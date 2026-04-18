@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+dist/
+npm-debug.log*
+.env
+.DS_Store
+# Não subir dados pesados da SSP
+data/raw/*
+!data/raw/.gitkeep
