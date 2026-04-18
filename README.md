@@ -19,10 +19,11 @@ Além disso, o sistema incorpora mecanismos de personalização, permitindo que 
 A violência contra a mulher é um problema global de grande escala, afetando milhões de mulheres todos os anos.
 
 Grande parte das soluções atuais:
-- dependem exclusivamente da ação da usuária
-- não utilizam análise inteligente de dados
-- apresentam alta taxa de falsos positivos
-- não consideram o contexto da situação
+
+* dependem exclusivamente da ação da usuária
+* não utilizam análise inteligente de dados
+* apresentam alta taxa de falsos positivos
+* não consideram o contexto da situação
 
 ---
 
@@ -30,36 +31,41 @@ Grande parte das soluções atuais:
 
 O Ampara propõe um sistema que:
 
-- realiza monitoramento contínuo via smartwatch
-- analisa padrões de comportamento da usuária
-- detecta anomalias com base em aprendizado de máquina
-- considera contexto (localização, horário, histórico)
-- permite personalização por meio de atividades e locais seguros
-- atua de forma não invasiva
+* realiza monitoramento contínuo via smartwatch
+* analisa padrões de comportamento da usuária
+* detecta anomalias com base em aprendizado de máquina
+* considera contexto (localização, horário, histórico)
+* permite personalização por meio de atividades e locais seguros
+* atua de forma não invasiva
 
 ---
 
 ## ⚙️ Como Funciona
 
 1. Coleta de dados via sensores:
-   - localização (GPS)
-   - frequência cardíaca
-   - movimento (acelerômetro)
-   - padrões de deslocamento
+
+   * localização (GPS)
+   * frequência cardíaca
+   * movimento (acelerômetro)
+   * padrões de deslocamento
 
 2. Processamento dos dados:
-   - análise de séries temporais
-   - modelagem de comportamento padrão
+
+   * análise de séries temporais
+   * modelagem de comportamento padrão
 
 3. Detecção de anomalias:
-   - identificação de desvios significativos
+
+   * identificação de desvios significativos
 
 4. Interação com a usuária:
-   - alerta discreto via vibração
-   - possibilidade de cancelamento
+
+   * alerta discreto via vibração
+   * possibilidade de cancelamento
 
 5. Ação:
-   - envio de alerta e localização para contatos de emergência
+
+   * envio de alerta e localização para contatos de emergência
 
 ---
 
@@ -68,34 +74,34 @@ O Ampara propõe um sistema que:
 O sistema adota uma abordagem híbrida entre detecção automática e validação da usuária, reduzindo significativamente falsos positivos.
 
 O botão possui duas funções:
-- acionamento manual de emergência
-- cancelamento de alertas automáticos
+
+* acionamento manual de emergência
+* cancelamento de alertas automáticos
 
 Além disso, o sistema incorpora mecanismos de contexto para melhorar a precisão:
 
-- cadastro de atividades (ex: academia, corrida, caminhada), reduzindo interpretações incorretas de esforço físico como risco
-- definição de locais seguros (ex: casa, trabalho), ajustando a sensibilidade do sistema nesses ambientes
-- adaptação ao comportamento individual da usuária ao longo do tempo
+* cadastro de atividades (ex: academia, corrida, caminhada)
+* definição de locais seguros (ex: casa, trabalho)
+* adaptação ao comportamento individual da usuária ao longo do tempo
 
 ---
 
 ## 📊 Funcionalidades adicionais
 
-- 📍 Cadastro de locais seguros
-- 🏃 Cadastro de atividades recorrentes
-- 📈 Aba de relatórios com histórico de eventos
-- 🧠 Score de vulnerabilidade baseado em comportamento
-- 🕒 Histórico de deslocamentos e ocorrências
+* 📍 Cadastro de locais seguros
+* 🏃 Cadastro de atividades recorrentes
+* 📈 Aba de relatórios com histórico de eventos
+* 🧠 Score de vulnerabilidade baseado em comportamento
+* 🕒 Histórico de deslocamentos e ocorrências
 
 ---
 
 ## 🧠 Tecnologias Envolvidas
 
-- Wearables (smartwatch)
-- Sensores (acelerômetro, GPS, batimentos)
-- Machine Learning (detecção de anomalias)
-- Computação ubíqua / IoT
-- Backend em nuvem
+* Wearables (smartwatch)
+* Sensores (acelerômetro, GPS, batimentos)
+* Machine Learning (detecção de anomalias)
+* Backend em nuvem
 
 ---
 
@@ -103,10 +109,45 @@ Além disso, o sistema incorpora mecanismos de contexto para melhorar a precisã
 
 O sistema lida com dados altamente sensíveis, como localização e informações fisiológicas, sendo necessário:
 
-- criptografia de dados
-- controle de acesso
-- armazenamento seguro
-- conformidade com LGPD
+* criptografia de dados
+* controle de acesso
+* armazenamento seguro
+* conformidade com LGPD
+
+---
+
+## 🚀 Como rodar o projeto
+
+### Pré-requisitos
+
+* Node.js instalado
+* Expo (via npx ou app Expo Go)
+* Celular ou emulador
+
+### Passos
+
+```
+# 1. Clone o repositório
+git clone https://github.com/marodrigues412/ampara-tcc.git
+
+# 2. Entre na pasta do projeto
+cd ampara-tcc
+
+# 3. Entre na pasta do aplicativo mobile
+cd mobile
+
+# 4. Instale as dependências
+npm install
+
+# 5. Inicie o projeto
+npx expo start
+```
+
+### Executando o app
+
+* Abra o app Expo Go no celular
+* Escaneie o QR Code exibido
+* Ou rode em um emulador
 
 ---
 
@@ -124,13 +165,13 @@ Desenvolver um sistema capaz de auxiliar na identificação de situações de vu
 
 ## 👩‍💻 Autoras
 
-- Amanda Herculano  
-- Maria Eduarda Rodrigues  
+* Amanda Herculano
+* Maria Eduarda Rodrigues
 
 ---
 
 ## 📚 Referências
 
-- WHO – Violence against women  
-- Fórum Brasileiro de Segurança Pública  
-- Estudos sobre wearable computing e segurança  
+* WHO – Violence against women
+* Fórum Brasileiro de Segurança Pública
+* Estudos sobre wearable computing e segurança
