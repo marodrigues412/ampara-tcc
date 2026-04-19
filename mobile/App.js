@@ -1,10 +1,17 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState, useEffect } from 'react'; 
+import { StyleSheet, Text, View, Modal, TouchableOpacity } from 'react-native';
 import { useRiskDetection } from './hooks/useRiskDetection'; // Importando sua lógica
 
 export default function App() {
   // Usando o seu hook para pegar os dados processados
-  const { data, location, riskStatus, errorMsg } = useRiskDetection();
+  const { data, location, riskStatus, errorMsg, stepCount } = useRiskDetection();
+  const [modalVisible, setModalVisible] = useState(false); 
+  
+  useEffect(() => {
+    if (riskStatus.isHighRisk) {
+      setModalVisible(true);
+    }
+  }, [riskStatus.isHighRisk]);
   
   // Facilitando o acesso às variáveis
   const { x, y, z } = data;
@@ -15,6 +22,11 @@ export default function App() {
       <View style={styles.headerContainer}>
         <Text style={styles.header}>Ampara</Text>
         <Text style={styles.subHeader}>Monitoramento ativo</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>Monitor de Atividade:</Text>
+        <Text style={styles.data}>👣 {stepCount} passos contados</Text>
       </View>
 
       <View style={styles.card}>
@@ -46,6 +58,28 @@ export default function App() {
           <Text style={{color: '#888'}}>{errorMsg || "A carregar sinal..."}</Text>
         )}
       </View>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.alertTitle}>🚨 ANOMALIA DETECTADA</Text>
+            <Text style={styles.alertText}>
+              Detetámos um impacto brusco de {magnitude}G durante o movimento. 
+              Estás em segurança?
+            </Text>
+            <TouchableOpacity 
+              style={styles.button} 
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.buttonText}>ESTOU BEM</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -123,5 +157,42 @@ const styles = StyleSheet.create({
     color: '#777',
     marginTop: 10,
     fontSize: 13
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)', // Fundo escurecido
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 30,
+    borderRadius: 25,
+    width: '85%',
+    alignItems: 'center',
+    elevation: 10
+  },
+  alertTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#6b2b38',
+    marginBottom: 10
+  },
+  alertText: {
+    textAlign: 'center',
+    color: '#555',
+    marginBottom: 20
+  },
+  button: {
+    backgroundColor: '#4CAF50',
+    padding: 15,
+    borderRadius: 12,
+    width: '100%'
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center'
   }
 });
