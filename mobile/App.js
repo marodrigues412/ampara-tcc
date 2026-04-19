@@ -33,15 +33,17 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>AMPARA - Sensor Lab</Text>
-
+    <View style={styles.headerContainer}>
+      <Text style={styles.header}>Ampara</Text>
+      <Text style={styles.subHeader}>Monitoramento ativo</Text>
+    </View>
       <View style={styles.card}>
         <Text style={styles.label}>Sensores de Movimento:</Text>
         <Text style={styles.data}>X: {x.toFixed(2)} | Y: {y.toFixed(2)} | Z: {z.toFixed(2)}</Text>
         
         <View style={styles.statusBox}>
           <Text style={styles.magnitudeLabel}>Força G Atual:</Text>
-          <Text style={[styles.magnitudeValue, { color: magnitude > 1.8 ? '#FF5252' : '#4CAF50' }]}>
+          <Text style={[styles.magnitudeValue, { color: magnitude > 1.8 ? '#C2185B' : '#4CAF50'}]}>
             {magnitude}
           </Text>
         </View>
@@ -51,7 +53,7 @@ export default function App() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Geolocalização (GPS):</Text>
+        <Text style={styles.label}>Geolocalização atual (GPS):</Text>
         {location ? (
           <Text style={styles.geoText}>
             LAT: {location.coords.latitude.toFixed(6)} {"\n"}
@@ -66,14 +68,70 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  header: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginBottom: 30 },
-  card: { backgroundColor: '#1E1E1E', padding: 20, borderRadius: 15, width: '100%', marginBottom: 20, borderWidth: 1, borderColor: '#333' },
-  label: { color: '#BB86FC', fontSize: 14, marginBottom: 10, fontWeight: 'bold', textTransform: 'uppercase' },
-  data: { color: '#fff', fontFamily: 'monospace' },
-  geoText: { color: '#03DAC6', fontSize: 16, fontFamily: 'monospace', lineHeight: 25 },
+
+  container: { flex: 1, backgroundColor: '#F5EFEA', alignItems: 'stretch', justifyContent: 'flex-start', paddingTop: 20, paddingHorizontal: 20 },
+
+  header: {
+    color: '#6b2b38',
+    fontSize: 30,
+    fontWeight: '600'
+  },
+
+  subHeader: {
+    color: '#9C6873',
+    fontSize: 20,
+    marginTop: 4
+  },
+
+  card: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 20,
+    width: '100%',
+    marginBottom: 16,
+    shadowColor: '#C2185B',
+    shadowOpacity: 0.08,
+    shadowRadius: 15,
+    elevation: 3
+  }, 
+
+    label: { color: '#9C6873', fontSize: 14, marginBottom: 10, fontWeight: 'bold', textTransform: 'uppercase' },
+
+  data: {
+    color: '#333',
+    fontSize: 14,
+    marginBottom: 10
+  },
+
+  geoText: {
+    color: '#555',
+    fontSize: 14,
+    lineHeight: 22
+  },
+
   statusBox: { flexDirection: 'row', alignItems: 'center', marginTop: 15 },
-  magnitudeLabel: { color: '#fff', fontSize: 18 },
-  magnitudeValue: { fontSize: 32, fontWeight: 'bold', marginLeft: 10 },
-  hint: { color: '#666', marginTop: 10, fontStyle: 'italic' }
-});
+
+    magnitudeLabel: { color: '#555', fontSize: 13 },
+
+  magnitudeValue: {
+    fontSize: 36,
+    fontWeight: '600',
+    marginLeft: 10
+  },
+
+  hint: {
+    color: '#777',
+    marginTop: 10,
+    fontSize: 13
+  },
+
+  headerContainer: {
+    width: '100%',
+    paddingTop: 60,
+    paddingBottom: 16,
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E0DA'
+  }
+
+  });
