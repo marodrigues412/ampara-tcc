@@ -1,10 +1,11 @@
 // src/hooks/useRiskDetection.js
 import { useState, useEffect } from 'react';
-import { Accelerometer } from 'expo-sensors';
+import { Accelerometer, Pedometer } from 'expo-sensors';
 import * as Location from 'expo-location';
 
 export const useRiskDetection = () => {
   const [data, setData] = useState({ x: 0, y: 0, z: 0 });
+  const [stepCount, setStepCount] = useState(0);
   const [location, setLocation] = useState(null);
   const [riskStatus, setRiskStatus] = useState({ isHighRisk: false, magnitude: 0 });
   const [errorMsg, setErrorMsg] = useState(null);
@@ -13,18 +14,26 @@ export const useRiskDetection = () => {
   const RISK_THRESHOLD = 1.8;
 
   useEffect(() => {
+  // 1. Iniciar Podômetro
+    const stepSub = Pedometer.watchStepCount(result => {
+      setStepCount(result.steps);
+    });
+
     // 1. Iniciar Sensores
     Accelerometer.setUpdateInterval(100);
     const subscription = Accelerometer.addListener(accelerometerData => {
       setData(accelerometerData);
       
-      // Cálculo de Magnitude G (Pitágoras 3D)
       const { x, y, z } = accelerometerData;
       const mag = Math.sqrt(x**2 + y**2 + z**2);
       
+      // NOVA LÓGICA: Impacto (G > 1.8) E em movimento (Passos > 0)
+      const hasImpact = mag > RISK_THRESHOLD;
+      const isWalking = stepCount > 0;
+
       setRiskStatus({
         magnitude: mag.toFixed(2),
-        isHighRisk: mag > RISK_THRESHOLD
+        isHighRisk: hasImpact && isWalking // AQUI OS DOIS SÃO EXIGIDOS
       });
     });
 
@@ -39,8 +48,11 @@ export const useRiskDetection = () => {
       setLocation(loc);
     })();
 
-    return () => subscription.remove();
-  }, []);
+    return () => {
+      subscription.remove();
+      stepSub.remove();
+    };
+  }, [stepCount]); // Reavaliar risco quando o número de passos mudar;
 
-  return { data, location, riskStatus, errorMsg };
+  return { data, location, riskStatus, errorMsg, stepCount };
 };
