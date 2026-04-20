@@ -1,10 +1,23 @@
 [
-  { "lat": -23.663500, "lon": -46.529500, "tipo": "ROUBO", "status": "DENTRO - Aprox 100m de você (Fácil de visualizar ao lado do seu ponto azul)" },
-  { "lat": -23.664000, "lon": -46.529000, "tipo": "FURTO", "status": "ENTRA - Aprox 130m" },
-  { "lat": -23.661000, "lon": -46.527000, "tipo": "ROUBO", "status": "ENTRA - Aprox 250m" },
-  { "lat": -23.667000, "lon": -46.532000, "tipo": "FURTO", "status": "ENTRA - Limite (aprox 480m)" },
-  
-  { "lat": -23.670000, "lon": -46.540000, "tipo": "ROUBO", "status": "FORA - Diferença > 0.005 (aprox 1.2km)" },
-  { "lat": -23.600000, "lon": -46.500000, "tipo": "FURTO", "status": "FORA - Outro bairro" },
-  { "lat": -23.550500, "lon": -46.633300, "tipo": "ROUBO", "status": "FORA - Centro de SP" }
+  { "lat": -23.55997587, "lon": -46.51992176, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.55990437, "lon": -46.52147521, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.57797427, "lon": -46.52366929, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.58023989, "lon": -46.51037853, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.56931219, "lon": -46.51384394, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.56802897, "lon": -46.51155271, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.57171483, "lon": -46.52596416, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.56118528, "lon": -46.51861508, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.56737053, "lon": -46.52154222, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.5764876,  "lon": -46.52140908, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.57716519, "lon": -46.52359131, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.5904897,  "lon": -46.5169634,  "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.57326303, "lon": -46.52562,    "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.57711081, "lon": -46.52380245, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.56698614, "lon": -46.52291946, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.56909098, "lon": -46.51360344, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.56572888, "lon": -46.51550026, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.57471321, "lon": -46.51722789, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.56379855, "lon": -46.52072099, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.57562864, "lon": -46.51623809, "tipo": "FURTO", "status": "PENDENTE" },
+  { "lat": -23.583183, "lon": -46.517356, "tipo": "IMPORTUNAÇÃO SEXUAL", "status": "PENDENTE" }
 ]
