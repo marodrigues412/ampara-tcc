@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'; 
-import { StyleSheet, Text, View, Modal, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { useRiskDetection } from './hooks/useRiskDetection'; // Importando sua lógica
+import MapView, { Marker, Circle } from 'react-native-maps';
+import crimeData from './data/crimes_mock.json';
 
 export default function App() {
   const { data, location, riskStatus, errorMsg, stepCount, nearbyCrimes } = useRiskDetection();
@@ -17,6 +19,11 @@ export default function App() {
   const { magnitude, isHighRisk } = riskStatus;
 
   return (
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.scrollContent} // Estilo extra para garantir o padding
+      showsVerticalScrollIndicator={false}         // Deixa o visual mais limpo
+    >
     <View style={styles.container}>
       <View style={styles.headerContainer}>
         <Text style={styles.header}>Ampara</Text>
@@ -53,8 +60,44 @@ export default function App() {
             <Text style={styles.geoText}>
               LAT: {location.coords.latitude.toFixed(6)} | LON: {location.coords.longitude.toFixed(6)}
             </Text>
+
+            {/* --- INICIO DO BLOCO DO MAPA --- */}
+            <View style={styles.mapContainer}>
+              <MapView
+                style={styles.map}
+                initialRegion={{
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                  latitudeDelta: 0.008, // Zoom ideal para ver os 500m
+                  longitudeDelta: 0.008,
+                }}
+              >
+                {/* Marcador da Usuária */}
+                <Marker coordinate={location.coords} title="Você" pinColor="blue" />
+
+                {/* Círculo de 500 metros (Geofencing) */}
+                <Circle
+                  center={location.coords}
+                  radius={500}
+                  fillColor="rgba(107, 43, 56, 0.15)"
+                  strokeColor="#6B2B38"
+                  strokeWidth={2}
+                />
+
+                {/* Marcadores dos Crimes do Mock */}
+                {crimeData.map((crime, index) => (
+                  <Marker
+                    key={index}
+                    coordinate={{ latitude: crime.lat, longitude: crime.lon }}
+                    title={crime.tipo}
+                    pinColor="#C2185B"
+                  />
+                ))}
+              </MapView>
+            </View>
+            {/* --- FIM DO BLOCO DO MAPA --- */}
             
-            {/* NOVO BLOCO SSP */}
+            {/* Bloco SSP que você já tinha */}
             <View style={{ marginTop: 10, padding: 8, backgroundColor: nearbyCrimes > 0 ? '#FFEBEE' : '#E8F5E9', borderRadius: 10 }}>
               <Text style={{ fontWeight: 'bold', color: nearbyCrimes > 0 ? '#C2185B' : '#2E7D32' }}>
                 {nearbyCrimes > 0 ? `⚠️ ${nearbyCrimes} crimes registrados na região` : "✅ Região estável"}
@@ -88,6 +131,7 @@ export default function App() {
         </View>
       </Modal>
     </View>
+  </ScrollView>
   );
 }
 
@@ -95,10 +139,11 @@ const styles = StyleSheet.create({
   container: { 
     flex: 1, 
     backgroundColor: '#F5EFEA', 
-    alignItems: 'stretch', 
-    justifyContent: 'flex-start', 
-    paddingTop: 20, 
-    paddingHorizontal: 20 
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40, // Espaço extra no final para o scroll respirar
+    paddingTop: 20,
   },
   headerContainer: {
     width: '100%',
@@ -196,6 +241,18 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 12,
     width: '100%'
+  },
+  mapContainer: {
+    height: 250,
+    width: '100%',
+    marginVertical: 10,
+    borderRadius: 15,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#EEE',
+  },
+  map: {
+    flex: 1,
   },
   buttonText: {
     color: 'white',

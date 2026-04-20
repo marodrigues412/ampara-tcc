@@ -1,0 +1,10 @@
+Qual distância faz sentido?
+Definimos um raio de 500 metros (que no código corresponde ao offset de 0.005).
+
+Por que esse círculo?
+
+Tempo de Resposta: 500 metros é a distância que um pedestre médio percorre em 5 a 7 minutos. Isso significa que o crime ocorreu no "quarteirão vizinho", em um local onde a usuária provavelmente passará ou acabou de passar.
+
+Precisão do GPS: Em ambientes urbanos, o GPS pode oscilar. Um raio muito curto (ex: 100m) causaria falsos negativos (o crime sumiria da tela se você atravessasse a rua).
+
+Densidade Criminal: Se você usar um raio de 2km ou 5km (cidade inteira), o app estará sempre "vermelho", o que gera fadiga de alerta e faz a usuária ignorar o sistema.
