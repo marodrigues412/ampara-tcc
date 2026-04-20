@@ -165,8 +165,31 @@ Desenvolver um sistema capaz de auxiliar na identificação de situações de vu
 
 ## 👩‍💻 Autoras
 
-* Amanda Herculano
-* Maria Eduarda Rodrigues
+<p align="center">
+  <a href="https://github.com/amandaherculano">
+    <img src="https://github.com/amandaherculano.png" width="120px;" alt="Amanda Herculano"/>
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/marodrigues412">
+    <img src="https://github.com/marodrigues412.png" width="120px;" alt="Maria Eduarda Rodrigues"/>
+  </a>
+</p>
+
+<p align="center">
+  <b>Amanda Herculano</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Maria Eduarda Rodrigues</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/amandaherculano">GitHub</a> • 
+  <a href="https://www.linkedin.com/in/amanda-herculano/">LinkedIn</a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://github.com/marodrigues412">GitHub</a> • 
+  <a href="https://www.linkedin.com/in/marodrigu3s/">LinkedIn</a>
+</p>
+
+<p align="center">
+Desenvolvido como Trabalho de Conclusão de Curso – Instituto Mauá de Tecnologia (2026)
+</p>
 
 ---
 
