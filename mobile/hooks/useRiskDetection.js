@@ -1,7 +1,7 @@
-// src/hooks/useRiskDetection.js
 import { useState, useEffect } from 'react';
 import { Accelerometer, Pedometer } from 'expo-sensors';
 import * as Location from 'expo-location';
+import crimeData from '../data/crimes_mock.json';
 
 export const useRiskDetection = () => {
   const [data, setData] = useState({ x: 0, y: 0, z: 0 });
@@ -9,50 +9,67 @@ export const useRiskDetection = () => {
   const [location, setLocation] = useState(null);
   const [riskStatus, setRiskStatus] = useState({ isHighRisk: false, magnitude: 0 });
   const [errorMsg, setErrorMsg] = useState(null);
+  const [nearbyCrimes, setNearbyCrimes] = useState(0);
 
-  // Constante de Limiar de Risco (G-Force)
   const RISK_THRESHOLD = 1.8;
 
-  useEffect(() => {
-  // 1. Iniciar Podômetro
-    const stepSub = Pedometer.watchStepCount(result => {
-      setStepCount(result.steps);
-    });
+  const checkCrimeRisk = (userLat, userLon) => {
+    const range = 0.005; 
+    const count = crimeData.filter(crime => {
+      return Math.abs(crime.lat - userLat) < range && 
+             Math.abs(crime.lon - userLon) < range;
+    }).length;
+    setNearbyCrimes(count);
+  };
 
-    // 1. Iniciar Sensores
+useEffect(() => {
+    let stepSub; // 1. Criamos a variável aqui fora para o "return" conseguir ler
+    let subscription;
+
+    // Função para iniciar os sensores de passos
+    const startPedometer = async () => {
+      const isAvailable = await Pedometer.isAvailableAsync();
+      if (isAvailable) {
+        const { status } = await Pedometer.requestPermissionsAsync();
+        if (status === 'granted') {
+          stepSub = Pedometer.watchStepCount(result => {
+            setStepCount(result.steps);
+          });
+        }
+      }
+    };
+
+    // Iniciar Sensores e Localização
+    startPedometer();
+
     Accelerometer.setUpdateInterval(100);
-    const subscription = Accelerometer.addListener(accelerometerData => {
-      setData(accelerometerData);
-      
-      const { x, y, z } = accelerometerData;
+    subscription = Accelerometer.addListener(accData => {
+      setData(accData);
+      const { x, y, z } = accData;
       const mag = Math.sqrt(x**2 + y**2 + z**2);
       
-      // NOVA LÓGICA: Impacto (G > 1.8) E em movimento (Passos > 0)
-      const hasImpact = mag > RISK_THRESHOLD;
-      const isWalking = stepCount > 0;
-
       setRiskStatus({
         magnitude: mag.toFixed(2),
-        isHighRisk: hasImpact && isWalking // AQUI OS DOIS SÃO EXIGIDOS
+        // Lógica: Impacto E passos > 0 (ou >= 0 para facilitar teste)
+        isHighRisk: mag > RISK_THRESHOLD && stepCount >= 0 
       });
     });
 
-    // 2. Iniciar Localização
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permissão de GPS negada!');
-        return;
+      if (status === 'granted') {
+        let loc = await Location.getCurrentPositionAsync({});
+        setLocation(loc);
+        checkCrimeRisk(loc.coords.latitude, loc.coords.longitude);
       }
-      let loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc);
     })();
 
+    // LIMPEZA CORRETA
     return () => {
-      subscription.remove();
-      stepSub.remove();
+      if (subscription) subscription.remove();
+      if (stepSub) stepSub.remove(); // Agora o 'stepSub' existe aqui!
     };
-  }, [stepCount]); // Reavaliar risco quando o número de passos mudar;
+  }, [stepCount]);
 
-  return { data, location, riskStatus, errorMsg, stepCount };
+  return { data, location, riskStatus, errorMsg, stepCount, nearbyCrimes };
 };

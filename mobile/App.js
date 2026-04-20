@@ -3,18 +3,17 @@ import { StyleSheet, Text, View, Modal, TouchableOpacity } from 'react-native';
 import { useRiskDetection } from './hooks/useRiskDetection'; // Importando sua lógica
 
 export default function App() {
-  // Usando o seu hook para pegar os dados processados
-  const { data, location, riskStatus, errorMsg, stepCount } = useRiskDetection();
+  const { data, location, riskStatus, errorMsg, stepCount, nearbyCrimes } = useRiskDetection();
   const [modalVisible, setModalVisible] = useState(false); 
+  const { x, y, z } = data;
   
+  // Para evitar que o modal abra toda hora, criamos uma trava
   useEffect(() => {
-    if (riskStatus.isHighRisk) {
+    if (riskStatus.isHighRisk && !modalVisible) {
       setModalVisible(true);
     }
   }, [riskStatus.isHighRisk]);
-  
-  // Facilitando o acesso às variáveis
-  const { x, y, z } = data;
+
   const { magnitude, isHighRisk } = riskStatus;
 
   return (
@@ -50,10 +49,18 @@ export default function App() {
       <View style={styles.card}>
         <Text style={styles.label}>Geolocalização atual (GPS):</Text>
         {location ? (
-          <Text style={styles.geoText}>
-            LAT: {location.coords.latitude.toFixed(6)} {"\n"}
-            LON: {location.coords.longitude.toFixed(6)}
-          </Text>
+          <>
+            <Text style={styles.geoText}>
+              LAT: {location.coords.latitude.toFixed(6)} | LON: {location.coords.longitude.toFixed(6)}
+            </Text>
+            
+            {/* NOVO BLOCO SSP */}
+            <View style={{ marginTop: 10, padding: 8, backgroundColor: nearbyCrimes > 0 ? '#FFEBEE' : '#E8F5E9', borderRadius: 10 }}>
+              <Text style={{ fontWeight: 'bold', color: nearbyCrimes > 0 ? '#C2185B' : '#2E7D32' }}>
+                {nearbyCrimes > 0 ? `⚠️ ${nearbyCrimes} crimes registrados na região` : "✅ Região estável"}
+              </Text>
+            </View>
+          </>
         ) : (
           <Text style={{color: '#888'}}>{errorMsg || "A carregar sinal..."}</Text>
         )}
