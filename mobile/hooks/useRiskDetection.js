@@ -64,10 +64,9 @@ useEffect(() => {
       }
     })();
 
-    // LIMPEZA CORRETA
     return () => {
       if (subscription) subscription.remove();
-      if (stepSub) stepSub.remove(); // Agora o 'stepSub' existe aqui!
+      if (stepSub) stepSub.remove(); 
     };
   }, [stepCount]);
 

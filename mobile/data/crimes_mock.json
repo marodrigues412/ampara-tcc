@@ -1,4 +1,10 @@
 [
-  { "lat": -23.662854, "lon": -46.528764, "tipo": "ROUBO" },
-  { "lat": -23.6489, "lon": -46.5712, "tipo": "FURTO" }
+  { "lat": -23.663500, "lon": -46.529500, "tipo": "ROUBO", "status": "DENTRO - Aprox 100m de você (Fácil de visualizar ao lado do seu ponto azul)" },
+  { "lat": -23.664000, "lon": -46.529000, "tipo": "FURTO", "status": "ENTRA - Aprox 130m" },
+  { "lat": -23.661000, "lon": -46.527000, "tipo": "ROUBO", "status": "ENTRA - Aprox 250m" },
+  { "lat": -23.667000, "lon": -46.532000, "tipo": "FURTO", "status": "ENTRA - Limite (aprox 480m)" },
+  
+  { "lat": -23.670000, "lon": -46.540000, "tipo": "ROUBO", "status": "FORA - Diferença > 0.005 (aprox 1.2km)" },
+  { "lat": -23.600000, "lon": -46.500000, "tipo": "FURTO", "status": "FORA - Outro bairro" },
+  { "lat": -23.550500, "lon": -46.633300, "tipo": "ROUBO", "status": "FORA - Centro de SP" }
 ]
