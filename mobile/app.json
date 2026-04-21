@@ -4,19 +4,21 @@
     "slug": "ampara-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png", 
+    "icon": "./assets/images/icon.png",
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.amparaapp"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F5F3EF",
         "foregroundImage": "./assets/images/icon.png"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.amparaapp"
     },
     "plugins": [
       "expo-router",
@@ -26,7 +28,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 250,
           "resizeMode": "contain",
-          "backgroundColor": "#F5F3EF" 
+          "backgroundColor": "#F5F3EF"
         }
       ]
     ]

@@ -7,3 +7,4 @@ npm-debug.log*
 # Não subir dados pesados da SSP
 data/raw/*
 !data/raw/.gitkeep
+mobile/25.0.2
