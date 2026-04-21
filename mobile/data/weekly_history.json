@@ -1,0 +1,33 @@
+{
+  "weekly_scores": [
+    { "dia": "Seg", "score": 95 },
+    { "dia": "Ter", "score": 88 },
+    { "dia": "Qua", "score": 45 },
+    { "dia": "Qui", "score": 70 },
+    { "dia": "Sex", "score": 30 },
+    { "dia": "Sab", "score": 92 },
+    { "dia": "Dom", "score": 100 }
+  ],
+  "hourly_risk_score": [
+    { "hora": "08h", "score": 95 },
+    { "hora": "12h", "score": 80 },
+    { "hora": "18h", "score": 60 },
+    { "hora": "20h", "score": 45 },
+    { "hora": "22h", "score": 25 },
+    { "hora": "00h", "score": 70 }
+  ],
+  "alerts_distribution": [
+  { 
+    "name": "Alertas Reais", 
+    "count": 5
+  },
+  { 
+    "name": "Falsos Positivos", 
+    "count": 15
+  },
+  { 
+    "name": "Cancelados", 
+    "count": 10
+  }
+]
+}

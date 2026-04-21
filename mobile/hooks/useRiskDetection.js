@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Accelerometer, Pedometer } from 'expo-sensors';
 import * as Location from 'expo-location';
+import { calculateSecurityScore } from '../utils/scoreCalculator'; // Importação do util
 import crimeData from '../data/crimes_mock.json';
 
 export const useRiskDetection = () => {
@@ -10,6 +11,10 @@ export const useRiskDetection = () => {
   const [riskStatus, setRiskStatus] = useState({ isHighRisk: false, magnitude: 0 });
   const [errorMsg, setErrorMsg] = useState(null);
   const [nearbyCrimes, setNearbyCrimes] = useState(0);
+  
+  // NOVOS ESTADOS PARA O GRÁFICO
+  const [currentScore, setCurrentScore] = useState(100);
+  const [statusColor, setStatusColor] = useState('#4CAF50');
 
   const RISK_THRESHOLD = 1.8;
 
@@ -22,11 +27,10 @@ export const useRiskDetection = () => {
     setNearbyCrimes(count);
   };
 
-useEffect(() => {
-    let stepSub; // 1. Criamos a variável aqui fora para o "return" conseguir ler
+  useEffect(() => {
+    let stepSub;
     let subscription;
 
-    // Função para iniciar os sensores de passos
     const startPedometer = async () => {
       const isAvailable = await Pedometer.isAvailableAsync();
       if (isAvailable) {
@@ -39,7 +43,6 @@ useEffect(() => {
       }
     };
 
-    // Iniciar Sensores e Localização
     startPedometer();
 
     Accelerometer.setUpdateInterval(100);
@@ -48,9 +51,19 @@ useEffect(() => {
       const { x, y, z } = accData;
       const mag = Math.sqrt(x**2 + y**2 + z**2);
       
+      // CALCULA O SCORE EM TEMPO REAL BASEADO NOS SENSORES E NA CONTAGEM DE CRIMES
+      const result = calculateSecurityScore({
+        magnitudeG: mag,
+        isNearCrimeZone: nearbyCrimes > 0,
+        currentHour: new Date().getHours(),
+        bpmPanico: false
+      });
+
+      setCurrentScore(result.score);
+      setStatusColor(result.color);
+
       setRiskStatus({
         magnitude: mag.toFixed(2),
-        // Lógica: Impacto E passos > 0 (ou >= 0 para facilitar teste)
         isHighRisk: mag > RISK_THRESHOLD && stepCount >= 0 
       });
     });
@@ -68,7 +81,17 @@ useEffect(() => {
       if (subscription) subscription.remove();
       if (stepSub) stepSub.remove(); 
     };
-  }, [stepCount]);
+  }, [stepCount, nearbyCrimes]); // Adicionado nearbyCrimes aqui para atualizar o score se os crimes mudarem
 
-  return { data, location, riskStatus, errorMsg, stepCount, nearbyCrimes };
+  // RETORNA TAMBÉM O SCORE E A COR PARA O DASHBOARD
+  return { 
+    data, 
+    location, 
+    riskStatus, 
+    errorMsg, 
+    stepCount, 
+    nearbyCrimes, 
+    currentScore, 
+    statusColor 
+  };
 };
