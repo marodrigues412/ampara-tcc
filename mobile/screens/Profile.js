@@ -71,52 +71,62 @@ export default function Profile({ navigation }) {
     )
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Perfil</Text>
-        <Text style={styles.subtitle}>Suas informações</Text>
+return (
+  <ScrollView
+    style={styles.container}
+    contentContainerStyle={styles.scrollContent}
+    showsVerticalScrollIndicator={false}
+  >
+    <View style={styles.header}>
+      <Text style={styles.title}>Perfil</Text>
+      <Text style={styles.subtitle}>Suas informações</Text>
+    </View>
+
+    <View style={styles.card}>
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>
+          {profile?.nome?.charAt(0)?.toUpperCase() || 'U'}
+        </Text>
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {profile?.nome?.charAt(0)?.toUpperCase() || 'U'}
-          </Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Nome</Text>
-          <Text style={styles.value}>{profile?.nome || 'Não informado'}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Email</Text>
-          <Text style={styles.value}>{user?.email}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Telefone</Text>
-          <Text style={styles.value}>{profile?.telefone || 'Não informado'}</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => navigation.navigate('EditProfile')}
-        >
-          <Text style={styles.editText}>Editar perfil</Text>
-        </TouchableOpacity>
+      <View style={styles.row}>
+        <Text style={styles.label}>Nome</Text>
+        <Text style={styles.value}>{profile?.nome || 'Não informado'}</Text>
       </View>
 
-      <TouchableOpacity style={styles.logout} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Sair da conta</Text>
+      <View style={styles.row}>
+        <Text style={styles.label}>Email</Text>
+        <Text style={styles.value}>{user?.email}</Text>
+      </View>
+
+      <View style={styles.row}>
+        <Text style={styles.label}>Telefone</Text>
+        <Text style={styles.value}>{profile?.telefone || 'Não informado'}</Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.editButton}
+        onPress={() => navigation.navigate('EditProfile')}
+      >
+        <Text style={styles.editText}>Editar perfil</Text>
       </TouchableOpacity>
-    </ScrollView>
-  )
+    </View>
+
+    {/* 👇 NOVO BOTÃO CERTO */}
+    <TouchableOpacity
+      style={styles.secondaryButton}
+      onPress={() => navigation.navigate('EmergencyContacts')}
+    >
+      <Text style={styles.secondaryText}>
+        📞 Contatos de emergência
+      </Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity style={styles.logout} onPress={handleLogout}>
+      <Text style={styles.logoutText}>Sair da conta</Text>
+    </TouchableOpacity>
+  </ScrollView>
+)
 }
 
 const styles = StyleSheet.create({
@@ -220,5 +230,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center'
-  }
+  },
+
+  secondaryButton: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#9C6873',
+    padding: 14,
+    borderRadius: 14,
+    alignItems: 'center'
+  },
+
+  secondaryText: {
+    color: '#9C6873',
+    fontWeight: '600',
+    fontSize: 15
+  },
 })
