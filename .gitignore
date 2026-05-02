@@ -1,10 +1,26 @@
+# Dependências
 node_modules/
+
+# Expo
 .expo/
+.expo-shared/
+
+# Build
 dist/
+
+# Logs
 npm-debug.log*
+
+# Env
 .env
+
+# Mac
 .DS_Store
-# Não subir dados pesados da SSP
+
+# Dados pesados SSP
 data/raw/*
 !data/raw/.gitkeep
-mobile/25.0.2
+
+# Android/iOS build (caso use)
+android/build/
+ios/build/
