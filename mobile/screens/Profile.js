@@ -122,6 +122,13 @@ return (
       </Text>
     </TouchableOpacity>
 
+    <TouchableOpacity
+    style={styles.editButton}
+    onPress={() => navigation.navigate('SafeLocations')}
+  >
+    <Text style={styles.editText}>📍 Locais seguros</Text>
+  </TouchableOpacity>
+
     <TouchableOpacity style={styles.logout} onPress={handleLogout}>
       <Text style={styles.logoutText}>Sair da conta</Text>
     </TouchableOpacity>
