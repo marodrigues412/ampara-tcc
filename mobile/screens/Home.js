@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { StyleSheet, Text, View, Modal, TouchableOpacity, ScrollView } from 'react-native'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import MapView, { Marker, Circle } from 'react-native-maps'
@@ -8,6 +8,12 @@ export default function Home() {
   const { data, location, riskStatus, errorMsg, stepCount, nearbyCrimes } = useRiskDetection()
   const [modalVisible, setModalVisible] = useState(false)
 
+  const [region, setRegion] = useState(null)
+  const [userRegion, setUserRegion] = useState(null)
+  const [mapMoved, setMapMoved] = useState(false)
+
+  const mapRef = useRef(null)
+
   const { x, y, z } = data
   const { magnitude, isHighRisk } = riskStatus
 
@@ -16,6 +22,43 @@ export default function Home() {
       setModalVisible(true)
     }
   }, [isHighRisk])
+
+  useEffect(() => {
+    if (location) {
+      const initialRegion = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      }
+
+      setRegion(initialRegion)
+      setUserRegion(initialRegion)
+    }
+  }, [location])
+
+  const handleRegionChange = (newRegion) => {
+    setRegion(newRegion)
+
+    if (!userRegion) return
+
+    const distance =
+      Math.abs(newRegion.latitude - userRegion.latitude) +
+      Math.abs(newRegion.longitude - userRegion.longitude)
+
+    if (distance > 0.002) {
+      setMapMoved(true)
+    } else {
+      setMapMoved(false)
+    }
+  }
+
+  const recenterMap = () => {
+    if (mapRef.current && userRegion) {
+      mapRef.current.animateToRegion(userRegion, 500)
+      setMapMoved(false)
+    }
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -54,7 +97,7 @@ export default function Home() {
       <View style={styles.card}>
         <Text style={styles.label}>Localização:</Text>
 
-        {location ? (
+        {location && region ? (
           <>
             <Text style={styles.geoText}>
               LAT: {location.coords.latitude.toFixed(6)}
@@ -62,13 +105,10 @@ export default function Home() {
 
             <View style={styles.mapContainer}>
               <MapView
+                ref={mapRef}
                 style={styles.map}
-                initialRegion={{
-                  latitude: location.coords.latitude,
-                  longitude: location.coords.longitude,
-                  latitudeDelta: 0.008,
-                  longitudeDelta: 0.008,
-                }}
+                region={region}
+                onRegionChangeComplete={handleRegionChange}
               >
                 <Marker coordinate={location.coords} title="Você" />
 
@@ -80,14 +120,23 @@ export default function Home() {
                 />
 
                 {crimeData.map((crime, i) => (
-                <Marker
+                  <Marker
                     key={i}
                     coordinate={{ latitude: crime.lat, longitude: crime.lon }}
-                    title={crime.tipo} // 👈 título que aparece
+                    title={crime.tipo}
                     pinColor="#C2185B"
-                />
+                  />
                 ))}
               </MapView>
+
+              {mapMoved && (
+                <TouchableOpacity
+                  style={styles.recenterButton}
+                  onPress={recenterMap}
+                >
+                  <Text style={styles.recenterText}>📍 Voltar para mim</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={{
@@ -183,6 +232,23 @@ const styles = StyleSheet.create({
   },
 
   map: { flex: 1 },
+
+  recenterButton: {
+    position: 'absolute',
+    bottom: 10,
+    alignSelf: 'center',
+    backgroundColor: '#6B2B38',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    elevation: 5
+  },
+
+  recenterText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 13
+  },
 
   modalOverlay: {
     flex: 1,
