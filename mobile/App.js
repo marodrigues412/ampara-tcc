@@ -7,6 +7,7 @@ import Home from './screens/Home'
 import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
 import EmergencyContacts from './screens/EmergencyContacts'
+import SafeLocations from './screens/SafeLocations'
 
 import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -27,9 +28,9 @@ function Tabs() {
         tabBarStyle: {
           backgroundColor: '#FFF',
           borderTopWidth: 0,
-          height: 80,          
-          paddingBottom: 10,  
-          paddingTop: 5,       
+          height: 80,
+          paddingBottom: 10,
+          paddingTop: 5,
         },
 
         tabBarActiveTintColor: '#6B2B38',
@@ -91,10 +92,10 @@ export default function App() {
           {/* Tabs (Home, Dashboard, Profile) */}
           <Stack.Screen name="Tabs" component={Tabs} />
 
-          {/* Tela fora da navbar */}
+          {/* Telas fora da navbar (configurações) */}
           <Stack.Screen name="EditProfile" component={EditProfile} />
-
-          <Stack.Screen name="EmergencyContacts" component={EmergencyContacts} /> 
+          <Stack.Screen name="EmergencyContacts" component={EmergencyContacts} />
+          <Stack.Screen name="SafeLocations" component={SafeLocations} />
 
         </Stack.Navigator>
       )}
