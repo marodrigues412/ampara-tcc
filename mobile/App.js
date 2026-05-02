@@ -6,6 +6,7 @@ import Dashboard from './screens/Dashboard'
 import Home from './screens/Home'
 import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
+import EmergencyContacts from './screens/EmergencyContacts'
 
 import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -92,6 +93,8 @@ export default function App() {
 
           {/* Tela fora da navbar */}
           <Stack.Screen name="EditProfile" component={EditProfile} />
+
+          <Stack.Screen name="EmergencyContacts" component={EmergencyContacts} /> 
 
         </Stack.Navigator>
       )}
