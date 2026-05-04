@@ -83,7 +83,7 @@ export default function Home() {
           <Text style={styles.magnitudeLabel}>Força G:</Text>
           <Text style={[
             styles.magnitudeValue,
-            { color: isHighRisk ? '#C2185B' : '#4CAF50' }
+            { color: isHighRisk ? '#B91C1C' : '#2E8B57' }
           ]}>
             {magnitude}
           </Text>
@@ -115,8 +115,8 @@ export default function Home() {
                 <Circle
                   center={location.coords}
                   radius={500}
-                  fillColor="rgba(107, 43, 56, 0.15)"
-                  strokeColor="#6B2B38"
+                  fillColor="rgba(134, 97, 145, 0.15)"
+                  strokeColor="#000000"
                 />
 
                 {crimeData.map((crime, i) => (
@@ -124,7 +124,7 @@ export default function Home() {
                     key={i}
                     coordinate={{ latitude: crime.lat, longitude: crime.lon }}
                     title={crime.tipo}
-                    pinColor="#C2185B"
+                    pinColor="#B91C1C"
                   />
                 ))}
               </MapView>
@@ -147,7 +147,7 @@ export default function Home() {
             }}>
               <Text style={{
                 fontWeight: 'bold',
-                color: nearbyCrimes > 0 ? '#C2185B' : '#2E7D32'
+                color: nearbyCrimes > 0 ? '#C2185B' : '#2E8B57'
               }}>
                 {nearbyCrimes > 0
                   ? `⚠️ ${nearbyCrimes} crimes na região`
@@ -193,12 +193,12 @@ const styles = StyleSheet.create({
 
   header: {
     fontSize: 30,
-    color: '#6b2b38',
+    color: '#025382',
     fontWeight: '600'
   },
 
   subHeader: {
-    color: '#9C6873'
+    color: '#3A7FA6'
   },
 
   card: {
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
 
-  label: { color: '#9C6873', fontWeight: 'bold' },
+  label: { color: '#3A7FA6', fontWeight: 'bold' },
   data: { color: '#333' },
 
   geoText: { color: '#555' },
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     alignSelf: 'center',
-    backgroundColor: '#6B2B38',
+    backgroundColor: '#025382',
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,

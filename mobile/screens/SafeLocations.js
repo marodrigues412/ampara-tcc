@@ -377,7 +377,7 @@ export default function SafeLocations({ navigation }) {
                 longitude: currentLocation.longitude
               }}
               title="Você"
-              pinColor="#6B2B38"
+              pinColor="#025382"
             />
           )}
 
@@ -398,7 +398,7 @@ export default function SafeLocations({ navigation }) {
                   longitude: Number(loc.longitude)
                 }}
                 radius={80}
-                strokeColor="#6B2B38"
+                strokeColor="#025382"
                 fillColor="rgba(107, 43, 56, 0.14)"
               />
             </React.Fragment>
@@ -533,18 +533,18 @@ const styles = StyleSheet.create({
   back: {
     marginTop: 40,
     fontSize: 28,
-    color: '#6B2B38'
+    color: '#025382'
   },
 
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#6B2B38',
+    color: '#025382',
     marginTop: 8
   },
 
   subtitle: {
-    color: '#9C6873',
+    color: '#3A7FA6',
     marginBottom: 14
   },
 
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    backgroundColor: '#6B2B38',
+    backgroundColor: '#025382',
     padding: 15,
     borderRadius: 14,
     marginBottom: 10
@@ -592,14 +592,14 @@ const styles = StyleSheet.create({
 
   secondaryButton: {
     borderWidth: 1,
-    borderColor: '#6B2B38',
+    borderColor: '#025382',
     padding: 15,
     borderRadius: 14,
     marginBottom: 18
   },
 
   secondaryText: {
-    color: '#6B2B38',
+    color: '#025382',
     textAlign: 'center',
     fontWeight: '600'
   },
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
 
   locationType: {
     fontSize: 15,
-    color: '#6B2B38',
+    color: '#025382',
     marginTop: 2
   },
 
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: '#6B2B38',
+    color: '#025382',
     fontSize: 15,
     fontWeight: '600',
     marginTop: 14,
@@ -748,8 +748,8 @@ const styles = StyleSheet.create({
   },
 
   typeSelected: {
-    backgroundColor: '#6B2B38',
-    borderColor: '#6B2B38'
+    backgroundColor: '#025382',
+    borderColor: '#025382'
   },
 
   typeText: {
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    backgroundColor: '#6B2B38',
+    backgroundColor: '#025382',
     padding: 15,
     borderRadius: 14,
     marginTop: 22,
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
 
   cancelText: {
     textAlign: 'center',
-    color: '#9C6873',
+    color: '#3A7FA6',
     fontSize: 16,
     marginTop: 14
   }

@@ -66,7 +66,7 @@ export default function Profile({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6B2B38" />
+        <ActivityIndicator size="large" color="#025382" />
       </View>
     )
   }
@@ -112,9 +112,8 @@ return (
       </TouchableOpacity>
     </View>
 
-    {/* 👇 NOVO BOTÃO CERTO */}
     <TouchableOpacity
-      style={styles.secondaryButton}
+      style={styles.editButton}
       onPress={() => navigation.navigate('EmergencyContacts')}
     >
       <Text style={styles.secondaryText}>
@@ -126,7 +125,7 @@ return (
     style={styles.editButton}
     onPress={() => navigation.navigate('SafeLocations')}
   >
-    <Text style={styles.editText}>📍 Locais seguros</Text>
+    <Text style={styles.secondaryText}>📍 Locais seguros</Text>
   </TouchableOpacity>
 
     <TouchableOpacity style={styles.logout} onPress={handleLogout}>
@@ -154,12 +153,12 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 34,
-    color: '#6B2B38',
+    color: '#025382',
     fontWeight: 'bold'
   },
 
   subtitle: {
-    color: '#9C6873',
+    color: '#3A7FA6',
     fontSize: 17
   },
 
@@ -175,7 +174,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#6B2B38',
+    backgroundColor: '#025382',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 22
@@ -194,7 +193,7 @@ const styles = StyleSheet.create({
 
   label: {
     fontSize: 14,
-    color: '#9C6873',
+    color: '#3A7FA6',
     marginBottom: 4
   },
 
@@ -206,7 +205,7 @@ const styles = StyleSheet.create({
   editButton: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#6B2B38',
+    borderColor: '#025382',
     padding: 14,
     borderRadius: 14,
     width: '100%',
@@ -214,14 +213,14 @@ const styles = StyleSheet.create({
   },
 
   editText: {
-    color: '#6B2B38',
+    color: '#025382',
     fontWeight: '700',
     fontSize: 16
   },
 
   logout: {
     marginTop: 12,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#025382',
     padding: 15,
     borderRadius: 16
   },
@@ -242,14 +241,14 @@ const styles = StyleSheet.create({
   secondaryButton: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#9C6873',
+    borderColor: '#3A7FA6',
     padding: 14,
     borderRadius: 14,
     alignItems: 'center'
   },
 
   secondaryText: {
-    color: '#9C6873',
+    color: '#3A7FA6',
     fontWeight: '600',
     fontSize: 15
   },
