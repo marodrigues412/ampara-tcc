@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 30,
     textAlign: 'center',
-    color: '#6b2b38'
+    color: '#025382'
   },
   input: {
     borderWidth: 1,
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   button: {
-    backgroundColor: '#6B2B38',
+    backgroundColor: '#025382',
     padding: 15,
     borderRadius: 10
   },
@@ -114,6 +114,6 @@ const styles = StyleSheet.create({
   link: {
     marginTop: 15,
     textAlign: 'center',
-    color: '#6b2b38'
+    color: '#025382'
   }
 })

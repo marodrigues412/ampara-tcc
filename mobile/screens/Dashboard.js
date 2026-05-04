@@ -45,7 +45,7 @@ export default function Dashboard() {
     backgroundGradientTo: "#FFF",
     decimalPlaces: 0,
     color: (opacity = 1) => `rgba(107, 43, 56, ${opacity})`,
-    labelColor: () => `#6B2B38`,
+    labelColor: () => `#025382`,
     style: { borderRadius: 16 },
     propsForBackgroundLines: {
       strokeWidth: 1,
@@ -143,7 +143,7 @@ export default function Dashboard() {
               showValuesOnTopOfBars
               chartConfig={{
                 ...chartConfigBase,
-                color: () => `#6B2B38`,
+                color: () => `#025382`,
                 barPercentage: 0.95,
               }}
               style={styles.chartStyle}
@@ -157,11 +157,11 @@ export default function Dashboard() {
 
           <PieChart
             data={weeklyData.alerts_distribution.map((item, index) => {
-              const palette = ['#6B2B38', '#A5D6A7', '#FFC107']
+              const palette = ['#025382', '#A5D6A7', '#FFC107']
               return {
                 ...item,
                 color: palette[index],
-                legendFontColor: "#6B2B38",
+                legendFontColor: "#025382",
                 legendFontSize: 12,
               }
             })}
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   header: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#6B2B38',
+    color: '#025382',
     marginBottom: 20,
   },
 
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
 
   cardTitle: {
     fontSize: 16,
-    color: '#6B2B38',
+    color: '#025382',
     fontWeight: 'bold',
     marginBottom: 15,
   },
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
 
   scoreSubLabel: {
     fontSize: 10,
-    color: '#9C6873',
+    color: '#3A7FA6',
     fontWeight: 'bold',
   },
 

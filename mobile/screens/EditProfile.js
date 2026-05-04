@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#6B2B38',
+    color: '#025382',
     marginBottom: 20
   },
 
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: '#9C6873',
+    color: '#3A7FA6',
     marginBottom: 5
   },
 
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    backgroundColor: '#6B2B38',
+    backgroundColor: '#025382',
     padding: 15,
     borderRadius: 12,
     alignItems: 'center'
@@ -173,6 +173,6 @@ const styles = StyleSheet.create({
   },
 
   cancelText: {
-    color: '#9C6873'
+    color: '#3A7FA6'
   }
 })
