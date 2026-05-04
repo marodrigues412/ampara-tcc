@@ -253,11 +253,11 @@ export default function EmergencyContacts({ navigation }) {
 const styles = StyleSheet.create({
   container: { padding: 20 },
 
-  back: { color: '#6B2B38', marginBottom: 10 },
+  back: { color: '#025382', marginBottom: 10 },
 
-  title: { fontSize: 30, fontWeight: 'bold', color: '#6B2B38' },
+  title: { fontSize: 30, fontWeight: 'bold', color: '#025382' },
 
-  subtitle: { color: '#9C6873', marginBottom: 20 },
+  subtitle: { color: '#3A7FA6', marginBottom: 20 },
 
   card: {
     backgroundColor: '#FFF',
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     marginBottom: 20
   },
 
-  label: { marginTop: 10, color: '#9C6873' },
+  label: { marginTop: 10, color: '#3A7FA6' },
 
   input: {
     borderWidth: 1,
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: '#6B2B38',
+    backgroundColor: '#025382',
     padding: 14,
     borderRadius: 12,
     marginTop: 15,
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
 
   name: { fontWeight: 'bold', fontSize: 16 },
   phone: { color: '#666' },
-  relacao: { color: '#9C6873' },
+  relacao: { color: '#3A7FA6' },
 
   actions: { flexDirection: 'row', alignItems: 'center' },
   icon: { fontSize: 18, marginHorizontal: 8 },

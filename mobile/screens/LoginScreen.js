@@ -71,9 +71,9 @@ export default function LoginScreen({ onLogin }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 20 },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#6b2b38' },
+  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#025382' },
   input: { borderWidth: 1, borderColor: '#ccc', padding: 15, marginBottom: 15, borderRadius: 10 },
-  button: { backgroundColor: '#6B2B38', padding: 15, borderRadius: 10 },
+  button: { backgroundColor: '#025382', padding: 15, borderRadius: 10 },
   buttonText: { color: '#fff', textAlign: 'center', fontWeight: 'bold' },
-  link: { marginTop: 15, textAlign: 'center', color: '#6b2b38' }
+  link: { marginTop: 15, textAlign: 'center', color: '#025382' }
 })
