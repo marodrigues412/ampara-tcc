@@ -33,7 +33,7 @@ function Tabs() {
           paddingTop: 5,
         },
 
-        tabBarActiveTintColor: '#6B2B38',
+        tabBarActiveTintColor: '#025382',
         tabBarInactiveTintColor: '#B0A9A3',
 
         tabBarLabelStyle: {
