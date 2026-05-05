@@ -1,0 +1,515 @@
+---
+---
+
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ampara</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+
+<body>
+
+<!-- NAV -->
+<nav>
+  <h2>Ampara</h2>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+
+  <div class="hero-content">
+    <h1>Sinta-se mais segura nos seus trajetos</h1>
+
+    <p>
+	Monitoramento em tempo real que combina localização, comportamento e contexto para identificar situações de risco com precisão, de forma inteligente, não invasiva e integrada ao seu celular e smartwatch.
+    </p>
+
+    <div class="buttons">
+      <a 
+        href="https://github.com/marodrigues412/ampara-tcc" 
+        target="_blank"
+        class="btn primary"
+      >
+        Ver projeto
+      </a>
+
+	<a class="btn outline" onclick="showComingSoon()">Ver demo</a>    </div>
+
+  </div>
+
+  <!-- MOCKUP PREMIUM -->
+  <div class="phone-wrapper">
+    <div class="glow"></div>
+
+    <div class="phone">
+      <img src="/app.png" alt="App Ampara" />
+    </div>
+  </div>
+
+</section>
+
+<section class="impact">
+
+  <div class="impact-text">
+    <h2>Mais tranquilidade em cada deslocamento</h2>
+
+    <p>
+      O Ampara acompanha você em tempo real e entende o contexto ao seu redor,
+      oferecendo suporte inteligente quando algo foge do padrão.
+    </p>
+  </div>
+
+  <div class="impact-cards">
+
+    <div class="impact-card">
+      <h3>Monitoramento contínuo</h3>
+      <p>Seu trajeto é acompanhado de forma inteligente.</p>
+    </div>
+
+    <div class="impact-card">
+      <h3>Detecção de risco</h3>
+      <p>Identificação de situações incomuns com base em comportamento.</p>
+    </div>
+
+    <div class="impact-card">
+      <h3>Suporte imediato</h3>
+      <p>Contato rápido com contatos de confiança.</p>
+    </div>
+
+  </div>
+
+</section>
+
+<!-- PROBLEMA -->
+<section class="section light">
+  <div class="container">
+    <h2>Por que o Ampara existe?</h2>
+
+    <p>
+      Se deslocar pela cidade ainda é uma experiência insegura para muitas mulheres,
+      especialmente à noite ou em regiões desconhecidas.
+      
+      Mesmo com tantos aplicativos disponíveis, poucos realmente entendem o contexto
+      da usuária em tempo real.
+    </p>
+  </div>
+</section>
+
+<!-- DIFERENCIAL -->
+<section class="section">
+  <div class="container">
+    <h2>O que torna o Ampara diferente?</h2>
+
+    <div class="cards">
+      <div class="card">
+        <h3>Contexto real</h3>
+        <p>Não depende apenas de localização: considera comportamento e ambiente.</p>
+      </div>
+
+      <div class="card">
+        <h3>Não invasivo</h3>
+        <p>Interage com a usuária de forma leve, sem gerar alarmes desnecessários.</p>
+      </div>
+
+      <div class="card">
+        <h3>Foco na usuária</h3>
+        <p>Construído pensando na experiência real de quem usa.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMO FUNCIONA -->
+<section class="section light">
+  <div class="container">
+    <h2>Como funciona</h2>
+
+    <div class="cards">
+      <div class="card">
+        <span>📍</span>
+        <h3>Localização</h3>
+        <p>O app acompanha seu trajeto e entende o contexto ao seu redor.</p>
+      </div>
+
+      <div class="card">
+        <span>⚡</span>
+        <h3>Sensores</h3>
+        <p>Através do seu smartwatch, analisa padrões de movimento para identificar comportamentos fora do normal.</p>
+      </div>
+
+      <div class="card">
+        <span>🛡️</span>
+        <h3>Proteção</h3>
+        <p>Gera alertas inteligentes e aciona contatos de emergência quando necessário.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SOBRE -->
+<section class="section" id="sobre">
+  <div class="container">
+    <h2>Sobre o projeto</h2>
+
+    <p>
+      O Ampara nasceu como um Trabalho de Conclusão de Curso com um objetivo claro:
+      usar tecnologia de forma prática e acessível para aumentar a segurança feminina.
+      
+      Mais do que um aplicativo, buscamos criar uma solução que se adapta ao contexto
+      da usuária e contribui para uma experiência mais segura no dia a dia.
+    </p>
+  </div>
+</section>
+
+<!-- EQUIPE -->
+<section class="section light" id="time">
+  <div class="container">
+    <h2>Equipe</h2>
+
+    <div class="team">
+      <div class="member">
+		<img src="/maria.jpg" class="avatar" />
+        <h3>Maria Eduarda</h3>
+        <p>Dados, Desenvolvimento & Produto</p>
+      </div>
+
+      <div class="member">
+		<img src="/amanda.jpg" class="avatar" />
+        <h3>Amanda</h3>
+        <p>Experiência, Arquitetura & Integrações</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Projeto Ampara • TCC 2026
+</footer>
+
+</body>
+
+<style>
+/* RESET */
+body {
+  margin: 0;
+  font-family: -apple-system, sans-serif;
+  background: #F8FAFC;
+  color: #1A1A1A;
+}
+
+/* NAV */
+nav {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 25px 60px;
+  color: white;
+}
+
+nav a {
+  margin-left: 40px; /* 👈 arrumado */
+  text-decoration: none;
+  color: white;
+  opacity: 0.85;
+}
+
+/* HERO */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10%;
+  gap: 80px;
+
+  background: radial-gradient(circle at top, #0A2F4F 0%, #025382 70%);
+  color: white;
+}
+
+/* TEXTO */
+.hero-content {
+  max-width: 520px;
+}
+
+.hero h1 {
+  font-size: 52px;
+  line-height: 1.2;
+  margin-bottom: 20px;
+}
+
+.hero p {
+  font-size: 18px;
+  opacity: 0.9;
+  text-align: justify;
+}
+
+/* BOTÕES */
+.buttons {
+  margin-top: 30px;
+}
+
+.btn {
+  padding: 14px 26px;
+  border-radius: 14px;
+  text-decoration: none;
+  margin-right: 10px;
+  font-weight: 500;
+  transition: 0.2s;
+}
+
+.primary {
+  background: white;
+  color: #025382;
+}
+
+.primary:hover {
+  transform: translateY(-2px);
+}
+
+.outline {
+  border: 2px solid white;
+  color: white;
+}
+
+.outline:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+/* MOCKUP */
+.phone-wrapper {
+  position: relative;
+}
+
+.glow {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background: #4FA3D1;
+  filter: blur(120px);
+  opacity: 0.4;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.phone {
+  position: relative;
+  width: 280px;
+  height: 560px;
+  background: #111;
+  border-radius: 40px;
+  padding: 10px;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.4);
+  animation: float 4s ease-in-out infinite;
+}
+
+.phone img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 30px;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+/* ========================= */
+/* IMPACT (AGORA BONITO MESMO) */
+/* ========================= */
+
+.impact {
+  padding: 140px 10%;
+  background: linear-gradient(180deg, #F8FAFC 0%, #EEF3F8 100%);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+.impact-text {
+  max-width: 650px;
+  margin-bottom: 70px;
+}
+
+.impact-text h2 {
+  font-size: 40px;
+  color: #0A2F4F;
+}
+
+.impact-text p {
+  margin-top: 15px;
+  color: #475569;
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+/* CARDS IMPACT */
+.impact-cards {
+  display: flex;
+  gap: 25px;
+  flex-wrap: wrap;
+}
+
+.impact-card {
+  flex: 1;
+  min-width: 260px;
+
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(10px);
+
+  padding: 30px;
+  border-radius: 20px;
+
+  border: 1px solid rgba(2, 83, 130, 0.08);
+
+  box-shadow: 
+    0 10px 25px rgba(2, 83, 130, 0.08),
+    0 2px 6px rgba(0,0,0,0.04);
+
+  transition: all 0.25s ease;
+}
+
+.impact-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 
+    0 20px 40px rgba(2, 83, 130, 0.15),
+    0 5px 10px rgba(0,0,0,0.08);
+}
+
+.impact-card h3 {
+  color: #025382;
+  margin-bottom: 10px;
+}
+
+.impact-card p {
+  color: #475569;
+}
+
+/* ========================= */
+/* SECTIONS (FIX DO PROBLEMA) */
+/* ========================= */
+
+.section {
+  padding: 120px 20px;
+}
+
+.section.light {
+  background: #ffffff;
+  border-top: 1px solid rgba(0,0,0,0.05);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+/* TEXTO CENTRAL */
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.container p {
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.7;
+  color: #475569;
+}
+
+/* ========================= */
+/* CARDS NORMAL */
+/* ========================= */
+
+.cards {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 50px;
+  flex-wrap: wrap;
+}
+
+.card {
+  background: white;
+  padding: 35px;
+  border-radius: 18px;
+  width: 260px;
+
+  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+
+  transition: 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+}
+
+.card span {
+  font-size: 24px;
+}
+
+/* ========================= */
+/* TEAM */
+/* ========================= */
+
+.team {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 50px;
+}
+
+.member {
+  background: white;
+  padding: 30px;
+  border-radius: 18px;
+  width: 220px;
+
+  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+.avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+
+  margin: 0 auto 15px;
+
+  border: 4px solid white;
+
+  box-shadow: 
+    0 15px 30px rgba(2, 83, 130, 0.25),
+    0 5px 10px rgba(0,0,0,0.08);
+
+  transition: 0.3s;
+}
+
+.member:hover .avatar {
+  transform: scale(1.08);
+}
+
+/* FOOTER */
+footer {
+  text-align: center;
+  padding: 50px;
+  color: #64748B;
+}
+
+/* RESPONSIVO */
+@media (max-width: 900px) {
+  .hero {
+    flex-direction: column;
+    text-align: center;
+    padding-top: 100px;
+  }
+}
+
+</style>
+
+<script>
+function showComingSoon() {
+  alert("Demo em breve 🚀");
+}
+</script>
+
+</html>
