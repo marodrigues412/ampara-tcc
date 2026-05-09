@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
+  Platform
 } from 'react-native'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import MapView, { Marker, Circle } from 'react-native-maps'
