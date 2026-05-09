@@ -8,67 +8,74 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native'
-// import { supabase } from '../services/supabase' // Comentado até ter a conta
+import { supabase } from '../services/supabase' // Conexão real habilitada
 
 export default function MyReports({ navigation }) {
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Simulação de dados para teste (Mock local)
   useEffect(() => {
-    const mockData = [
-      {
-        id: '1',
-        tipo: 'Local Mal Iluminado',
-        local: 'Rua Alfredo Silveira, 379 - Santo André',
-        horario: '21:30',
-        data: '08/05/2026'
-      },
-      {
-        id: '2',
-        tipo: 'Assédio/Importunação',
-        local: 'Av. Industrial, 600 - Santo André',
-        horario: '18:15',
-        data: '05/05/2026'
-      }
-    ]
-
-    // Simulando delay de rede
-    setTimeout(() => {
-      setReports(mockData)
-      setLoading(false)
-    }, 1000)
-
-    // Quando tiver o Supabase, use: loadReports()
+    loadReports()
   }, [])
 
-  /* const loadReports = async () => {
-    setLoading(true)
-    const { data: userData } = await supabase.auth.getUser()
-    const { data, error } = await supabase
-      .from('occurrences')
-      .select('*')
-      .eq('user_id', userData.user.id)
-      .order('created_at', { ascending: false })
+  const loadReports = async () => {
+    try {
+      setLoading(true)
+      
+      // 1. Obtém o usuário logado (mesma lógica de SafeLocations)
+      const { data: userData } = await supabase.auth.getUser()
+      const currentUser = userData?.user
 
-    if (error) {
-      Alert.alert('Erro', 'Não foi possível carregar suas contribuições.')
-    } else {
+      if (!currentUser) {
+        setLoading(false)
+        return
+      }
+
+      // 2. Busca as ocorrências vinculadas ao ID deste usuário
+      // Usando os nomes de colunas da imagem image_73a93d.png
+      const { data, error } = await supabase
+        .from('occurrences')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
       setReports(data || [])
+    } catch (error) {
+      console.error(error)
+      Alert.alert('Erro', 'Não foi possível carregar seus registros.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
-  */
+
+  // Função para formatar a data do created_at (ISO para pt-BR)
+  const formatDate = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    return date.toLocaleDateString('pt-BR')
+  }
 
   const renderReport = ({ item }) => (
     <View style={styles.reportCard}>
       <View style={styles.reportInfo}>
-        <Text style={styles.reportType}>{item.tipo}</Text>
-        <Text style={styles.reportLocal}>{item.local}</Text>
+        {/* Usando tipo_crime conforme image_73a93d.png */}
+        <Text style={styles.reportType}>{item.tipo_crime}</Text>
+        
+        {/* Usando address conforme image_73a93d.png */}
+        <Text style={styles.reportLocal}>{item.address}</Text>
+        
+        {/* Exibindo a descrição se houver */}
+        {item.descricao ? (
+          <Text style={styles.reportDescription}>"{item.descricao}"</Text>
+        ) : null}
+
         <Text style={styles.reportDate}>
-          📅 {item.data} às {item.horario}
+          📅 {formatDate(item.created_at)} às {item.horario}
         </Text>
       </View>
+      
       <View style={styles.statusBadge}>
         <Text style={styles.statusText}>Enviado</Text>
       </View>
@@ -94,9 +101,11 @@ export default function MyReports({ navigation }) {
 
       <FlatList
         data={reports}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         renderItem={renderReport}
         contentContainerStyle={styles.listContent}
+        refreshing={loading}
+        onRefresh={loadReports}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
             Você ainda não realizou nenhum registro de ocorrência.
@@ -141,7 +150,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Ajustado para topo para acomodar descrição longa
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.05,
@@ -154,17 +163,27 @@ const styles = StyleSheet.create({
   reportType: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#B91C1C' // Tom de destaque para o crime
+    color: '#B91C1C'
   },
   reportLocal: {
     fontSize: 14,
     color: '#555',
-    marginTop: 4
+    marginTop: 4,
+    fontWeight: '500'
+  },
+  reportDescription: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 6,
+    backgroundColor: '#F9F9F9',
+    padding: 6,
+    borderRadius: 8
   },
   reportDate: {
     fontSize: 12,
     color: '#999',
-    marginTop: 8
+    marginTop: 10
   },
   statusBadge: {
     backgroundColor: '#E8F5E9',
