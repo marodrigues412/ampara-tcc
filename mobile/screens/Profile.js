@@ -125,13 +125,23 @@ return (
     style={styles.editButton}
     onPress={() => navigation.navigate('SafeLocations')}
   >
-    <Text style={styles.secondaryText}>📍 Locais seguros</Text>
-  </TouchableOpacity>
+      <Text style={styles.secondaryText}>📍 Locais seguros</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      style={styles.editButton}
+      onPress={() => navigation.navigate('MyReports')} // Certifique-se de que não há espaços extras
+    >
+      <Text style={styles.secondaryText}>📑 Meus registros e contribuições</Text>
+    </TouchableOpacity>
 
     <TouchableOpacity style={styles.logout} onPress={handleLogout}>
       <Text style={styles.logoutText}>Sair da conta</Text>
     </TouchableOpacity>
+
   </ScrollView>
+
+  
 )
 }
 
