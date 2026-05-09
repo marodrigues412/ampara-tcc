@@ -8,6 +8,7 @@ import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
 import EmergencyContacts from './screens/EmergencyContacts'
 import SafeLocations from './screens/SafeLocations'
+import MyReports from './screens/MyReports'
 
 import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -92,10 +93,13 @@ export default function App() {
           {/* Tabs (Home, Dashboard, Profile) */}
           <Stack.Screen name="Tabs" component={Tabs} />
 
-          {/* Telas fora da navbar (configurações) */}
+          {/* Telas fora da navbar (configurações e funcionalidades) */}
           <Stack.Screen name="EditProfile" component={EditProfile} />
           <Stack.Screen name="EmergencyContacts" component={EmergencyContacts} />
           <Stack.Screen name="SafeLocations" component={SafeLocations} />
+
+          {/* 🔹 Novas Rotas para Ocorrências */}
+          <Stack.Screen name="MyReports" component={MyReports} />
 
         </Stack.Navigator>
       )}
