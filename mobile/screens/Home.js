@@ -60,6 +60,11 @@ export default function Home({ navigation }) {
     'Perseguição'
   ]
 
+  // score
+
+  const [riskScore, setRiskScore] = useState(0)
+  const [riskLevel, setRiskLevel] = useState("Baixo")
+
   // função boleana de atividade
 
   const [activityMode,setActivityMode]=useState(false);
@@ -105,6 +110,56 @@ export default function Home({ navigation }) {
       "academia"
     );
   }
+
+    useEffect(() => {
+
+        let score = 0
+
+        // movimento brusco
+        if(magnitude >=4){
+            score+=6
+            }
+            else if(magnitude >=2){
+            score+=3
+            }
+            else if(magnitude >=1.2){
+            score+=1
+          }
+
+        // crimes próximos
+        if (crimeData.length > 15) {
+          score += 4
+        } 
+        else if (crimeData.length > 5) {
+          score += 2
+        }
+
+        // atividade reduz sensibilidade
+        if (activityMode) {
+          score -= 2
+        }
+
+        score = Math.max(score,0)
+
+        setRiskScore(score)
+
+        if(score >= 8){
+            setRiskLevel("Crítico")
+        }
+
+        else if(score >=4){
+            setRiskLevel("Moderado")
+        }
+
+        else{
+            setRiskLevel("Baixo")
+        }
+
+      },[
+          magnitude,
+          crimeData,
+          activityMode
+      ])
 
   // Monitorar G Alto para abrir alerta
   useEffect(() => {
@@ -297,52 +352,88 @@ export default function Home({ navigation }) {
           <Text style={styles.subHeader}>Monitoramento ativo</Text>
         </View>
 
-<View
-  style={[
-    styles.activityBanner,
-    activityMode && styles.activityBannerActive
-  ]}
->
-  <View style={styles.activityHeader}>
-    
-    <View>
+{/* SCORE */}
+<View style={styles.scoreCard}>
 
-      <Text
-        style={[
-          styles.activityTitle,
-          activityMode && styles.activityTitleActive
-        ]}
-      >
-        🏋️ Modo atividade
-      </Text>
+  <Text style={styles.scoreLabel}>
+    Risco atual
+  </Text>
 
-      <Text style={styles.activitySubtitle}>
-        {activityMode
-          ? "Monitoramento adaptado para exercícios"
-          : "Evita falsos alertas durante exercícios"}
-      </Text>
+  <Text style={styles.scoreValue}>
+    {riskScore}
+  </Text>
 
-    </View>
-
-    <Switch
-      value={activityMode}
-      onValueChange={toggleActivity}
-      trackColor={{
-        false:"#DDD",
-        true:"#C2185B"
-      }}
-      thumbColor="#FFF"
-    />
-
+  <View
+    style={[
+      styles.scoreBadge,
+      riskLevel==="Baixo" && styles.lowRisk,
+      riskLevel==="Moderado" && styles.mediumRisk,
+      riskLevel==="Crítico" && styles.highRisk
+    ]}
+  >
+    <Text style={styles.scoreBadgeText}>
+      {riskLevel}
+    </Text>
   </View>
 
-  {activityMode && (
-    <Text style={styles.activityStatus}>
-      ● Ativo agora
-    </Text>
-  )}
+  <Text style={styles.scoreDescription}>
+    Monitoramento em tempo real baseado em contexto
+  </Text>
 
 </View>
+
+
+          {/* MODO ATIVIDADE */}
+          <View
+            style={[
+              styles.activityBanner,
+              activityMode && styles.activityBannerActive
+            ]}
+          >
+            <View style={styles.activityHeader}>
+
+              <View>
+
+                <Text
+                  style={[
+                    styles.activityTitle,
+                    activityMode && styles.activityTitleActive
+                  ]}
+                >
+                  🏋️ Modo atividade
+                </Text>
+
+                <Text style={styles.activitySubtitle}>
+                  {activityMode
+                    ? "Monitoramento adaptado para exercícios"
+                    : "Evita falsos alertas durante exercícios"}
+                </Text>
+
+              </View>
+
+              <Switch
+                value={activityMode}
+                onValueChange={toggleActivity}
+                trackColor={{
+                  false:"#DDD",
+                  true:"#C2185B"
+                }}
+                thumbColor="#FFF"
+              />
+
+            </View>
+
+            {activityMode && (
+              <Text style={styles.activityStatus}>
+                ● Ativo agora
+              </Text>
+            )}
+
+          </View>
+
+
+
+
         {/* MAPA (União: Estilo Ma + Pinos Ma) */}
         <View style={styles.mapFixedContainer}>
           {location && region ? (
@@ -390,22 +481,48 @@ export default function Home({ navigation }) {
         </View>
 
         {/* MONITOR DE ATIVIDADE */}
-        <View style={styles.card}>
-          <Text style={styles.label}>Monitor de Atividade</Text>
-          <Text style={styles.data}>👣 {stepCount} passos</Text>
-        </View>
+            <View style={styles.metricsContainer}>
 
-        {/* SENSORES */}
-        <View style={styles.card}>
-          <Text style={styles.label}>Sensores</Text>
-          <Text style={styles.data}>X: {x.toFixed(2)} | Y: {y.toFixed(2)} | Z: {z.toFixed(2)}</Text>
-          <View style={styles.statusBox}>
-            <Text style={styles.magnitudeLabel}>Força G:</Text>
-            <Text style={[styles.magnitudeValue, { color: isHighRisk ? '#B91C1C' : '#2E8B57' }]}>
-              {magnitude}
+            <View style={styles.metricBox}>
+            <Text style={styles.metricIcon}>
+            👣
             </Text>
-          </View>
-        </View>
+
+            <Text style={styles.metricValue}>
+            {stepCount}
+            </Text>
+
+            <Text style={styles.metricLabel}>
+            passos
+            </Text>
+            </View>
+
+
+            <View style={styles.metricBox}>
+            <Text style={styles.metricIcon}>
+            📈
+            </Text>
+
+            <Text
+            style={[
+            styles.metricValue,
+            {
+            color:isHighRisk
+            ? "#B91C1C"
+            : "#2E8B57"
+            }
+            ]}
+            >
+            {magnitude}
+            </Text>
+
+            <Text style={styles.metricLabel}>
+            Força G
+            </Text>
+
+            </View>
+
+            </View>
 
 
       </ScrollView>
@@ -594,5 +711,145 @@ activityStatus:{
   alertTitle: { fontSize: 24, fontWeight: 'bold', color: '#B91C1C', marginBottom: 15 },
   alertText: { fontSize: 18, color: '#333', textAlign: 'center', marginBottom: 25 },
   okButton: { backgroundColor: '#4CAF50', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 15 },
-  okButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 }
+  okButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
+
+  // estilos score
+
+    scoreCard:{
+    backgroundColor:"#FFF8FC",
+    paddingVertical:8,
+    paddingHorizontal:10,
+    borderRadius:16,
+    marginBottom:8,
+    alignItems:"center",
+    borderWidth:1,
+    borderColor:"#F4C7DD"
+    },
+
+    scoreTitle:{
+    fontSize:13,
+    fontWeight:"700",
+    color:"#444"
+    },
+
+    scoreValue:{
+    fontSize:32,
+    fontWeight:"bold",
+    color:"#C2185B",
+    marginVertical:3
+    },
+
+    scoreBadge:{
+    paddingVertical:3,
+    paddingHorizontal:10,
+    borderRadius:16
+    },
+
+    scoreBadgeText:{
+    color:"#FFF",
+    fontWeight:"700"
+    },
+
+    scoreDescription:{
+    marginTop:6,
+    fontSize:12,
+    color:"#666",
+    textAlign:"center"
+    },
+
+    lowRisk:{
+    backgroundColor:"#4CAF50"
+    },
+
+    mediumRisk:{
+    backgroundColor:"#FF9800"
+    },
+
+    highRisk:{
+    backgroundColor:"#B91C1C"
+},
+scoreCard:{
+backgroundColor:"#FFF8FC",
+paddingVertical:20,
+paddingHorizontal:16,
+borderRadius:22,
+marginBottom:16,
+alignItems:"center",
+borderWidth:1,
+borderColor:"#F4C7DD"
+},
+
+scoreLabel:{
+fontSize:14,
+fontWeight:"600",
+color:"#666"
+},
+
+scoreValue:{
+fontSize:58,
+fontWeight:"bold",
+color:"#C2185B",
+marginVertical:6
+},
+
+scoreBadge:{
+paddingVertical:6,
+paddingHorizontal:18,
+borderRadius:18
+},
+
+scoreBadgeText:{
+color:"#FFF",
+fontWeight:"700",
+fontSize:14
+},
+
+scoreDescription:{
+marginTop:10,
+fontSize:12,
+color:"#777",
+textAlign:"center"
+},
+
+lowRisk:{
+backgroundColor:"#4CAF50"
+},
+
+mediumRisk:{
+backgroundColor:"#FF9800"
+},
+
+highRisk:{
+backgroundColor:"#B91C1C"
+},
+metricsContainer:{
+flexDirection:"row",
+justifyContent:"space-between",
+marginTop:8,
+marginBottom:20
+},
+
+metricBox:{
+backgroundColor:"#FFF",
+width:"48%",
+padding:18,
+borderRadius:20,
+alignItems:"center"
+},
+
+metricIcon:{
+fontSize:26
+},
+
+metricValue:{
+fontSize:28,
+fontWeight:"bold",
+marginTop:8
+},
+
+metricLabel:{
+marginTop:5,
+fontSize:13,
+color:"#777"
+},
 })
