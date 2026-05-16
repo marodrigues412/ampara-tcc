@@ -49,11 +49,17 @@ export default function Home({ navigation }) {
   const { magnitude, isHighRisk } = riskStatus
 
   const tiposOcorrencia = [
-    'Assalto/Roubo',
-    'Assédio/Importunação',
-    'Atividade Suspeita',
-    'Local Mal Iluminado',
-    'Perseguição'
+    'Homicídio Doloso',
+    'Tentativa de Homicídio',
+    'Lesão Corporal Dolosa',
+    'Latrocínio',
+    'Estupro',
+    'Roubo - Outros',
+    'Roubo de Veículo',
+    'Roubo de Carga',
+    'Roubo a Banco',
+    'Furto - Outros',
+    'Furto de Veículo'
   ]
 
   // --- Estados do Score de Risco ---
