@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native'
-import { supabase } from '../services/supabase' // Conexão real habilitada
+import { supabase } from '../services/supabase'
 
 export default function MyReports({ navigation }) {
   const [reports, setReports] = useState([])
@@ -22,7 +22,7 @@ export default function MyReports({ navigation }) {
     try {
       setLoading(true)
       
-      // 1. Obtém o usuário logado (mesma lógica de SafeLocations)
+      // 1. Obtém o usuário logado
       const { data: userData } = await supabase.auth.getUser()
       const currentUser = userData?.user
 
@@ -31,8 +31,7 @@ export default function MyReports({ navigation }) {
         return
       }
 
-      // 2. Busca as ocorrências vinculadas ao ID deste usuário
-      // Usando os nomes de colunas da imagem image_73a93d.png
+      // 2. Busca as ocorrências trazendo explicitamente a coluna 'horario'
       const { data, error } = await supabase
         .from('occurrences')
         .select('*')
@@ -60,10 +59,8 @@ export default function MyReports({ navigation }) {
   const renderReport = ({ item }) => (
     <View style={styles.reportCard}>
       <View style={styles.reportInfo}>
-        {/* Usando tipo_crime conforme image_73a93d.png */}
         <Text style={styles.reportType}>{item.tipo_crime}</Text>
         
-        {/* Usando address conforme image_73a93d.png */}
         <Text style={styles.reportLocal}>{item.address}</Text>
         
         {/* Exibindo a descrição se houver */}
@@ -71,8 +68,10 @@ export default function MyReports({ navigation }) {
           <Text style={styles.reportDescription}>"{item.descricao}"</Text>
         ) : null}
 
+        {/* 🕒 Renderização do Horário Otimizada: mostra o horário salvo no Supabase, 
+            e caso não exista em algum registro antigo, oculta graciosamente */}
         <Text style={styles.reportDate}>
-          📅 {formatDate(item.created_at)} às {item.horario}
+          📅 {formatDate(item.created_at)} {item.horario ? `às ${item.horario}` : ''}
         </Text>
       </View>
       
@@ -93,7 +92,7 @@ export default function MyReports({ navigation }) {
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-        <Text style={styles.backText}>←</Text>
+        <Text style={styles.backText}>← Voltar</Text>
       </TouchableOpacity>
 
       <Text style={styles.title}>Meus Registros</Text>
@@ -123,11 +122,13 @@ const styles = StyleSheet.create({
     padding: 20
   },
   backButton: {
-    marginTop: 40
+    marginTop: 40,
+    marginBottom: 10
   },
   backText: {
-    fontSize: 28,
-    color: '#025382'
+    fontSize: 16,
+    color: '#025382',
+    fontWeight: '600'
   },
   title: {
     fontSize: 32,
@@ -150,7 +151,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start', // Ajustado para topo para acomodar descrição longa
+    alignItems: 'flex-start',
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.05,
@@ -181,9 +182,10 @@ const styles = StyleSheet.create({
     borderRadius: 8
   },
   reportDate: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 10
+    fontSize: 13,
+    color: '#777',
+    marginTop: 10,
+    fontWeight: '500'
   },
   statusBadge: {
     backgroundColor: '#E8F5E9',
