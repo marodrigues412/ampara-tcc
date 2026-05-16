@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Switch
 } from 'react-native'
 
 import MapView, { Marker, Circle } from 'react-native-maps'
@@ -19,12 +20,7 @@ import * as Location from 'expo-location'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import { buscarCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
-
-import { Switch } from "react-native";
-import {
- getActivityStatus,
- updateActivityStatus
-} from "../services/activityService";
+import { getActivityStatus, updateActivityStatus } from "../services/activityService"
 
 export default function Home({ navigation }) {
   const { data, location, riskStatus, errorMsg, stepCount } = useRiskDetection()
@@ -60,106 +56,72 @@ export default function Home({ navigation }) {
     'Perseguição'
   ]
 
-  // score
-
+  // --- Estados do Score de Risco ---
   const [riskScore, setRiskScore] = useState(0)
   const [riskLevel, setRiskLevel] = useState("Baixo")
 
-  // função boleana de atividade
+  // --- Estado do Modo Atividade ---
+  const [activityMode, setActivityMode] = useState(false)
 
-  const [activityMode,setActivityMode]=useState(false);
+  useEffect(() => {
+    loadActivity()
+  }, [])
 
-  useEffect(()=>{
+  async function loadActivity() {
+    const user = (await supabase.auth.getUser()).data.user
+    if (!user) return
 
-    loadActivity();
-
-    },[]);
-
-
-    async function loadActivity(){
-
-    const user=(
-    await supabase.auth.getUser()
-    ).data.user;
-
-    if(!user)return;
-
-    const data=
-    await getActivityStatus(user.id);
-
-    if(data){
-
-    setActivityMode(data.ativo);
-
+    const data = await getActivityStatus(user.id)
+    if (data) {
+      setActivityMode(data.ativo)
     }
-
-    }
-
-  async function toggleActivity(value){
-    setActivityMode(value);
-
-    const user=(
-      await supabase.auth.getUser()
-    ).data.user;
-
-    if(!user)return;
-
-    await updateActivityStatus(
-      user.id,
-      value,
-      "academia"
-    );
   }
 
-    useEffect(() => {
+  async function toggleActivity(value) {
+    setActivityMode(value)
 
-        let score = 0
+    const user = (await supabase.auth.getUser()).data.user
+    if (!user) return
 
-        // movimento brusco
-        if(magnitude >=4){
-            score+=6
-            }
-            else if(magnitude >=2){
-            score+=3
-            }
-            else if(magnitude >=1.2){
-            score+=1
-          }
+    await updateActivityStatus(user.id, value, "academia")
+  }
 
-        // crimes próximos
-        if (crimeData.length > 15) {
-          score += 4
-        } 
-        else if (crimeData.length > 5) {
-          score += 2
-        }
+  // --- Lógica de Cálculo de Risco ---
+  useEffect(() => {
+    let score = 0
 
-        // atividade reduz sensibilidade
-        if (activityMode) {
-          score -= 2
-        }
+    // Movimento brusco
+    if (magnitude >= 4) {
+      score += 6
+    } else if (magnitude >= 2) {
+      score += 3
+    } else if (magnitude >= 1.2) {
+      score += 1
+    }
 
-        score = Math.max(score,0)
+    // Crimes próximos
+    if (crimeData.length > 15) {
+      score += 4
+    } else if (crimeData.length > 5) {
+      score += 2
+    }
 
-        setRiskScore(score)
+    // Atividade reduz sensibilidade
+    if (activityMode) {
+      score -= 2
+    }
 
-        if(score >= 8){
-            setRiskLevel("Crítico")
-        }
+    score = Math.max(score, 0)
+    setRiskScore(score)
 
-        else if(score >=4){
-            setRiskLevel("Moderado")
-        }
-
-        else{
-            setRiskLevel("Baixo")
-        }
-
-      },[
-          magnitude,
-          crimeData,
-          activityMode
-      ])
+    if (score >= 8) {
+      setRiskLevel("Crítico")
+    } else if (score >= 4) {
+      setRiskLevel("Moderado")
+    } else {
+      setRiskLevel("Baixo")
+    }
+  }, [magnitude, crimeData, activityMode])
 
   // Monitorar G Alto para abrir alerta
   useEffect(() => {
@@ -174,7 +136,7 @@ export default function Home({ navigation }) {
       const initialRegion = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        latitudeDelta: 0.015, // Zoom um pouco mais equilibrado
+        latitudeDelta: 0.015,
         longitudeDelta: 0.015,
       }
       setRegion(initialRegion)
@@ -183,7 +145,7 @@ export default function Home({ navigation }) {
   }, [location])
 
   // =========================
-  // CARREGAR CRIMES (Logica da Maria)
+  // CARREGAR CRIMES (Lógica da Maria)
   // =========================
   useEffect(() => {
     async function carregarCrimes() {
@@ -225,7 +187,7 @@ export default function Home({ navigation }) {
   }, [location])
 
   // =========================
-  // LOGICA DE ENDEREÇO (Logica da Amanda)
+  // LÓGICA DE ENDEREÇO E REGISTRO (Lógica da Amanda)
   // =========================
   const handleUseCurrentLocation = async () => {
     setLoadingGPS(true)
@@ -278,8 +240,8 @@ export default function Home({ navigation }) {
   }
 
   const handleSaveOccurrence = async () => {
-    if (!occTipo || !occEndereco) {
-      Alert.alert('Atenção', 'Preencha o tipo e o local.')
+    if (!occTipo || !occEndereco || !occHorario) {
+      Alert.alert('Atenção', 'Preencha o tipo, o local e o horário.')
       return
     }
 
@@ -300,7 +262,7 @@ export default function Home({ navigation }) {
             tipo_crime: occTipo,
             address: occEndereco,
             descricao: occDescricao,
-            horario: occHorario,
+            horario: occHorario, // Salvando o horário capturado ou editado
             latitude: occCoords?.latitude,
             longitude: occCoords?.longitude,
             risk_score: magnitude || 0,
@@ -325,6 +287,7 @@ export default function Home({ navigation }) {
     setOccDescricao('')
     setOccCoords(null)
     setSuggestions([])
+    setOccHorario(new Date().toLocaleTimeString().slice(0, 5)) // Reseta pegando a hora atualizada
   }
 
   const handleRegionChange = (newRegion) => {
@@ -352,89 +315,41 @@ export default function Home({ navigation }) {
           <Text style={styles.subHeader}>Monitoramento ativo</Text>
         </View>
 
-{/* SCORE */}
-<View style={styles.scoreCard}>
-
-  <Text style={styles.scoreLabel}>
-    Risco atual
-  </Text>
-
-  <Text style={styles.scoreValue}>
-    {riskScore}
-  </Text>
-
-  <View
-    style={[
-      styles.scoreBadge,
-      riskLevel==="Baixo" && styles.lowRisk,
-      riskLevel==="Moderado" && styles.mediumRisk,
-      riskLevel==="Crítico" && styles.highRisk
-    ]}
-  >
-    <Text style={styles.scoreBadgeText}>
-      {riskLevel}
-    </Text>
-  </View>
-
-  <Text style={styles.scoreDescription}>
-    Monitoramento em tempo real baseado em contexto
-  </Text>
-
-</View>
-
-
-          {/* MODO ATIVIDADE */}
-          <View
-            style={[
-              styles.activityBanner,
-              activityMode && styles.activityBannerActive
-            ]}
-          >
-            <View style={styles.activityHeader}>
-
-              <View>
-
-                <Text
-                  style={[
-                    styles.activityTitle,
-                    activityMode && styles.activityTitleActive
-                  ]}
-                >
-                  🏋️ Modo atividade
-                </Text>
-
-                <Text style={styles.activitySubtitle}>
-                  {activityMode
-                    ? "Monitoramento adaptado para exercícios"
-                    : "Evita falsos alertas durante exercícios"}
-                </Text>
-
-              </View>
-
-              <Switch
-                value={activityMode}
-                onValueChange={toggleActivity}
-                trackColor={{
-                  false:"#DDD",
-                  true:"#C2185B"
-                }}
-                thumbColor="#FFF"
-              />
-
-            </View>
-
-            {activityMode && (
-              <Text style={styles.activityStatus}>
-                ● Ativo agora
-              </Text>
-            )}
-
+        {/* SCORE CARD */}
+        <View style={styles.scoreCard}>
+          <Text style={styles.scoreLabel}>Risco atual</Text>
+          <Text style={styles.scoreValue}>{riskScore}</Text>
+          <View style={[
+            styles.scoreBadge,
+            riskLevel === "Baixo" && styles.lowRisk,
+            riskLevel === "Moderado" && styles.mediumRisk,
+            riskLevel === "Crítico" && styles.highRisk
+          ]}>
+            <Text style={styles.scoreBadgeText}>{riskLevel}</Text>
           </View>
+          <Text style={styles.scoreDescription}>Monitoramento em tempo real baseado em contexto</Text>
+        </View>
 
+        {/* MODO ATIVIDADE */}
+        <View style={[styles.activityBanner, activityMode && styles.activityBannerActive]}>
+          <View style={styles.activityHeader}>
+            <View>
+              <Text style={[styles.activityTitle, activityMode && styles.activityTitleActive]}>🏋️ Modo atividade</Text>
+              <Text style={styles.activitySubtitle}>
+                {activityMode ? "Monitoramento adaptado para exercícios" : "Evita falsos alertas durante exercícios"}
+              </Text>
+            </View>
+            <Switch
+              value={activityMode}
+              onValueChange={toggleActivity}
+              trackColor={{ false: "#DDD", true: "#C2185B" }}
+              thumbColor="#FFF"
+            />
+          </View>
+          {activityMode && <Text style={styles.activityStatus}>● Ativo agora</Text>}
+        </View>
 
-
-
-        {/* MAPA (União: Estilo Ma + Pinos Ma) */}
+        {/* MAPA */}
         <View style={styles.mapFixedContainer}>
           {location && region ? (
             <>
@@ -480,54 +395,26 @@ export default function Home({ navigation }) {
           </Text>
         </View>
 
-        {/* MONITOR DE ATIVIDADE */}
-            <View style={styles.metricsContainer}>
+        {/* METRICS CONTAINER */}
+        <View style={styles.metricsContainer}>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricIcon}>👣</Text>
+            <Text style={styles.metricValue}>{stepCount}</Text>
+            <Text style={styles.metricLabel}>passos</Text>
+          </View>
 
-            <View style={styles.metricBox}>
-            <Text style={styles.metricIcon}>
-            👣
+          <View style={styles.metricBox}>
+            <Text style={styles.metricIcon}>📈</Text>
+            <Text style={[styles.metricValue, { color: isHighRisk ? "#B91C1C" : "#2E8B57" }]}>
+              {magnitude}
             </Text>
-
-            <Text style={styles.metricValue}>
-            {stepCount}
-            </Text>
-
-            <Text style={styles.metricLabel}>
-            passos
-            </Text>
-            </View>
-
-
-            <View style={styles.metricBox}>
-            <Text style={styles.metricIcon}>
-            📈
-            </Text>
-
-            <Text
-            style={[
-            styles.metricValue,
-            {
-            color:isHighRisk
-            ? "#B91C1C"
-            : "#2E8B57"
-            }
-            ]}
-            >
-            {magnitude}
-            </Text>
-
-            <Text style={styles.metricLabel}>
-            Força G
-            </Text>
-
-            </View>
-
-            </View>
-
+            <Text style={styles.metricLabel}>Força G</Text>
+          </View>
+        </View>
 
       </ScrollView>
 
-      {/* BOTÕES FLUTUANTES (Amanda) */}
+      {/* BOTÕES FLUTUANTES */}
       <View style={styles.floatingContainer}>
         <TouchableOpacity style={styles.fabHelp} onPress={() => alert('Acionando contatos de emergência...')}>
           <Text style={styles.fabText}>🆘 AJUDA</Text>
@@ -537,7 +424,7 @@ export default function Home({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* MODAL DE REGISTRO (Amanda) */}
+      {/* MODAL DE REGISTRO */}
       <Modal visible={reportModalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flexOne}>
           <View style={styles.occOverlay}>
@@ -571,6 +458,17 @@ export default function Home({ navigation }) {
                     </TouchableOpacity>
                   ))}
                 </View>
+
+                {/* 👇 NOVO ENTRADA VISUAL: CAMPO DE HORÁRIO DO INCIDENTE */}
+                <Text style={styles.occLabel}>Horário do Ocorrido</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ex: 19:45"
+                  value={occHorario}
+                  onChangeText={setOccHorario}
+                  maxLength={5}
+                  keyboardType="numbers-and-punctuation"
+                />
 
                 <Text style={styles.occLabel}>Descrição</Text>
                 <TextInput
@@ -614,6 +512,7 @@ export default function Home({ navigation }) {
   )
 }
 
+// --- Folha de Estilos ---
 const styles = StyleSheet.create({
   flexOne: { flex: 1 },
   container: { flex: 1, backgroundColor: '#F5EFEA' },
@@ -627,62 +526,17 @@ const styles = StyleSheet.create({
   recenterText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
   crimeAlert: { padding: 14, borderRadius: 16, marginBottom: 16 },
   crimeAlertText: { fontWeight: '700', fontSize: 16 },
-  card: { backgroundColor: '#FFF', padding: 20, borderRadius: 24, marginBottom: 16 },
-  label: { color: '#3A7FA6', fontWeight: '700', fontSize: 22 },
-  data: { color: '#333', marginTop: 10, fontSize: 18 },
-  statusBox: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
-  magnitudeLabel: { color: '#555', fontSize: 20 },
-  magnitudeValue: { fontSize: 56, marginLeft: 12 },
-activityBanner:{
-  backgroundColor:"#FFF",
-  padding:16,
-  borderRadius:20,
-  marginBottom:16,
-  borderWidth:1,
-  borderColor:"#E8E0D8"
-},
-
-activityBannerActive:{
-  backgroundColor:"#FFF0F7",
-  borderColor:"#C2185B"
-},
-
-activityHeader:{
-  flexDirection:"row",
-  justifyContent:"space-between",
-  alignItems:"center"
-},
-
-activityTitle:{
-  fontSize:16,
-  fontWeight:"700",
-  color:"#333"
-},
-
-activityTitleActive:{
-  color:"#C2185B"
-},
-
-activitySubtitle:{
-  fontSize:13,
-  color:"#666",
-  marginTop:4,
-  maxWidth:220
-},
-
-activityStatus:{
-  marginTop:10,
-  color:"#C2185B",
-  fontWeight:"700",
-  fontSize:12
-},
-
-  // Estilos da Amanda (FAB e Modal)
+  activityBanner: { backgroundColor: "#FFF", padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: "#E8E0D8" },
+  activityBannerActive: { backgroundColor: "#FFF0F7", borderColor: "#C2185B" },
+  activityHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  activityTitle: { fontSize: 16, fontWeight: "700", color: "#333" },
+  activityTitleActive: { color: "#C2185B" },
+  activitySubtitle: { fontSize: 13, color: "#666", marginTop: 4, maxWidth: 220 },
+  activityStatus: { marginTop: 10, color: "#C2185B", fontWeight: "700", fontSize: 12 },
   floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end' },
   fabHelp: { backgroundColor: '#B91C1C', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
   fabRegister: { backgroundColor: '#025382', marginTop: 12, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
   fabText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
-  
   occOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   occModal: { backgroundColor: '#FFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '85%' },
   occScrollContent: { flexGrow: 1, paddingBottom: 20 },
@@ -690,7 +544,7 @@ activityStatus:{
   occLabel: { color: '#3A7FA6', fontWeight: 'bold', marginTop: 15, marginBottom: 8 },
   inputRow: { flexDirection: 'row', gap: 10 },
   inputFlex: { flex: 1, borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, padding: 15, fontSize: 16, backgroundColor: '#FAFAFA' },
-  input: { borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, padding: 15, fontSize: 16, backgroundColor: '#FAFAFA' },
+  input: { borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, padding: 15, fontSize: 16, backgroundColor: '#FAFAFA', marginTop: 5 },
   gpsBtn: { backgroundColor: '#F5EFEA', width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#D8D0CC' },
   gpsIcon: { fontSize: 24 },
   typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 5 },
@@ -704,152 +558,24 @@ activityStatus:{
   suggestionsBox: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#DDD', borderRadius: 12, marginTop: 5, maxHeight: 150 },
   suggestionItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#EEE' },
   suggestionText: { fontSize: 14, color: '#333' },
-
-  // Estilos Alerta G
   alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
   alertContent: { backgroundColor: '#FFF', padding: 30, borderRadius: 25, width: '85%', alignItems: 'center' },
   alertTitle: { fontSize: 24, fontWeight: 'bold', color: '#B91C1C', marginBottom: 15 },
   alertText: { fontSize: 18, color: '#333', textAlign: 'center', marginBottom: 25 },
   okButton: { backgroundColor: '#4CAF50', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 15 },
   okButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
-
-  // estilos score
-
-    scoreCard:{
-    backgroundColor:"#FFF8FC",
-    paddingVertical:8,
-    paddingHorizontal:10,
-    borderRadius:16,
-    marginBottom:8,
-    alignItems:"center",
-    borderWidth:1,
-    borderColor:"#F4C7DD"
-    },
-
-    scoreTitle:{
-    fontSize:13,
-    fontWeight:"700",
-    color:"#444"
-    },
-
-    scoreValue:{
-    fontSize:32,
-    fontWeight:"bold",
-    color:"#C2185B",
-    marginVertical:3
-    },
-
-    scoreBadge:{
-    paddingVertical:3,
-    paddingHorizontal:10,
-    borderRadius:16
-    },
-
-    scoreBadgeText:{
-    color:"#FFF",
-    fontWeight:"700"
-    },
-
-    scoreDescription:{
-    marginTop:6,
-    fontSize:12,
-    color:"#666",
-    textAlign:"center"
-    },
-
-    lowRisk:{
-    backgroundColor:"#4CAF50"
-    },
-
-    mediumRisk:{
-    backgroundColor:"#FF9800"
-    },
-
-    highRisk:{
-    backgroundColor:"#B91C1C"
-},
-scoreCard:{
-backgroundColor:"#FFF8FC",
-paddingVertical:20,
-paddingHorizontal:16,
-borderRadius:22,
-marginBottom:16,
-alignItems:"center",
-borderWidth:1,
-borderColor:"#F4C7DD"
-},
-
-scoreLabel:{
-fontSize:14,
-fontWeight:"600",
-color:"#666"
-},
-
-scoreValue:{
-fontSize:58,
-fontWeight:"bold",
-color:"#C2185B",
-marginVertical:6
-},
-
-scoreBadge:{
-paddingVertical:6,
-paddingHorizontal:18,
-borderRadius:18
-},
-
-scoreBadgeText:{
-color:"#FFF",
-fontWeight:"700",
-fontSize:14
-},
-
-scoreDescription:{
-marginTop:10,
-fontSize:12,
-color:"#777",
-textAlign:"center"
-},
-
-lowRisk:{
-backgroundColor:"#4CAF50"
-},
-
-mediumRisk:{
-backgroundColor:"#FF9800"
-},
-
-highRisk:{
-backgroundColor:"#B91C1C"
-},
-metricsContainer:{
-flexDirection:"row",
-justifyContent:"space-between",
-marginTop:8,
-marginBottom:20
-},
-
-metricBox:{
-backgroundColor:"#FFF",
-width:"48%",
-padding:18,
-borderRadius:20,
-alignItems:"center"
-},
-
-metricIcon:{
-fontSize:26
-},
-
-metricValue:{
-fontSize:28,
-fontWeight:"bold",
-marginTop:8
-},
-
-metricLabel:{
-marginTop:5,
-fontSize:13,
-color:"#777"
-},
+  scoreCard: { backgroundColor: "#FFF8FC", paddingVertical: 20, paddingHorizontal: 16, borderRadius: 22, marginBottom: 16, alignItems: "center", borderWidth: 1, borderColor: "#F4C7DD" },
+  scoreLabel: { fontSize: 14, fontWeight: "600", color: "#666" },
+  scoreValue: { fontSize: 58, fontWeight: "bold", color: "#C2185B", marginVertical: 6 },
+  scoreBadge: { paddingVertical: 6, paddingHorizontal: 18, borderRadius: 18 },
+  scoreBadgeText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
+  scoreDescription: { marginTop: 10, fontSize: 12, color: "#777", textAlign: 'center' },
+  lowRisk: { backgroundColor: "#4CAF50" },
+  mediumRisk: { backgroundColor: "#FF9800" },
+  highRisk: { backgroundColor: "#B91C1C" },
+  metricsContainer: { flexDirection: "row", justifyContent: "space-between", marginTop: 8, marginBottom: 20 },
+  metricBox: { backgroundColor: "#FFF", width: "48%", padding: 18, borderRadius: 20, alignItems: "center" },
+  metricIcon: { fontSize: 26 },
+  metricValue: { fontSize: 28, fontWeight: "bold", marginTop: 8 },
+  metricLabel: { marginTop: 5, fontSize: 13, color: "#777" },
 })
