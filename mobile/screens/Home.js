@@ -20,6 +20,12 @@ import { useRiskDetection } from '../hooks/useRiskDetection'
 import { buscarCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 
+import { Switch } from "react-native";
+import {
+ getActivityStatus,
+ updateActivityStatus
+} from "../services/activityService";
+
 export default function Home({ navigation }) {
   const { data, location, riskStatus, errorMsg, stepCount } = useRiskDetection()
   
@@ -53,6 +59,52 @@ export default function Home({ navigation }) {
     'Local Mal Iluminado',
     'Perseguição'
   ]
+
+  // função boleana de atividade
+
+  const [activityMode,setActivityMode]=useState(false);
+
+  useEffect(()=>{
+
+    loadActivity();
+
+    },[]);
+
+
+    async function loadActivity(){
+
+    const user=(
+    await supabase.auth.getUser()
+    ).data.user;
+
+    if(!user)return;
+
+    const data=
+    await getActivityStatus(user.id);
+
+    if(data){
+
+    setActivityMode(data.ativo);
+
+    }
+
+    }
+
+  async function toggleActivity(value){
+    setActivityMode(value);
+
+    const user=(
+      await supabase.auth.getUser()
+    ).data.user;
+
+    if(!user)return;
+
+    await updateActivityStatus(
+      user.id,
+      value,
+      "academia"
+    );
+  }
 
   // Monitorar G Alto para abrir alerta
   useEffect(() => {
@@ -245,6 +297,52 @@ export default function Home({ navigation }) {
           <Text style={styles.subHeader}>Monitoramento ativo</Text>
         </View>
 
+<View
+  style={[
+    styles.activityBanner,
+    activityMode && styles.activityBannerActive
+  ]}
+>
+  <View style={styles.activityHeader}>
+    
+    <View>
+
+      <Text
+        style={[
+          styles.activityTitle,
+          activityMode && styles.activityTitleActive
+        ]}
+      >
+        🏋️ Modo atividade
+      </Text>
+
+      <Text style={styles.activitySubtitle}>
+        {activityMode
+          ? "Monitoramento adaptado para exercícios"
+          : "Evita falsos alertas durante exercícios"}
+      </Text>
+
+    </View>
+
+    <Switch
+      value={activityMode}
+      onValueChange={toggleActivity}
+      trackColor={{
+        false:"#DDD",
+        true:"#C2185B"
+      }}
+      thumbColor="#FFF"
+    />
+
+  </View>
+
+  {activityMode && (
+    <Text style={styles.activityStatus}>
+      ● Ativo agora
+    </Text>
+  )}
+
+</View>
         {/* MAPA (União: Estilo Ma + Pinos Ma) */}
         <View style={styles.mapFixedContainer}>
           {location && region ? (
@@ -287,7 +385,7 @@ export default function Home({ navigation }) {
         {/* ALERTA CRIMES PRÓXIMOS */}
         <View style={[styles.crimeAlert, { backgroundColor: crimeData.length > 0 ? '#FFEBEE' : '#E8F5E9' }]}>
           <Text style={[styles.crimeAlertText, { color: crimeData.length > 0 ? '#C2185B' : '#2E8B57' }]}>
-            {crimeData.length > 0 ? `⚠️ ${crimeData.length} ocorrências próximas` : '✅ Região segura'}
+            {crimeData.length > 0 ? `⚠️ Área com registros recentes` : '✅ Região segura'}
           </Text>
         </View>
 
@@ -308,6 +406,8 @@ export default function Home({ navigation }) {
             </Text>
           </View>
         </View>
+
+
       </ScrollView>
 
       {/* BOTÕES FLUTUANTES (Amanda) */}
@@ -416,7 +516,50 @@ const styles = StyleSheet.create({
   statusBox: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
   magnitudeLabel: { color: '#555', fontSize: 20 },
   magnitudeValue: { fontSize: 56, marginLeft: 12 },
-  
+activityBanner:{
+  backgroundColor:"#FFF",
+  padding:16,
+  borderRadius:20,
+  marginBottom:16,
+  borderWidth:1,
+  borderColor:"#E8E0D8"
+},
+
+activityBannerActive:{
+  backgroundColor:"#FFF0F7",
+  borderColor:"#C2185B"
+},
+
+activityHeader:{
+  flexDirection:"row",
+  justifyContent:"space-between",
+  alignItems:"center"
+},
+
+activityTitle:{
+  fontSize:16,
+  fontWeight:"700",
+  color:"#333"
+},
+
+activityTitleActive:{
+  color:"#C2185B"
+},
+
+activitySubtitle:{
+  fontSize:13,
+  color:"#666",
+  marginTop:4,
+  maxWidth:220
+},
+
+activityStatus:{
+  marginTop:10,
+  color:"#C2185B",
+  fontWeight:"700",
+  fontSize:12
+},
+
   // Estilos da Amanda (FAB e Modal)
   floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end' },
   fabHelp: { backgroundColor: '#B91C1C', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
