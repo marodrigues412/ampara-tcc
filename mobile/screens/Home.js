@@ -44,6 +44,8 @@ export default function Home({ navigation }) {
   const [loadingGPS, setLoadingGPS] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const searchTimeout = useRef(null)
+  const [safeLocations, setSafeLocations] = useState([]);
+  const [insideSafeZone, setInsideSafeZone] = useState(false);
 
   const { x, y, z } = data
   const { magnitude, isHighRisk } = riskStatus
@@ -70,7 +72,27 @@ export default function Home({ navigation }) {
   const [activityMode, setActivityMode] = useState(false)
 
   useEffect(() => {
-    loadActivity()
+    loadActivity();
+    loadSafeLocations();
+
+    // Cria o canal de escuta em tempo real na tabela de locais seguros
+    const safeLocationsChannel = supabase
+      .channel('public:safe_locations')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'safe_locations' },
+        () => {
+          // Sempre que houver INSERT, UPDATE ou DELETE, recarrega a lista automaticamente
+          console.log('🔄 [REALTIME] Alteração detectada em safe_locations! Atualizando...');
+          loadSafeLocations();
+        }
+      )
+      .subscribe();
+
+    // Limpa a escuta quando a tela Home for desmontada (evita vazamento de memória)
+    return () => {
+      supabase.removeChannel(safeLocationsChannel);
+    };
   }, [])
 
   async function loadActivity() {
@@ -80,6 +102,22 @@ export default function Home({ navigation }) {
     const data = await getActivityStatus(user.id)
     if (data) {
       setActivityMode(data.ativo)
+    }
+  }
+  async function loadSafeLocations() {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('safe_locations')
+        .select('latitude, longitude')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      setSafeLocations(data || []);
+    } catch (error) {
+      console.error('ERRO AO CARREGAR LOCAIS SEGUROS:', error);
     }
   }
 
@@ -95,39 +133,98 @@ export default function Home({ navigation }) {
   // --- Lógica de Cálculo de Risco ---
   useEffect(() => {
     let score = 0
-
-    // Movimento brusco
-    if (magnitude >= 4) {
-      score += 6
-    } else if (magnitude >= 2) {
-      score += 3
-    } else if (magnitude >= 1.2) {
-      score += 1
+    let logMotivos = {
+      movimentoBrusco: 0,
+      crimesProximos: 0,
+      modoAtividade: 0,
+      localSeguro: 0
     }
 
-    // Crimes próximos
+    // movimento brusco
+    if(magnitude >=4){
+        score+=6
+        logMotivos.movimentoBrusco = +6
+        }
+        else if(magnitude >=2){
+        score+=3
+        logMotivos.movimentoBrusco = +3
+        }
+        else if(magnitude >=1.2){
+        score+=1
+        logMotivos.movimentoBrusco = +1
+      }
+
+    // crimes próximos
     if (crimeData.length > 15) {
       score += 4
-    } else if (crimeData.length > 5) {
+      logMotivos.crimesProximos = +4
+    } 
+    else if (crimeData.length > 5) {
       score += 2
+      logMotivos.crimesProximos = +2
     }
 
-    // Atividade reduz sensibilidade
+    // atividade reduz sensibilidade
     if (activityMode) {
       score -= 2
+      logMotivos.modoAtividade = -2
     }
 
-    score = Math.max(score, 0)
+    // 👇 NOVA REGRA: Verificar perímetro seguro (80 metros)
+    let emZonaSegura = false
+    if (location && safeLocations.length > 0) {
+      const userLat = location.coords.latitude
+      const userLon = location.coords.longitude
+
+      emZonaSegura = safeLocations.some((loc) => {
+        const latSafe = Number(loc.latitude)
+        const lonSafe = Number(loc.longitude)
+        
+        const distanciaEmKm = Math.sqrt(
+          Math.pow((latSafe - userLat) * 111, 2) +
+          Math.pow((lonSafe - userLon) * 111, 2)
+        )
+        return distanciaEmKm <= 0.08
+      })
+
+      if (emZonaSegura) {
+        score -= 3
+        logMotivos.localSeguro = -3
+      }
+    }
+
+    setInsideSafeZone(emZonaSegura)
+
+    score = Math.max(score,0)
     setRiskScore(score)
 
-    if (score >= 8) {
-      setRiskLevel("Crítico")
-    } else if (score >= 4) {
-      setRiskLevel("Moderado")
-    } else {
-      setRiskLevel("Baixo")
+    // 🛑 LOG NO TERMINAL COM A CONTA DO SCORE
+    console.log("=========================================")
+    console.log(`📊 CONTA DO SCORE DO AMPARA:`);
+    console.log(`   (+) Força G (Magnitude): ${logMotivos.movimentoBrusco}`);
+    console.log(`   (+) Crimes ao redor: ${logMotivos.crimesProximos}`);
+    console.log(`   (-) Modo Atividade? ${activityMode ? 'Sim' : 'Não'} (${logMotivos.modoAtividade})`);
+    console.log(`   (-) Em Local Seguro? ${emZonaSegura ? 'Sim' : 'Não'} (${logMotivos.localSeguro})`);
+    console.log(`   ➔ SCORE FINAL: ${score}`);
+    console.log("=========================================")
+
+    if(score >= 8){
+        setRiskLevel("Crítico")
     }
-  }, [magnitude, crimeData, activityMode])
+    else if(score >=4){
+        setRiskLevel("Moderado")
+    }
+    else{
+        setRiskLevel("Baixo")
+    }
+
+  },[
+      magnitude,
+      crimeData,
+      activityMode,
+      location,       // 👇 Adicionado
+      safeLocations   // 👇 Adicionado
+  ])
 
   // Monitorar G Alto para abrir alerta
   useEffect(() => {
@@ -335,7 +432,13 @@ export default function Home({ navigation }) {
           </View>
           <Text style={styles.scoreDescription}>Monitoramento em tempo real baseado em contexto</Text>
         </View>
-
+        {insideSafeZone && (
+          <View style={styles.safeZoneBanner}>
+            <Text style={styles.safeZoneBannerTitle}>Perímetro Seguro Ativo</Text>
+            <Text style={styles.safeZoneBannerSubtitle}>O nível de risco local foi ajustado para este estabelecimento cadastrado.</Text>
+          </View>
+        )}
+  
         {/* MODO ATIVIDADE */}
         <View style={[styles.activityBanner, activityMode && styles.activityBannerActive]}>
           <View style={styles.activityHeader}>
@@ -579,6 +682,29 @@ const styles = StyleSheet.create({
   lowRisk: { backgroundColor: "#4CAF50" },
   mediumRisk: { backgroundColor: "#FF9800" },
   highRisk: { backgroundColor: "#B91C1C" },
+  safeZoneBanner: {
+      backgroundColor: '#FFF',
+      padding: 16,
+      borderRadius: 20,
+      marginBottom: 16,
+      borderWidth: 1.5,
+      borderColor: '#025382',
+      elevation: 1,
+      shadowColor: '#000',
+      shadowOpacity: 0.03,
+      shadowRadius: 4
+    },
+    safeZoneBannerTitle: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: '#025382'
+    },
+    safeZoneBannerSubtitle: {
+      fontSize: 13,
+      color: '#3A7FA6',
+      marginTop: 4,
+      fontWeight: '500'
+    },
   metricsContainer: { flexDirection: "row", justifyContent: "space-between", marginTop: 8, marginBottom: 20 },
   metricBox: { backgroundColor: "#FFF", width: "48%", padding: 18, borderRadius: 20, alignItems: "center" },
   metricIcon: { fontSize: 26 },
