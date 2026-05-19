@@ -22,7 +22,7 @@ import { buscarCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
 
-// 🛑 COLE AQUI A URL COMPLETA DO SEU API ENDPOINT GERADA NO CONSOLE DO API GATEWAY DA AWS
+// 🛑 URL DO API ENDPOINT NO API GATEWAY DA AWS
 const URL_AWS_GATEWAY = "https://2egghrwmeg.execute-api.us-east-1.amazonaws.com/default/ampara-alert-trigger";
 
 export default function Home({ navigation }) {
@@ -50,7 +50,6 @@ export default function Home({ navigation }) {
   const [safeLocations, setSafeLocations] = useState([]);
   const [insideSafeZone, setInsideSafeZone] = useState(false);
 
-  const { x, y, z } = data
   const { magnitude, isHighRisk } = riskStatus
 
   const tiposOcorrencia = [
@@ -77,14 +76,15 @@ export default function Home({ navigation }) {
   // --- Controle do Cronômetro de Alerta (Item 9 e 10) ---
   const [countdown, setCountdown] = useState(15)
   const [listaContatos, setListaContatos] = useState([])
-  const timerRef = useRef(null)
+  const [alertaDisparado, setAlertaDisparado] = useState(false);
+  const timerRef = useRef(null);
 
+  // --- Inicialização e Escuta Realtime do Supabase ---
   useEffect(() => {
     loadActivity();
     loadSafeLocations();
     loadEmergencyContacts();
 
-    // Cria o canal de escuta em tempo real na tabela de locais seguros
     const safeLocationsChannel = supabase
       .channel('public:safe_locations')
       .on(
@@ -99,30 +99,83 @@ export default function Home({ navigation }) {
 
     return () => {
       supabase.removeChannel(safeLocationsChannel);
-      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [])
+
+  // =========================================================================
+  // 🚀 LÓGICA UNIFICADA E FUNCIONANDO DO JEITO QUE ESTAVA (Mmotor setTimeout encadeado)
+  // Mas sem as duplicidades que causavam o loop de requisições.
+  // =========================================================================
+
+  // 1️⃣ GATILHO DO MODAL: Abre o modal visual se a Força G for alta OU o score for crítico.
+  // Reseta o relógio para 15s e libera a trava de disparo.
+  useEffect(() => {
+    // Se houver alto risco E o modal estiver fechado E ainda não disparamos socorro para este evento
+    if ((isHighRisk || riskLevel === "Crítico") && !modalVisible && !alertaDisparado) {
+      setCountdown(15);
+      setAlertaDisparado(false); // Reseta a trava
+      setModalVisible(true);
+      console.log("⏱️ [Timer Ampara] Estado crítico detectado! Abrindo modal visual e resetando countdown para 15s.");
+    }
+  }, [isHighRisk, riskLevel, modalVisible, alertaDisparado]);
+
+  // 2️⃣ O MOTOR SEGURO (O 'Jeito que estava' que funcionou marchar 14s, 13s...)
+  // Monitora ocountdown e faz a contagem regressiva síncrona com tiro único final.
+  useEffect(() => {
+    // Se o usuário cancelou o modal visual, matamos o motor imediatamente
+    if (!modalVisible) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      return;
+    }
+
+    // Caso o cronômetro tenha chegado a zero e o backend ainda não tenha sido acionado
+    if (countdown === 0 && modalVisible && !alertaDisparado) {
+      console.log("🚀 [Timer Ampara] Zerou com precisão! Cancelando motor e disparando protocolo automático único...");
+      
+      setAlertaDisparado(true); // 🔒 TRANCA IMEDIATAMENTE para não entrar aqui de novo
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setModalVisible(false); // Fecha o front
+      
+      executarEnvioDeSocorro(); // Dá o único tiro na AWS e Supabase
+      
+      // 🛑 CRUCIAL: 'return' para abortar a re-execução do useEffect antes que o React processe as mudanças de estado assíncronas.
+      // Isso impede a metralhadora de requisições.
+      return;
+    }
+
+    // Se o contador for maior que zero e o alerta não foi disparado, roda o relógio
+    if (countdown > 0 && modalVisible && !alertaDisparado) {
+      // Limpa timeout residual anterior por segurança
+      if (timerRef.current) clearTimeout(timerRef.current);
+      
+      // Cria um intervalo que dura EXATAMENTE 1 segundo e depois morre
+      timerRef.current = setTimeout(() => {
+        const proximoSegundo = countdown - 1;
+        console.log(`⏱️ [Timer Ampara] Contagem interna rodando: ${proximoSegundo}s`);
+        setCountdown(proximoSegundo);
+      }, 1000);
+    }
+
+    // Limpeza padrão do ciclo de vida
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [countdown, isHighRisk, modalVisible, alertaDisparado]); // Auto-encadeia setTimeout a cada mudança de countdown.
+
+  // =========================================================================
 
   async function loadActivity() {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
-
     const data = await getActivityStatus(user.id)
-    if (data) {
-      setActivityMode(data.ativo)
-    }
+    if (data) setActivityMode(data.ativo)
   }
 
   async function loadSafeLocations() {
     try {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
-
-      const { data, error } = await supabase
-        .from('safe_locations')
-        .select('latitude, longitude')
-        .eq('user_id', user.id);
-
+      const { data, error } = await supabase.from('safe_locations').select('latitude, longitude').eq('user_id', user.id);
       if (error) throw error;
       setSafeLocations(data || []);
     } catch (error) {
@@ -134,12 +187,7 @@ export default function Home({ navigation }) {
     try {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
-
-      const { data, error } = await supabase
-        .from('emergency_contacts')
-        .select('telefone')
-        .eq('user_id', user.id);
-
+      const { data, error } = await supabase.from('emergency_contacts').select('telefone').eq('user_id', user.id);
       if (error) throw error;
       const telefones = data ? data.map(c => c.telefone) : [];
       setListaContatos(telefones);
@@ -150,114 +198,49 @@ export default function Home({ navigation }) {
 
   async function toggleActivity(value) {
     setActivityMode(value)
-
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
-
     await updateActivityStatus(user.id, value, "academia")
   }
 
   // --- Lógica de Cálculo de Risco Adaptável ---
   useEffect(() => {
     let score = 0
-    let logMotivos = {
-      movimentoBrusco: 0,
-      crimesProximos: 0,
-      modoAtividade: 0,
-      localSeguro: 0
-    }
+    let logMotivos = { movimentoBrusco: 0, crimesProximos: 0, modoAtividade: 0, localSeguro: 0 }
 
-    if(magnitude >= 4){
-        score += 6
-        logMotivos.movimentoBrusco = +6
-    }
-    else if(magnitude >= 2){
-        score += 3
-        logMotivos.movimentoBrusco = +3
-    }
-    else if(magnitude >= 1.2){
-        score += 1
-        logMotivos.movimentoBrusco = +1
-    }
+    if (magnitude >= 4) { score += 6; logMotivos.movimentoBrusco = +6 }
+    else if (magnitude >= 2) { score += 3; logMotivos.movimentoBrusco = +3 }
+    else if (magnitude >= 1.2) { score += 1; logMotivos.movimentoBrusco = +1 }
 
-    if (crimeData.length > 15) {
-      score += 4
-      logMotivos.crimesProximos = +4
-    } 
-    else if (crimeData.length > 5) {
-      score += 2
-      logMotivos.crimesProximos = +2
-    }
+    if (crimeData.length > 15) { score += 4; logMotivos.crimesProximos = +4 }
+    else if (crimeData.length > 5) { score += 2; logMotivos.crimesProximos = +2 }
 
-    if (activityMode) {
-      score -= 2
-      logMotivos.modoAtividade = -2
-    }
+    if (activityMode) { score -= 2; logMotivos.modoAtividade = -2 }
 
     let emZonaSegura = false
     if (location && safeLocations.length > 0) {
       const userLat = location.coords.latitude
       const userLon = location.coords.longitude
-
       emZonaSegura = safeLocations.some((loc) => {
         const latSafe = Number(loc.latitude)
         const lonSafe = Number(loc.longitude)
-        
-        const distanciaEmKm = Math.sqrt(
-          Math.pow((latSafe - userLat) * 111, 2) +
-          Math.pow((lonSafe - userLon) * 111, 2)
-        )
-        return distanciaEmKm <= 0.08
-      })
-
-      if (emZonaSegura) {
-        score -= 3
-        logMotivos.localSeguro = -3
-      }
+        const distanciaEmKm = Math.sqrt(Math.pow((latSafe - userLat) * 111, 2) + Math.pow((lonSafe - userLon) * 111, 2));
+        return distanciaEmKm <= 0.08;
+      });
+      if (emZonaSegura) { score -= 3; logMotivos.localSeguro = -3 }
     }
 
     setInsideSafeZone(emZonaSegura)
     score = Math.max(score, 0)
     setRiskScore(score)
 
-    if(score >= 8){
-        setRiskLevel("Crítico")
-    }
-    else if(score >= 4){
-        setRiskLevel("Moderado")
-    }
-    else{
-        setRiskLevel("Baixo")
-    }
-
+    if (score >= 8) { setRiskLevel("Crítico") }
+    else if (score >= 4) { setRiskLevel("Moderado") }
+    else { setRiskLevel("Baixo") }
   }, [magnitude, crimeData, activityMode, location, safeLocations])
 
-  // --- Lógica de Gerenciamento do Cronômetro Regressivo (Item 9) ---
-  useEffect(() => {
-    if (isHighRisk && !modalVisible) {
-      setCountdown(15)
-      setModalVisible(true)
-      
-      timerRef.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current)
-            setModalVisible(false)
-            executarEnvioDeSocorro() 
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [isHighRisk])
-
-  // --- Função do Disparo Automático em Segundo Plano (Item 8 e 10) ---
-const executarEnvioDeSocorro = async () => {
+  // --- Função do Disparo Automático em Segundo Plano (Tiro Único) ---
+  const executarEnvioDeSocorro = async () => {
     if (!location) {
       console.error("❌ [Ampara] Abortando: Localização GPS ausente para resgate.");
       return;
@@ -266,8 +249,7 @@ const executarEnvioDeSocorro = async () => {
     const userLat = location.coords.latitude;
     const userLon = location.coords.longitude;
     
-    // 1️⃣ DECLARA A VARIÁVEL AQUI (Acessível para a função toda)
-    const linkMapa = `https://maps.google.com/?q=${userLat},${userLon}`;
+    const linkMapa = `http://googleusercontent.com/maps.google.com/maps?q=${userLat},${userLon}`;
     const textoMensagem = `ALERTA AMPARA: Amanda pode estar em perigo! Risco: ${riskLevel}. Localização: ${linkMapa}`;
 
     console.log("🚀 [Ampara] Disparando protocolo de socorro automático e silencioso...");
@@ -296,7 +278,6 @@ const executarEnvioDeSocorro = async () => {
     }
 
     // --- REGISTRO AUTOMÁTICO DE AUDITORIA NO SUPABASE (alert_logs) ---
-    // --- REGISTRO AUTOMÁTICO DE AUDITORIA NO SUPABASE (alert_logs) ---
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       
@@ -305,24 +286,20 @@ const executarEnvioDeSocorro = async () => {
         return;
       }
 
-      // Prepara os números exatamente para o campo text 'recipient_names'
       const contatosString = listaContatos.length > 0 ? listaContatos.join(', ') : "+5511999999999";
-
       console.log("⏳ [Supabase] Tentando inserir na alert_logs para o UID:", userData.user.id);
 
-      // Faz o insert capturando explicitamente o retorno de erro do Postgres
       const { error: insertError } = await supabase
         .from('alert_logs')
         .insert([
           {
-            user_id: userData.user.id,        // uuid null -> Vinculado a auth.users
-            message: textoMensagem,           // text null
-            recipient_names: contatosString   // text null
+            user_id: userData.user.id,
+            message: textoMensagem,
+            recipient_names: contatosString
           }
         ]);
 
       if (insertError) {
-        // Se o Postgres rejeitar por RLS (Row Level Security) ou FK, vai estourar aqui
         console.error("❌ [Supabase] O Postgres rejeitou o insert:", insertError.message, insertError.details);
       } else {
         console.log("✅ [Supabase] Log de alerta cravado com sucesso na tabela alert_logs!");
@@ -334,9 +311,10 @@ const executarEnvioDeSocorro = async () => {
   }
 
   const handleUserIsSafe = () => {
-    if (timerRef.current) clearInterval(timerRef.current)
+    if (timerRef.current) clearTimeout(timerRef.current)
     setModalVisible(false)
     setCountdown(15)
+    setAlertaDisparado(false) // Libera para um novo pânico futuro
     console.log("🔒 [Ampara] Envio automático abortado pela usuária.")
   }
 
@@ -360,36 +338,17 @@ const executarEnvioDeSocorro = async () => {
       try {
         const crimes = await buscarCrimes()
         if (!location) return
-
         const userLat = location.coords.latitude
         const userLon = location.coords.longitude
-
-        const crimesFormatados = crimes
-          .map((crime) => {
-            const lat = Number(crime.latitude)
-            const lon = Number(crime.longitude)
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
-
-            return {
-              id: crime.id || Math.random().toString(),
-              lat,
-              lon,
-              tipo: crime.natureza_apurada || crime.condcta || 'Ocorrência',
-              distancia: Math.sqrt(
-                Math.pow((lat - userLat) * 111, 2) +
-                Math.pow((lon - userLon) * 111, 2)
-              )
-            }
-          })
-          .filter(Boolean)
-          .filter(crime => crime.distancia <= 20)
-          .sort((a, b) => a.distancia - b.distancia)
-          .slice(0, 100)
-
+        const crimesFormatados = crimes.map((crime) => {
+          const lat = Number(crime.latitude); const lon = Number(crime.longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+          return { id: crime.id || Math.random().toString(), lat, lon, tipo: crime.natureza_apurada || crime.condcta || 'Ocorrência',
+            distancia: Math.sqrt(Math.pow((lat - userLat) * 111, 2) + Math.pow((lon - userLon) * 111, 2))
+          }
+        }).filter(Boolean).filter(crime => crime.distancia <= 20).sort((a, b) => a.distancia - b.distancia).slice(0, 100)
         setCrimeData(crimesFormatados)
-      } catch (error) {
-        console.error('❌ ERRO AO FILTRAR CRIMES:', error)
-      }
+      } catch (error) { console.error('❌ ERRO AO FILTRAR CRIMES:', error) }
     }
     carregarCrimes()
   }, [location])
@@ -398,118 +357,43 @@ const executarEnvioDeSocorro = async () => {
   const handleUseCurrentLocation = async () => {
     setLoadingGPS(true)
     let { status } = await Location.requestForegroundPermissionsAsync()
-    if (status !== 'granted') {
-      Alert.alert('Erro', 'Permissão de GPS negada')
-      setLoadingGPS(false)
-      return
-    }
-
+    if (status !== 'granted') { Alert.alert('Erro', 'Permissão de GPS negada'); setLoadingGPS(false); return; }
     let loc = await Location.getCurrentPositionAsync({})
     const { latitude, longitude } = loc.coords
     setOccCoords({ latitude, longitude })
-
     const address = await Location.reverseGeocodeAsync({ latitude, longitude })
-    if (address && address.length > 0) {
-      const a = address[0]
-      const formatted = `${a.street || ''}${a.streetNumber ? ', ' + a.streetNumber : ''}, ${a.district || ''}, ${a.city || ''}`
-      setOccEndereco(formatted)
-    }
+    if (address && address.length > 0) { const a = address[0]; setOccEndereco(`${a.street || ''}${a.streetNumber ? ', ' + a.streetNumber : ''}, ${a.district || ''}, ${a.city || ''}`); }
     setLoadingGPS(false)
   }
 
   const searchAddress = (text) => {
     setOccEndereco(text)
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
-    if (text.trim().length < 3) {
-      setSuggestions([])
-      return
-    }
-
+    if (text.trim().length < 3) { setSuggestions([]); return; }
     searchTimeout.current = setTimeout(async () => {
-      try {
-        const query = encodeURIComponent(`${text}, São Paulo, Brasil`)
-        const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5&countrycodes=br`
-        const response = await fetch(url, { headers: { 'User-Agent': 'ampara-tcc-app' } })
-        const result = await response.json()
-        setSuggestions(result || [])
-      } catch (error) {
-        setSuggestions([])
-      }
+      try { const query = encodeURIComponent(`${text}, São Paulo, Brasil`); const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5&countrycodes=br`;
+        const response = await fetch(url, { headers: { 'User-Agent': 'ampara-tcc-app' } }); const result = await response.json(); setSuggestions(result || []);
+      } catch (error) { setSuggestions([]); }
     }, 600)
   }
 
-  const selectSuggestion = (item) => {
-    setOccEndereco(item.display_name)
-    setOccCoords({ latitude: Number(item.lat), longitude: Number(item.lon) })
-    setSuggestions([])
-    Keyboard.dismiss()
-  }
+  const selectSuggestion = (item) => { setOccEndereco(item.display_name); setOccCoords({ latitude: Number(item.lat), longitude: Number(item.lon) }); setSuggestions([]); Keyboard.dismiss(); }
 
   const handleSaveOccurrence = async () => {
-    if (!occTipo || !occEndereco || !occHorario) {
-      Alert.alert('Atenção', 'Preencha o tipo, o local e o horário.')
-      return
-    }
-
-    try {
-      setIsSaving(true)
-      const { data: userData } = await supabase.auth.getUser()
-
-      if (!userData?.user) {
-        Alert.alert("Erro", "Usuário não autenticado.")
-        return
-      }
-
-      const { error } = await supabase
-        .from('occurrences')
-        .insert([
-          {
-            user_id: userData.user.id,
-            tipo_crime: occTipo,
-            address: occEndereco,
-            descricao: occDescricao,
-            horario: occHorario,
-            latitude: occCoords?.latitude,
-            longitude: occCoords?.longitude,
-            risk_score: magnitude || 0,
-          }
-        ])
-
-      if (error) throw error
-
-      Alert.alert("Sucesso", "Ocorrência registrada na rede Ampara!")
-      setReportModalVisible(false)
-      resetForm()
-    } catch (error) {
-      Alert.alert("Erro", `Não foi possível salvar: ${error.message}`)
-    } finally {
-      setIsSaving(false)
-    }
+    if (!occTipo || !occEndereco || !occHorario) { Alert.alert('Atenção', 'Preencha o tipo, o local e o horário.'); return; }
+    try { setIsSaving(true); const { data: userData } = await supabase.auth.getUser()
+      if (!userData?.user) { Alert.alert("Erro", "Usuário não autenticado."); return; }
+      const { error } = await supabase.from('occurrences').insert([{ user_id: userData.user.id, tipo_crime: occTipo, address: occEndereco, descricao: occDescricao, horario: occHorario, latitude: occCoords?.latitude, longitude: occCoords?.longitude, risk_score: magnitude || 0 }]);
+      if (error) throw error; Alert.alert("Sucesso", "Ocorrência registrada na rede Ampara!"); setReportModalVisible(false); resetForm();
+    } catch (error) { Alert.alert("Erro", `Não foi possível salvar: ${error.message}`) }
+    finally { setIsSaving(false) }
   }
 
-  const resetForm = () => {
-    setOccEndereco('')
-    setOccTipo('')
-    setOccDescricao('')
-    setOccCoords(null)
-    setSuggestions([])
-    setOccHorario(new Date().toLocaleTimeString().slice(0, 5))
-  }
+  const resetForm = () => { setOccEndereco(''); setOccTipo(''); setOccDescricao(''); setOccCoords(null); setSuggestions([]); setOccHorario(new Date().toLocaleTimeString().slice(0, 5)); }
 
-  const handleRegionChange = (newRegion) => {
-    setRegion(newRegion)
-    if (!userRegion) return
-    const distance = Math.abs(newRegion.latitude - userRegion.latitude) + 
-                     Math.abs(newRegion.longitude - userRegion.longitude)
-    setMapMoved(distance > 0.002)
-  }
+  const handleRegionChange = (newRegion) => { setRegion(newRegion); if (!userRegion) return; const distance = Math.abs(newRegion.latitude - userRegion.latitude) + Math.abs(newRegion.longitude - userRegion.longitude); setMapMoved(distance > 0.002); }
 
-  const recenterMap = () => {
-    if (mapRef.current && userRegion) {
-      mapRef.current.animateToRegion(userRegion, 500)
-      setMapMoved(false)
-    }
-  }
+  const recenterMap = () => { if (mapRef.current && userRegion) { mapRef.current.animateToRegion(userRegion, 500); setMapMoved(false); } }
 
   return (
     <View style={styles.container}>
@@ -736,7 +620,6 @@ const executarEnvioDeSocorro = async () => {
   )
 }
 
-// --- Folha de Estilos ---
 const styles = StyleSheet.create({
   flexOne: { flex: 1 },
   container: { flex: 1, backgroundColor: '#F5EFEA' },
