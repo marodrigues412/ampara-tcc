@@ -22,6 +22,9 @@ import { buscarCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
 
+// 🛑 COLE AQUI A URL COMPLETA DO SEU API ENDPOINT GERADA NO CONSOLE DO API GATEWAY DA AWS
+const URL_AWS_GATEWAY = "https://2egghrwmeg.execute-api.us-east-1.amazonaws.com/default/ampara-alert-trigger";
+
 export default function Home({ navigation }) {
   const { data, location, riskStatus, errorMsg, stepCount } = useRiskDetection()
   
@@ -33,7 +36,7 @@ export default function Home({ navigation }) {
   const [mapMoved, setMapMoved] = useState(false)
   const mapRef = useRef(null)
 
-  // --- Estados do Registro de Ocorrência (Amanda) ---
+  // --- Estados do Registro de Ocorrência ---
   const [reportModalVisible, setReportModalVisible] = useState(false)
   const [occEndereco, setOccEndereco] = useState('')
   const [occTipo, setOccTipo] = useState('')
@@ -71,9 +74,15 @@ export default function Home({ navigation }) {
   // --- Estado do Modo Atividade ---
   const [activityMode, setActivityMode] = useState(false)
 
+  // --- Controle do Cronômetro de Alerta (Item 9 e 10) ---
+  const [countdown, setCountdown] = useState(15)
+  const [listaContatos, setListaContatos] = useState([])
+  const timerRef = useRef(null)
+
   useEffect(() => {
     loadActivity();
     loadSafeLocations();
+    loadEmergencyContacts();
 
     // Cria o canal de escuta em tempo real na tabela de locais seguros
     const safeLocationsChannel = supabase
@@ -82,16 +91,15 @@ export default function Home({ navigation }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'safe_locations' },
         () => {
-          // Sempre que houver INSERT, UPDATE ou DELETE, recarrega a lista automaticamente
           console.log('🔄 [REALTIME] Alteração detectada em safe_locations! Atualizando...');
           loadSafeLocations();
         }
       )
       .subscribe();
 
-    // Limpa a escuta quando a tela Home for desmontada (evita vazamento de memória)
     return () => {
       supabase.removeChannel(safeLocationsChannel);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [])
 
@@ -104,6 +112,7 @@ export default function Home({ navigation }) {
       setActivityMode(data.ativo)
     }
   }
+
   async function loadSafeLocations() {
     try {
       const user = (await supabase.auth.getUser()).data.user;
@@ -117,7 +126,25 @@ export default function Home({ navigation }) {
       if (error) throw error;
       setSafeLocations(data || []);
     } catch (error) {
-      console.error('ERRO AO CARREGAR LOCAIS SEGUROS:', error);
+      console.error('❌ ERRO AO CARREGAR LOCAIS SEGUROS:', error);
+    }
+  }
+
+  async function loadEmergencyContacts() {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('emergency_contacts')
+        .select('telefone')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      const telefones = data ? data.map(c => c.telefone) : [];
+      setListaContatos(telefones);
+    } catch (error) {
+      console.error('❌ ERRO AO CARREGAR CONTATOS DE EMERGÊNCIA:', error);
     }
   }
 
@@ -130,7 +157,7 @@ export default function Home({ navigation }) {
     await updateActivityStatus(user.id, value, "academia")
   }
 
-  // --- Lógica de Cálculo de Risco ---
+  // --- Lógica de Cálculo de Risco Adaptável ---
   useEffect(() => {
     let score = 0
     let logMotivos = {
@@ -140,21 +167,19 @@ export default function Home({ navigation }) {
       localSeguro: 0
     }
 
-    // movimento brusco
-    if(magnitude >=4){
-        score+=6
+    if(magnitude >= 4){
+        score += 6
         logMotivos.movimentoBrusco = +6
-        }
-        else if(magnitude >=2){
-        score+=3
+    }
+    else if(magnitude >= 2){
+        score += 3
         logMotivos.movimentoBrusco = +3
-        }
-        else if(magnitude >=1.2){
-        score+=1
+    }
+    else if(magnitude >= 1.2){
+        score += 1
         logMotivos.movimentoBrusco = +1
-      }
+    }
 
-    // crimes próximos
     if (crimeData.length > 15) {
       score += 4
       logMotivos.crimesProximos = +4
@@ -164,13 +189,11 @@ export default function Home({ navigation }) {
       logMotivos.crimesProximos = +2
     }
 
-    // atividade reduz sensibilidade
     if (activityMode) {
       score -= 2
       logMotivos.modoAtividade = -2
     }
 
-    // 👇 NOVA REGRA: Verificar perímetro seguro (80 metros)
     let emZonaSegura = false
     if (location && safeLocations.length > 0) {
       const userLat = location.coords.latitude
@@ -194,46 +217,130 @@ export default function Home({ navigation }) {
     }
 
     setInsideSafeZone(emZonaSegura)
-
-    score = Math.max(score,0)
+    score = Math.max(score, 0)
     setRiskScore(score)
-
-    // 🛑 LOG NO TERMINAL COM A CONTA DO SCORE
-    console.log("=========================================")
-    console.log(`📊 CONTA DO SCORE DO AMPARA:`);
-    console.log(`   (+) Força G (Magnitude): ${logMotivos.movimentoBrusco}`);
-    console.log(`   (+) Crimes ao redor: ${logMotivos.crimesProximos}`);
-    console.log(`   (-) Modo Atividade? ${activityMode ? 'Sim' : 'Não'} (${logMotivos.modoAtividade})`);
-    console.log(`   (-) Em Local Seguro? ${emZonaSegura ? 'Sim' : 'Não'} (${logMotivos.localSeguro})`);
-    console.log(`   ➔ SCORE FINAL: ${score}`);
-    console.log("=========================================")
 
     if(score >= 8){
         setRiskLevel("Crítico")
     }
-    else if(score >=4){
+    else if(score >= 4){
         setRiskLevel("Moderado")
     }
     else{
         setRiskLevel("Baixo")
     }
 
-  },[
-      magnitude,
-      crimeData,
-      activityMode,
-      location,       // 👇 Adicionado
-      safeLocations   // 👇 Adicionado
-  ])
+  }, [magnitude, crimeData, activityMode, location, safeLocations])
 
-  // Monitorar G Alto para abrir alerta
+  // --- Lógica de Gerenciamento do Cronômetro Regressivo (Item 9) ---
   useEffect(() => {
     if (isHighRisk && !modalVisible) {
+      setCountdown(15)
       setModalVisible(true)
+      
+      timerRef.current = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current)
+            setModalVisible(false)
+            executarEnvioDeSocorro() 
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [isHighRisk])
 
-  // Configurar região inicial do mapa
+  // --- Função do Disparo Automático em Segundo Plano (Item 8 e 10) ---
+const executarEnvioDeSocorro = async () => {
+    if (!location) {
+      console.error("❌ [Ampara] Abortando: Localização GPS ausente para resgate.");
+      return;
+    }
+
+    const userLat = location.coords.latitude;
+    const userLon = location.coords.longitude;
+    
+    // 1️⃣ DECLARA A VARIÁVEL AQUI (Acessível para a função toda)
+    const linkMapa = `https://maps.google.com/?q=${userLat},${userLon}`;
+    const textoMensagem = `ALERTA AMPARA: Amanda pode estar em perigo! Risco: ${riskLevel}. Localização: ${linkMapa}`;
+
+    console.log("🚀 [Ampara] Disparando protocolo de socorro automático e silencioso...");
+
+    // --- DISPARO DE SMS AUTOMÁTICO (AWS Lambda + Amazon SNS) ---
+    try {
+      const response = await fetch(URL_AWS_GATEWAY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nomeUsuario: "Amanda",
+          latitude: userLat,
+          longitude: userLon,
+          nivelRisco: riskLevel,
+          contatos: listaContatos.length > 0 ? listaContatos : ["+5511999999999"] 
+        })
+      });
+
+      if (response.ok) {
+        console.log("✅ [AWS Nuvem] Requisição aceita com sucesso pelo API Gateway!");
+      } else {
+        console.warn(`⚠️ [AWS Nuvem] Servidor respondeu com código de alerta: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("❌ [AWS Nuvem] Falha de rede ao conectar com o API Gateway:", error);
+    }
+
+    // --- REGISTRO AUTOMÁTICO DE AUDITORIA NO SUPABASE (alert_logs) ---
+    // --- REGISTRO AUTOMÁTICO DE AUDITORIA NO SUPABASE (alert_logs) ---
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !userData?.user) {
+        console.error("❌ [Supabase] Erro: Usuário não autenticado ou sessão expirada.", userError);
+        return;
+      }
+
+      // Prepara os números exatamente para o campo text 'recipient_names'
+      const contatosString = listaContatos.length > 0 ? listaContatos.join(', ') : "+5511999999999";
+
+      console.log("⏳ [Supabase] Tentando inserir na alert_logs para o UID:", userData.user.id);
+
+      // Faz o insert capturando explicitamente o retorno de erro do Postgres
+      const { error: insertError } = await supabase
+        .from('alert_logs')
+        .insert([
+          {
+            user_id: userData.user.id,        // uuid null -> Vinculado a auth.users
+            message: textoMensagem,           // text null
+            recipient_names: contatosString   // text null
+          }
+        ]);
+
+      if (insertError) {
+        // Se o Postgres rejeitar por RLS (Row Level Security) ou FK, vai estourar aqui
+        console.error("❌ [Supabase] O Postgres rejeitou o insert:", insertError.message, insertError.details);
+      } else {
+        console.log("✅ [Supabase] Log de alerta cravado com sucesso na tabela alert_logs!");
+      }
+
+    } catch (supabaseError) {
+      console.error("❌ [Supabase] Falha grave de execução no bloco alert_logs:", supabaseError);
+    }
+  }
+
+  const handleUserIsSafe = () => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    setModalVisible(false)
+    setCountdown(15)
+    console.log("🔒 [Ampara] Envio automático abortado pela usuária.")
+  }
+
+  // Região inicial do mapa
   useEffect(() => {
     if (location) {
       const initialRegion = {
@@ -247,9 +354,7 @@ export default function Home({ navigation }) {
     }
   }, [location])
 
-  // =========================
-  // CARREGAR CRIMES (Lógica da Maria)
-  // =========================
+  // --- Carregamento de Ocorrências SSP-SP (Lógica da Maria) ---
   useEffect(() => {
     async function carregarCrimes() {
       try {
@@ -269,7 +374,7 @@ export default function Home({ navigation }) {
               id: crime.id || Math.random().toString(),
               lat,
               lon,
-              tipo: crime.natureza_apurada || crime.conduta || 'Ocorrência',
+              tipo: crime.natureza_apurada || crime.condcta || 'Ocorrência',
               distancia: Math.sqrt(
                 Math.pow((lat - userLat) * 111, 2) +
                 Math.pow((lon - userLon) * 111, 2)
@@ -283,15 +388,13 @@ export default function Home({ navigation }) {
 
         setCrimeData(crimesFormatados)
       } catch (error) {
-        console.error('ERRO AO BUSCAR CRIMES:', error)
+        console.error('❌ ERRO AO FILTRAR CRIMES:', error)
       }
     }
     carregarCrimes()
   }, [location])
 
-  // =========================
-  // LÓGICA DE ENDEREÇO E REGISTRO (Lógica da Amanda)
-  // =========================
+  // --- Lógica Geocodificação Reversa / Nominatim (Lógica da Amanda) ---
   const handleUseCurrentLocation = async () => {
     setLoadingGPS(true)
     let { status } = await Location.requestForegroundPermissionsAsync()
@@ -365,7 +468,7 @@ export default function Home({ navigation }) {
             tipo_crime: occTipo,
             address: occEndereco,
             descricao: occDescricao,
-            horario: occHorario, // Salvando o horário capturado ou editado
+            horario: occHorario,
             latitude: occCoords?.latitude,
             longitude: occCoords?.longitude,
             risk_score: magnitude || 0,
@@ -390,7 +493,7 @@ export default function Home({ navigation }) {
     setOccDescricao('')
     setOccCoords(null)
     setSuggestions([])
-    setOccHorario(new Date().toLocaleTimeString().slice(0, 5)) // Reseta pegando a hora atualizada
+    setOccHorario(new Date().toLocaleTimeString().slice(0, 5))
   }
 
   const handleRegionChange = (newRegion) => {
@@ -432,6 +535,7 @@ export default function Home({ navigation }) {
           </View>
           <Text style={styles.scoreDescription}>Monitoramento em tempo real baseado em contexto</Text>
         </View>
+        
         {insideSafeZone && (
           <View style={styles.safeZoneBanner}>
             <Text style={styles.safeZoneBannerTitle}>Perímetro Seguro Ativo</Text>
@@ -525,8 +629,8 @@ export default function Home({ navigation }) {
 
       {/* BOTÕES FLUTUANTES */}
       <View style={styles.floatingContainer}>
-        <TouchableOpacity style={styles.fabHelp} onPress={() => alert('Acionando contatos de emergência...')}>
-          <Text style={styles.fabText}>🆘 AJUDA</Text>
+        <TouchableOpacity style={styles.fabHelp} onPress={executarEnvioDeSocorro}>
+          <Text style={styles.fabText}>🆘 SOS IMEDIATO</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
           <Text style={styles.fabText}>🚨 REGISTRAR</Text>
@@ -568,7 +672,6 @@ export default function Home({ navigation }) {
                   ))}
                 </View>
 
-                {/* 👇 NOVO ENTRADA VISUAL: CAMPO DE HORÁRIO DO INCIDENTE */}
                 <Text style={styles.occLabel}>Horário do Ocorrido</Text>
                 <TextInput
                   style={styles.input}
@@ -605,14 +708,26 @@ export default function Home({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* MODAL ALERTA G */}
-      <Modal transparent visible={modalVisible}>
+      {/* MODAL DO CRONÔMETRO DE SEGURANÇA */}
+      <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.alertOverlay}>
           <View style={styles.alertContent}>
-            <Text style={styles.alertTitle}>🚨 MOVIMENTO BRUSCO</Text>
-            <Text style={styles.alertText}>Detectamos uma força de {magnitude}G. Você está segura?</Text>
-            <TouchableOpacity style={styles.okButton} onPress={() => setModalVisible(false)}>
-              <Text style={styles.okButtonText}>Sim, estou bem</Text>
+            <Text style={styles.alertTitle}>🚨 CONTATO DE SEGURANÇA</Text>
+            <Text style={styles.alertText}>
+              Detectamos um movimento incomum de {magnitude}G no dispositivo.
+            </Text>
+            
+            <View style={styles.timerCircle}>
+              <Text style={styles.timerCountText}>{countdown}</Text>
+              <Text style={styles.timerSecondsText}>segundos</Text>
+            </View>
+
+            <Text style={styles.alertWarningText}>
+              Os contatos de emergência e a central serão acionados automaticamente após o limite.
+            </Text>
+
+            <TouchableOpacity style={styles.okButton} onPress={handleUserIsSafe}>
+              <Text style={styles.okButtonText}>Estou bem, cancelar envio</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -667,12 +782,13 @@ const styles = StyleSheet.create({
   suggestionsBox: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#DDD', borderRadius: 12, marginTop: 5, maxHeight: 150 },
   suggestionItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#EEE' },
   suggestionText: { fontSize: 14, color: '#333' },
-  alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  alertContent: { backgroundColor: '#FFF', padding: 30, borderRadius: 25, width: '85%', alignItems: 'center' },
-  alertTitle: { fontSize: 24, fontWeight: 'bold', color: '#B91C1C', marginBottom: 15 },
-  alertText: { fontSize: 18, color: '#333', textAlign: 'center', marginBottom: 25 },
-  okButton: { backgroundColor: '#4CAF50', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 15 },
-  okButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
+  alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+  alertContent: { backgroundColor: '#FFF', padding: 25, borderRadius: 25, width: '85%', alignItems: 'center' },
+  alertTitle: { fontSize: 20, fontWeight: 'bold', color: '#B91C1C', marginBottom: 10, textAlign: 'center' },
+  alertText: { fontSize: 16, color: '#333', textAlign: 'center', marginBottom: 15 },
+  alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
+  okButton: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 15, alignItems: 'center' },
+  okButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   scoreCard: { backgroundColor: "#FFF8FC", paddingVertical: 20, paddingHorizontal: 16, borderRadius: 22, marginBottom: 16, alignItems: "center", borderWidth: 1, borderColor: "#F4C7DD" },
   scoreLabel: { fontSize: 14, fontWeight: "600", color: "#666" },
   scoreValue: { fontSize: 58, fontWeight: "bold", color: "#C2185B", marginVertical: 6 },
@@ -682,32 +798,15 @@ const styles = StyleSheet.create({
   lowRisk: { backgroundColor: "#4CAF50" },
   mediumRisk: { backgroundColor: "#FF9800" },
   highRisk: { backgroundColor: "#B91C1C" },
-  safeZoneBanner: {
-      backgroundColor: '#FFF',
-      padding: 16,
-      borderRadius: 20,
-      marginBottom: 16,
-      borderWidth: 1.5,
-      borderColor: '#025382',
-      elevation: 1,
-      shadowColor: '#000',
-      shadowOpacity: 0.03,
-      shadowRadius: 4
-    },
-    safeZoneBannerTitle: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: '#025382'
-    },
-    safeZoneBannerSubtitle: {
-      fontSize: 13,
-      color: '#3A7FA6',
-      marginTop: 4,
-      fontWeight: '500'
-    },
+  safeZoneBanner: { backgroundColor: '#FFF', padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1.5, borderColor: '#025382', elevation: 1, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4 },
+  safeZoneBannerTitle: { fontSize: 16, fontWeight: 'bold', color: '#025382' },
+  safeZoneBannerSubtitle: { fontSize: 13, color: '#3A7FA6', marginTop: 4, fontWeight: '500' },
   metricsContainer: { flexDirection: "row", justifyContent: "space-between", marginTop: 8, marginBottom: 20 },
   metricBox: { backgroundColor: "#FFF", width: "48%", padding: 18, borderRadius: 20, alignItems: "center" },
   metricIcon: { fontSize: 26 },
   metricValue: { fontSize: 28, fontWeight: "bold", marginTop: 8 },
   metricLabel: { marginTop: 5, fontSize: 13, color: "#777" },
+  timerCircle: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: '#B91C1C', justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
+  timerCountText: { fontSize: 36, fontWeight: 'bold', color: '#B91C1C' },
+  timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' }
 })
