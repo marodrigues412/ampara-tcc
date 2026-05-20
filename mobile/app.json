@@ -4,31 +4,40 @@
     "slug": "ampara-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+
+    "icon": "./assets/images/ampara-logo.png",
+
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.amparaapp"
     },
+
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F5F3EF",
-        "foregroundImage": "./assets/images/icon.png"
+        "backgroundColor": "#025382",
+        "foregroundImage": "./assets/images/ampara-logo.png"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.amparaapp"
     },
+
+    "web": {
+      "favicon": "./assets/images/ampara-logo.png"
+    },
+
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 250,
+          "image": "./assets/images/ampara-logo.png",
+          "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#F5F3EF"
+          "backgroundColor": "#025382"
         }
       ]
     ]
