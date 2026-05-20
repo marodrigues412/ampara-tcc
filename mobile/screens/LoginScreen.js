@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native'
 import { supabase } from '../services/supabase'
 import RegisterScreen from './RegisterScreen'
 
@@ -40,9 +40,15 @@ export default function LoginScreen({ onLogin }) {
     }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Ampara</Text>
+  <View style={styles.container}>
 
+    <Image
+      source={require('../assets/images/ampara-logo.png')}
+      style={styles.logo}
+      resizeMode="contain"
+    />
+
+    <Text style={styles.title}>Ampara</Text>
       <TextInput
         placeholder="Email"
         value={email}
@@ -75,5 +81,6 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#ccc', padding: 15, marginBottom: 15, borderRadius: 10 },
   button: { backgroundColor: '#025382', padding: 15, borderRadius: 10 },
   buttonText: { color: '#fff', textAlign: 'center', fontWeight: 'bold' },
-  link: { marginTop: 15, textAlign: 'center', color: '#025382' }
+  link: { marginTop: 15, textAlign: 'center', color: '#025382' },
+  logo: { width: 150, height: 150, alignSelf: 'center', marginBottom: 20 },
 })
