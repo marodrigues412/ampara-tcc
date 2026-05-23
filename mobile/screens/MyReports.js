@@ -49,32 +49,45 @@ export default function MyReports({ navigation }) {
     }
   }
 
-  // Função para formatar a data do created_at (ISO para pt-BR)
-  const formatDate = (dateString) => {
-    if (!dateString) return ''
-    const date = new Date(dateString)
-    return date.toLocaleDateString('pt-BR')
+  const formatCreatedAt = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+  }
+
+  const formatDataOcorrencia = (dataIso) => {
+    if (!dataIso) return null
+    const [ano, mes, dia] = dataIso.split('-')
+    return `${dia}/${mes}/${ano}`
   }
 
   const renderReport = ({ item }) => (
     <View style={styles.reportCard}>
       <View style={styles.reportInfo}>
         <Text style={styles.reportType}>{item.tipo_crime}</Text>
-        
-        <Text style={styles.reportLocal}>{item.address}</Text>
-        
-        {/* Exibindo a descrição se houver */}
+
+        <Text style={styles.reportLocal}>📍 {item.address}</Text>
+
         {item.descricao ? (
           <Text style={styles.reportDescription}>"{item.descricao}"</Text>
         ) : null}
 
-        {/* 🕒 Renderização do Horário Otimizada: mostra o horário salvo no Supabase, 
-            e caso não exista em algum registro antigo, oculta graciosamente */}
-        <Text style={styles.reportDate}>
-          📅 {formatDate(item.created_at)} {item.horario ? `às ${item.horario}` : ''}
-        </Text>
+        <View style={styles.divider} />
+
+        <View style={styles.metaRow}>
+          <Text style={styles.metaLabel}>Ocorrência em</Text>
+          <Text style={styles.metaValue}>
+            {formatDataOcorrencia(item.data_ocorrencia) || '—'}
+            {item.horario ? ` às ${item.horario}` : ''}
+          </Text>
+        </View>
+
+        <View style={styles.metaRow}>
+          <Text style={styles.metaLabel}>Registrado em</Text>
+          <Text style={styles.metaValue}>{formatCreatedAt(item.created_at)}</Text>
+        </View>
       </View>
-      
+
       <View style={styles.statusBadge}>
         <Text style={styles.statusText}>Enviado</Text>
       </View>
@@ -181,11 +194,31 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 8
   },
-  reportDate: {
+  divider: {
+    height: 1,
+    backgroundColor: '#F0EAE4',
+    marginVertical: 10
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4
+  },
+  metaLabel: {
+    fontSize: 11,
+    color: '#3A7FA6',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4
+  },
+  metaValue: {
     fontSize: 13,
-    color: '#777',
-    marginTop: 10,
-    fontWeight: '500'
+    color: '#444',
+    fontWeight: '500',
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: 8
   },
   statusBadge: {
     backgroundColor: '#E8F5E9',
