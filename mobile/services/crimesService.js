@@ -1,5 +1,28 @@
 import { supabase } from "./supabase";
 
+export async function buscarOcorrencias() {
+  const { data, error } = await supabase
+    .from("occurrences")
+    .select(`
+      id,
+      latitude,
+      longitude,
+      tipo_crime,
+      descricao,
+      address,
+      horario
+    `)
+    .not("latitude", "is", null)
+    .not("longitude", "is", null)
+
+  if (error) {
+    console.error("ERRO SUPABASE (occurrences):", error)
+    return []
+  }
+
+  return data
+}
+
 export async function buscarCrimes() {
 
   const { data, error } = await supabase
