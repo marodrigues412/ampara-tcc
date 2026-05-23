@@ -265,7 +265,7 @@ export default function Home({ navigation }) {
     }
 
     // A mensagem de texto agora inclui o endereço em texto plano e o link do mapa
-    const textoMensagem = `🚨 ALERTA AMPARA: Amanda pode estar em perigo! Risco: ${riskLevel}. Local: ${enderecoFormatado}. Mapa: ${linkMapa}`;
+    const textoMensagem = `🚨 ALERTA AMPARA: ${userName} pode estar em perigo! Risco: ${riskLevel}. Local: ${enderecoFormatado}. Mapa: ${linkMapa}`;
     const contatosAEnviar = listaContatos.length > 0 ? listaContatos : ["Nenhum contato cadastrado"];
 
     console.log("🚀 [Ampara] Disparando protocolo de socorro automático...");
@@ -276,7 +276,7 @@ export default function Home({ navigation }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nomeUsuario: "Amanda",
+          nomeUsuario: userName,
           latitude: userLat,
           longitude: userLon,
           nivelRisco: riskLevel,
