@@ -509,7 +509,7 @@ export default function Home({ navigation }) {
                     coordinate={{ latitude: crime.lat, longitude: crime.lon }}
                     title={crime.tipo}
                     description={`${crime.distancia.toFixed(2)} km`}
-                    pinColor="#C2185B"
+                    pinColor="red"
                   />
                 ))}
 
@@ -519,10 +519,26 @@ export default function Home({ navigation }) {
                     coordinate={{ latitude: occ.lat, longitude: occ.lon }}
                     title={`🚨 ${occ.tipo}`}
                     description={occ.descricao || occ.address || `${occ.distancia.toFixed(2)} km`}
-                    pinColor="magenta"
+                    pinColor="orange"
                   />
                 ))}
               </MapView>
+
+              <View style={styles.mapLegend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: 'blue' }]} />
+                  <Text style={styles.legendText}>Você</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: 'red' }]} />
+                  <Text style={styles.legendText}>Crimes SSP</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: 'orange' }]} />
+                  <Text style={styles.legendText}>Rede Ampara</Text>
+                </View>
+              </View>
+
               {mapMoved && (
                 <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}>
                   <Text style={styles.recenterText}>📍 Voltar para mim</Text>
@@ -594,6 +610,16 @@ export default function Home({ navigation }) {
 
             <TouchableOpacity style={styles.btnPrimary} onPress={() => setSosFeedbackVisible(false)}>
               <Text style={styles.btnPrimaryText}>Entendido</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.btnHelpGuide}
+              onPress={() => {
+                setSosFeedbackVisible(false)
+                navigation.navigate('HelpGuide')
+              }}
+            >
+              <Text style={styles.btnHelpGuideText}>O que fazer agora? Ver orientações</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -733,6 +759,10 @@ const styles = StyleSheet.create({
   mapFixedContainer: { height: 350, borderRadius: 25, overflow: 'hidden', backgroundColor: '#FFF', marginBottom: 14 },
   map: { flex: 1 },
   recenterButton: { position: 'absolute', bottom: 15, alignSelf: 'center', backgroundColor: '#025382', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 20 },
+  mapLegend: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: 11, color: '#333', fontWeight: '600' },
   recenterText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
   
   crimeAlert: { padding: 14, borderRadius: 16, marginBottom: 16 },
@@ -782,6 +812,8 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: '#025382', paddingVertical: 16, borderRadius: 15, alignItems: 'center', width: '100%' },
   btnPrimaryText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   btnCancelText: { textAlign: 'center', color: '#B91C1C', marginTop: 15, fontWeight: '600', fontSize: 15 },
+  btnHelpGuide: { marginTop: 12, paddingVertical: 12, borderRadius: 15, alignItems: 'center', borderWidth: 1.5, borderColor: '#025382' },
+  btnHelpGuideText: { color: '#025382', fontWeight: '700', fontSize: 14 },
   btnSafe: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 15, alignItems: 'center' },
   btnSafeText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
 
