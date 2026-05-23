@@ -49,6 +49,7 @@ export default function Home({ navigation }) {
   const searchTimeout = useRef(null)
   const [safeLocations, setSafeLocations] = useState([]);
   const [insideSafeZone, setInsideSafeZone] = useState(false);
+  const [userName, setUserName] = useState("Usuária"); // Valor padrão
 
   const { magnitude, isHighRisk } = riskStatus
 
@@ -87,6 +88,7 @@ export default function Home({ navigation }) {
     loadActivity();
     loadSafeLocations();
     loadEmergencyContacts();
+    loadUserData();
 
     const safeLocationsChannel = supabase
       .channel('public:safe_locations')
@@ -154,6 +156,17 @@ export default function Home({ navigation }) {
     };
   }, [countdown, isHighRisk, modalVisible, alertaDisparado]);
 
+  async function loadUserData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Tenta buscar o nome (assumindo que você tem uma tabela 'profiles')
+    const { data } = await supabase.from('profiles').select('nome').eq('id', user.id).single();
+    if (data?.nome) {
+     setUserName(data.nome);
+   }
+  }
+  
   async function loadActivity() {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
