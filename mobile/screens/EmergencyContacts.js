@@ -28,6 +28,7 @@ const [modalVisible,setModalVisible]=useState(false)
 
 const [phoneContacts,setPhoneContacts]=useState([])
 const [contactsModalVisible,setContactsModalVisible]=useState(false)
+const [contactSearch,setContactSearch]=useState('')
 
 const MAX_CONTATOS=3
 
@@ -225,9 +226,21 @@ b.name,
 
 setPhoneContacts(sorted)
 
+setContactSearch('')
+
 setContactsModalVisible(true)
 
 }
+
+const filteredContacts=contactSearch.trim()===''
+? phoneContacts
+: phoneContacts.filter(c=>{
+const term=contactSearch.toLowerCase()
+return (
+c.name?.toLowerCase().includes(term) ||
+c.phoneNumbers?.[0]?.number?.includes(term)
+)
+})
 
 return(
 
@@ -422,7 +435,7 @@ marginBottom:25
 style={{
 fontSize:28,
 fontWeight:'bold',
-marginBottom:20
+marginBottom:16
 }}
 >
 
@@ -430,7 +443,23 @@ Selecionar contato
 
 </Text>
 
-{phoneContacts.map(contact=>(
+<TextInput
+style={styles.searchInput}
+value={contactSearch}
+onChangeText={setContactSearch}
+placeholder="Buscar por nome ou número..."
+placeholderTextColor="#AAA"
+autoCorrect={false}
+clearButtonMode="while-editing"
+/>
+
+{filteredContacts.length===0&&(
+<Text style={styles.emptySearch}>
+Nenhum contato encontrado
+</Text>
+)}
+
+{filteredContacts.map(contact=>(
 
 <TouchableOpacity
 
@@ -677,6 +706,23 @@ gap:15
 
 icon:{
 fontSize:22
+},
+
+searchInput:{
+backgroundColor:"#FFF",
+borderRadius:14,
+padding:14,
+fontSize:16,
+marginBottom:18,
+borderWidth:1,
+borderColor:'#DDD'
+},
+
+emptySearch:{
+textAlign:'center',
+color:'#999',
+marginTop:30,
+fontSize:16
 },
 
 phoneCard:{
