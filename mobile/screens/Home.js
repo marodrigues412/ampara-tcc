@@ -73,12 +73,15 @@ export default function Home({ navigation }) {
   // --- Estado do Modo Atividade ---
   const [activityMode, setActivityMode] = useState(false)
 
-  // --- Controle do Cronômetro de Alerta (Item 9 e 10) ---
+  // --- Controle do Cronômetro de Alerta e Feedback SOS ---
   const [countdown, setCountdown] = useState(15)
   const [listaContatos, setListaContatos] = useState([])
   const [alertaDisparado, setAlertaDisparado] = useState(false);
   const timerRef = useRef(null);
-
+// NOVO: Estados para a tela de confirmação do SOS
+  const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
+  const [sosFeedbackData, setSosFeedbackData] = useState({ mensagem: '', contatos: [], endereco: '' });
+  
   // --- Inicialização e Escuta Realtime do Supabase ---
   useEffect(() => {
     loadActivity();
@@ -102,67 +105,54 @@ export default function Home({ navigation }) {
     };
   }, [])
 
-  // =========================================================================
-  // 🚀 LÓGICA UNIFICADA E FUNCIONANDO DO JEITO QUE ESTAVA (Mmotor setTimeout encadeado)
-  // Mas sem as duplicidades que causavam o loop de requisições.
-  // =========================================================================
-
-  // 1️⃣ GATILHO DO MODAL: Abre o modal visual se a Força G for alta OU o score for crítico.
-  // Reseta o relógio para 15s e libera a trava de disparo.
   useEffect(() => {
-    // Se houver alto risco E o modal estiver fechado E ainda não disparamos socorro para este evento
+  console.log("🔍 [Debug Sensores] Magnitude atual:", magnitude);
+  
+  if (magnitude > 1.5) {
+     console.log("⚠️ [Debug Sensores] Magnitude acima do limite! Disparando...");
+  }
+  }, [magnitude]);
+
+  // 1️⃣ GATILHO DO MODAL
+  useEffect(() => {
     if ((isHighRisk || riskLevel === "Crítico") && !modalVisible && !alertaDisparado) {
       setCountdown(15);
-      setAlertaDisparado(false); // Reseta a trava
+      setAlertaDisparado(false);
       setModalVisible(true);
       console.log("⏱️ [Timer Ampara] Estado crítico detectado! Abrindo modal visual e resetando countdown para 15s.");
     }
   }, [isHighRisk, riskLevel, modalVisible, alertaDisparado]);
 
-  // 2️⃣ O MOTOR SEGURO (O 'Jeito que estava' que funcionou marchar 14s, 13s...)
-  // Monitora ocountdown e faz a contagem regressiva síncrona com tiro único final.
+  // 2️⃣ O MOTOR SEGURO
   useEffect(() => {
-    // Se o usuário cancelou o modal visual, matamos o motor imediatamente
     if (!modalVisible) {
       if (timerRef.current) clearTimeout(timerRef.current);
       return;
     }
 
-    // Caso o cronômetro tenha chegado a zero e o backend ainda não tenha sido acionado
     if (countdown === 0 && modalVisible && !alertaDisparado) {
       console.log("🚀 [Timer Ampara] Zerou com precisão! Cancelando motor e disparando protocolo automático único...");
       
-      setAlertaDisparado(true); // 🔒 TRANCA IMEDIATAMENTE para não entrar aqui de novo
+      setAlertaDisparado(true);
       if (timerRef.current) clearTimeout(timerRef.current);
-      setModalVisible(false); // Fecha o front
+      setModalVisible(false);
       
-      executarEnvioDeSocorro(); // Dá o único tiro na AWS e Supabase
-      
-      // 🛑 CRUCIAL: 'return' para abortar a re-execução do useEffect antes que o React processe as mudanças de estado assíncronas.
-      // Isso impede a metralhadora de requisições.
+      executarEnvioDeSocorro();
       return;
     }
 
-    // Se o contador for maior que zero e o alerta não foi disparado, roda o relógio
     if (countdown > 0 && modalVisible && !alertaDisparado) {
-      // Limpa timeout residual anterior por segurança
       if (timerRef.current) clearTimeout(timerRef.current);
-      
-      // Cria um intervalo que dura EXATAMENTE 1 segundo e depois morre
       timerRef.current = setTimeout(() => {
         const proximoSegundo = countdown - 1;
-        console.log(`⏱️ [Timer Ampara] Contagem interna rodando: ${proximoSegundo}s`);
         setCountdown(proximoSegundo);
       }, 1000);
     }
 
-    // Limpeza padrão do ciclo de vida
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [countdown, isHighRisk, modalVisible, alertaDisparado]); // Auto-encadeia setTimeout a cada mudança de countdown.
-
-  // =========================================================================
+  }, [countdown, isHighRisk, modalVisible, alertaDisparado]);
 
   async function loadActivity() {
     const user = (await supabase.auth.getUser()).data.user
@@ -206,16 +196,14 @@ export default function Home({ navigation }) {
   // --- Lógica de Cálculo de Risco Adaptável ---
   useEffect(() => {
     let score = 0
-    let logMotivos = { movimentoBrusco: 0, crimesProximos: 0, modoAtividade: 0, localSeguro: 0 }
+    if (magnitude >= 4) { score += 6; }
+    else if (magnitude >= 2) { score += 3; }
+    else if (magnitude >= 1.2) { score += 1; }
 
-    if (magnitude >= 4) { score += 6; logMotivos.movimentoBrusco = +6 }
-    else if (magnitude >= 2) { score += 3; logMotivos.movimentoBrusco = +3 }
-    else if (magnitude >= 1.2) { score += 1; logMotivos.movimentoBrusco = +1 }
+    if (crimeData.length > 15) { score += 4; }
+    else if (crimeData.length > 5) { score += 2; }
 
-    if (crimeData.length > 15) { score += 4; logMotivos.crimesProximos = +4 }
-    else if (crimeData.length > 5) { score += 2; logMotivos.crimesProximos = +2 }
-
-    if (activityMode) { score -= 2; logMotivos.modoAtividade = -2 }
+    if (activityMode) { score -= 2; }
 
     let emZonaSegura = false
     if (location && safeLocations.length > 0) {
@@ -227,7 +215,7 @@ export default function Home({ navigation }) {
         const distanciaEmKm = Math.sqrt(Math.pow((latSafe - userLat) * 111, 2) + Math.pow((lonSafe - userLon) * 111, 2));
         return distanciaEmKm <= 0.08;
       });
-      if (emZonaSegura) { score -= 3; logMotivos.localSeguro = -3 }
+      if (emZonaSegura) { score -= 3; }
     }
 
     setInsideSafeZone(emZonaSegura)
@@ -239,24 +227,39 @@ export default function Home({ navigation }) {
     else { setRiskLevel("Baixo") }
   }, [magnitude, crimeData, activityMode, location, safeLocations])
 
-  // --- Função do Disparo Automático em Segundo Plano (Tiro Único) ---
+// --- Função do Disparo de Socorro ---
   const executarEnvioDeSocorro = async () => {
     if (!location) {
-      console.error("❌ [Ampara] Abortando: Localização GPS ausente para resgate.");
+      Alert.alert("Erro", "Localização GPS ausente para o resgate.");
       return;
     }
 
     const userLat = location.coords.latitude;
     const userLon = location.coords.longitude;
-    
     const linkMapa = `http://googleusercontent.com/maps.google.com/maps?q=${userLat},${userLon}`;
-    const textoMensagem = `ALERTA AMPARA: Amanda pode estar em perigo! Risco: ${riskLevel}. Localização: ${linkMapa}`;
-
-    console.log("🚀 [Ampara] Disparando protocolo de socorro automático e silencioso...");
-
-    // --- DISPARO DE SMS AUTOMÁTICO (AWS Lambda + Amazon SNS) ---
+    
+    // 🔍 BUSCA DO ENDEREÇO LEGÍVEL (Geocodificação Reversa)
+    let enderecoFormatado = "Endereço não identificado (Apenas GPS)";
     try {
-      const response = await fetch(URL_AWS_GATEWAY, {
+      const addressArray = await Location.reverseGeocodeAsync({ latitude: userLat, longitude: userLon });
+      if (addressArray && addressArray.length > 0) {
+        const a = addressArray[0];
+        // Monta a string: "Nome da Rua, Número - Bairro, Cidade"
+        enderecoFormatado = `${a.street || a.name || ''}${a.streetNumber ? ', ' + a.streetNumber : ''} - ${a.district || a.subregion || ''}, ${a.city || ''}`;
+      }
+    } catch (e) {
+      console.log("Erro ao buscar endereço reverso no SOS:", e);
+    }
+
+    // A mensagem de texto agora inclui o endereço em texto plano e o link do mapa
+    const textoMensagem = `🚨 ALERTA AMPARA: Amanda pode estar em perigo! Risco: ${riskLevel}. Local: ${enderecoFormatado}. Mapa: ${linkMapa}`;
+    const contatosAEnviar = listaContatos.length > 0 ? listaContatos : ["Nenhum contato cadastrado"];
+
+    console.log("🚀 [Ampara] Disparando protocolo de socorro automático...");
+
+    // 1. Envio AWS
+    try {
+      await fetch(URL_AWS_GATEWAY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -267,58 +270,53 @@ export default function Home({ navigation }) {
           contatos: listaContatos.length > 0 ? listaContatos : ["+5511999999999"] 
         })
       });
-
-      if (response.ok) {
-        console.log("✅ [AWS Nuvem] Requisição aceita com sucesso pelo API Gateway!");
-      } else {
-        console.warn(`⚠️ [AWS Nuvem] Servidor respondeu com código de alerta: ${response.status}`);
-      }
     } catch (error) {
       console.error("❌ [AWS Nuvem] Falha de rede ao conectar com o API Gateway:", error);
     }
 
-    // --- REGISTRO AUTOMÁTICO DE AUDITORIA NO SUPABASE (alert_logs) ---
+    // 2. Log Supabase
     try {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      console.log("⏳ [Supabase] Verificando autenticação...");
+      const { data: userData, error: authError } = await supabase.auth.getUser();
       
-      if (userError || !userData?.user) {
-        console.error("❌ [Supabase] Erro: Usuário não autenticado ou sessão expirada.", userError);
-        return;
-      }
-
-      const contatosString = listaContatos.length > 0 ? listaContatos.join(', ') : "+5511999999999";
-      console.log("⏳ [Supabase] Tentando inserir na alert_logs para o UID:", userData.user.id);
-
-      const { error: insertError } = await supabase
-        .from('alert_logs')
-        .insert([
-          {
+      if (authError || !userData?.user) {
+        console.error("❌ [Supabase] Usuário não está logado no App! O log foi abortado.");
+      } else {
+        console.log(`⏳ [Supabase] Gravando log para o usuário: ${userData.user.id}`);
+        
+        const { error: insertError } = await supabase.from('alert_logs').insert([{
             user_id: userData.user.id,
             message: textoMensagem,
-            recipient_names: contatosString
-          }
-        ]);
+            recipient_names: contatosAEnviar.join(', ')
+        }]);
 
-      if (insertError) {
-        console.error("❌ [Supabase] O Postgres rejeitou o insert:", insertError.message, insertError.details);
-      } else {
-        console.log("✅ [Supabase] Log de alerta cravado com sucesso na tabela alert_logs!");
+        if (insertError) {
+          console.error("❌ [Supabase] O Postgres rejeitou o insert:", insertError.message, insertError.details);
+        } else {
+          console.log("✅ [Supabase] Alerta gravado com sucesso na tabela alert_logs!");
+        }
       }
-
     } catch (supabaseError) {
-      console.error("❌ [Supabase] Falha grave de execução no bloco alert_logs:", supabaseError);
+      console.error("❌ [Supabase] Falha grave de código no bloco alert_logs:", supabaseError);
     }
+
+    // 3. Mostrar Feedback Visual para a Usuária (agora com o endereço em destaque)
+    setSosFeedbackData({
+      mensagem: textoMensagem,
+      contatos: contatosAEnviar,
+      endereco: enderecoFormatado
+    });
+    setSosFeedbackVisible(true);
   }
 
   const handleUserIsSafe = () => {
     if (timerRef.current) clearTimeout(timerRef.current)
     setModalVisible(false)
     setCountdown(15)
-    setAlertaDisparado(false) // Libera para um novo pânico futuro
+    setAlertaDisparado(false)
     console.log("🔒 [Ampara] Envio automático abortado pela usuária.")
   }
 
-  // Região inicial do mapa
   useEffect(() => {
     if (location) {
       const initialRegion = {
@@ -332,7 +330,6 @@ export default function Home({ navigation }) {
     }
   }, [location])
 
-  // --- Carregamento de Ocorrências SSP-SP (Lógica da Maria) ---
   useEffect(() => {
     async function carregarCrimes() {
       try {
@@ -353,7 +350,6 @@ export default function Home({ navigation }) {
     carregarCrimes()
   }, [location])
 
-  // --- Lógica Geocodificação Reversa / Nominatim (Lógica da Amanda) ---
   const handleUseCurrentLocation = async () => {
     setLoadingGPS(true)
     let { status } = await Location.requestForegroundPermissionsAsync()
@@ -514,20 +510,52 @@ export default function Home({ navigation }) {
       {/* BOTÕES FLUTUANTES */}
       <View style={styles.floatingContainer}>
         <TouchableOpacity style={styles.fabHelp} onPress={executarEnvioDeSocorro}>
-          <Text style={styles.fabText}>🆘 SOS IMEDIATO</Text>
+          <Text style={styles.fabText}>🆘 SOS</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
           <Text style={styles.fabText}>🚨 REGISTRAR</Text>
         </TouchableOpacity>
       </View>
 
-      {/* MODAL DE REGISTRO */}
-      <Modal visible={reportModalVisible} animationType="slide" transparent>
+      {/* ========================================================= */}
+      {/* 🛑 MODAL DE FEEDBACK DE SOS ENVIADO (PADRÃO CARD AMPARA)  */}
+      {/* ========================================================= */}
+      <Modal transparent visible={sosFeedbackVisible} animationType="fade">
+        <View style={styles.overlayCentered}>
+          <View style={styles.cardModal}>
+            <Text style={styles.cardTitleCritical}>✅ Alerta Enviado</Text>
+            <Text style={styles.cardSubtitle}>Sua rede de apoio recebeu um SMS com a sua localização em tempo real.</Text>
+            
+            <View style={styles.feedbackBox}>
+              <Text style={styles.feedbackLabel}>📍 Localização enviada:</Text>
+              <Text style={styles.feedbackAddressText}>{sosFeedbackData.endereco}</Text>
+              
+              <Text style={[styles.feedbackLabel, { marginTop: 15 }]}>✉️ Mensagem exata:</Text>
+              <Text style={styles.feedbackText}>{sosFeedbackData.mensagem}</Text>
+              
+              <Text style={[styles.feedbackLabel, { marginTop: 15 }]}>📞 Contatos acionados:</Text>
+              {sosFeedbackData.contatos.map((c, i) => (
+                <Text key={i} style={styles.feedbackContact}>{c}</Text>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.btnPrimary} onPress={() => setSosFeedbackVisible(false)}>
+              <Text style={styles.btnPrimaryText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* 🚨 MODAL DE REGISTRO (ATUALIZADO PARA PADRÃO CARD AMPARA) */}
+      {/* ========================================================= */}
+      <Modal visible={reportModalVisible} animationType="fade" transparent>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flexOne}>
-          <View style={styles.occOverlay}>
-            <View style={styles.occModal}>
-              <ScrollView contentContainerStyle={styles.occScrollContent} keyboardShouldPersistTaps="handled">
-                <Text style={styles.occTitle}>Relatar Incidente</Text>
+          <View style={styles.overlayCentered}>
+            <View style={[styles.cardModal, { maxHeight: '85%' }]}>
+              <ScrollView contentContainerStyle={styles.occScrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.cardTitle}>Relatar Incidente</Text>
+                <Text style={styles.cardSubtitle}>Ajude a mapear áreas de risco compartilhando dados com a rede.</Text>
 
                 <Text style={styles.occLabel}>Onde ocorreu?</Text>
                 <View style={styles.inputRow}>
@@ -556,35 +584,39 @@ export default function Home({ navigation }) {
                   ))}
                 </View>
 
-                <Text style={styles.occLabel}>Horário do Ocorrido</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: 19:45"
-                  value={occHorario}
-                  onChangeText={setOccHorario}
-                  maxLength={5}
-                  keyboardType="numbers-and-punctuation"
-                />
+                <View style={{flexDirection: 'row', gap: 10}}>
+                  <View style={{flex: 1}}>
+                    <Text style={styles.occLabel}>Horário</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ex: 19:45"
+                      value={occHorario}
+                      onChangeText={setOccHorario}
+                      maxLength={5}
+                      keyboardType="numbers-and-punctuation"
+                    />
+                  </View>
+                </View>
 
-                <Text style={styles.occLabel}>Descrição</Text>
+                <Text style={styles.occLabel}>Descrição (Opcional)</Text>
                 <TextInput
                   style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-                  placeholder="Conte o que aconteceu..."
+                  placeholder="Mais detalhes ajudam na inteligência do mapa..."
                   value={occDescricao}
                   onChangeText={setOccDescricao}
                   multiline
                 />
 
                 <TouchableOpacity 
-                  style={[styles.confirmBtn, isSaving && { opacity: 0.7 }]} 
+                  style={[styles.btnPrimary, { marginTop: 25 }, isSaving && { opacity: 0.7 }]} 
                   onPress={handleSaveOccurrence}
                   disabled={isSaving}
                 >
-                  {isSaving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmBtnText}>Confirmar Registro</Text>}
+                  {isSaving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnPrimaryText}>Publicar Ocorrência</Text>}
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => { setReportModalVisible(false); resetForm(); }}>
-                  <Text style={styles.cancelText}>Cancelar</Text>
+                  <Text style={styles.btnCancelText}>Cancelar e Voltar</Text>
                 </TouchableOpacity>
               </ScrollView>
             </View>
@@ -592,30 +624,35 @@ export default function Home({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* MODAL DO CRONÔMETRO DE SEGURANÇA */}
+      {/* ========================================================= */}
+      {/* ⏱️ MODAL DO CRONÔMETRO DE SEGURANÇA (MANTIDO)             */}
+      {/* ========================================================= */}
       <Modal transparent visible={modalVisible} animationType="fade">
-        <View style={styles.alertOverlay}>
-          <View style={styles.alertContent}>
-            <Text style={styles.alertTitle}>🚨 CONTATO DE SEGURANÇA</Text>
-            <Text style={styles.alertText}>
+        <View style={styles.overlayCentered}>
+          <View style={styles.cardModal}>
+            <Text style={styles.cardTitleCritical}>🚨 CONTATO DE SEGURANÇA</Text>
+            <Text style={styles.cardSubtitle}>
               Detectamos um movimento incomum de {magnitude}G no dispositivo.
             </Text>
             
-            <View style={styles.timerCircle}>
-              <Text style={styles.timerCountText}>{countdown}</Text>
-              <Text style={styles.timerSecondsText}>segundos</Text>
+            <View style={{alignItems: 'center'}}>
+              <View style={styles.timerCircle}>
+                <Text style={styles.timerCountText}>{countdown}</Text>
+                <Text style={styles.timerSecondsText}>segundos</Text>
+              </View>
             </View>
 
             <Text style={styles.alertWarningText}>
-              Os contatos de emergência e a central serão acionados automaticamente após o limite.
+              Os contatos de emergência serão acionados automaticamente após o limite.
             </Text>
 
-            <TouchableOpacity style={styles.okButton} onPress={handleUserIsSafe}>
-              <Text style={styles.okButtonText}>Estou bem, cancelar envio</Text>
+            <TouchableOpacity style={styles.btnSafe} onPress={handleUserIsSafe}>
+              <Text style={styles.btnSafeText}>Estou bem, cancelar envio</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
     </View>
   )
 }
@@ -624,15 +661,19 @@ const styles = StyleSheet.create({
   flexOne: { flex: 1 },
   container: { flex: 1, backgroundColor: '#F5EFEA' },
   scrollContent: { padding: 20, paddingBottom: 120 },
+  
   headerContainer: { paddingTop: 40, marginBottom: 20 },
   header: { fontSize: 42, color: '#025382', fontWeight: '700' },
   subHeader: { color: '#3A7FA6', fontSize: 18 },
+  
   mapFixedContainer: { height: 350, borderRadius: 25, overflow: 'hidden', backgroundColor: '#FFF', marginBottom: 14 },
   map: { flex: 1 },
   recenterButton: { position: 'absolute', bottom: 15, alignSelf: 'center', backgroundColor: '#025382', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 20 },
   recenterText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  
   crimeAlert: { padding: 14, borderRadius: 16, marginBottom: 16 },
   crimeAlertText: { fontWeight: '700', fontSize: 16 },
+  
   activityBanner: { backgroundColor: "#FFF", padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: "#E8E0D8" },
   activityBannerActive: { backgroundColor: "#FFF0F7", borderColor: "#C2185B" },
   activityHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -640,38 +681,12 @@ const styles = StyleSheet.create({
   activityTitleActive: { color: "#C2185B" },
   activitySubtitle: { fontSize: 13, color: "#666", marginTop: 4, maxWidth: 220 },
   activityStatus: { marginTop: 10, color: "#C2185B", fontWeight: "700", fontSize: 12 },
+  
   floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end' },
   fabHelp: { backgroundColor: '#B91C1C', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
   fabRegister: { backgroundColor: '#025382', marginTop: 12, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
   fabText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
-  occOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  occModal: { backgroundColor: '#FFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '85%' },
-  occScrollContent: { flexGrow: 1, paddingBottom: 20 },
-  occTitle: { fontSize: 26, fontWeight: 'bold', color: '#025382', marginBottom: 20 },
-  occLabel: { color: '#3A7FA6', fontWeight: 'bold', marginTop: 15, marginBottom: 8 },
-  inputRow: { flexDirection: 'row', gap: 10 },
-  inputFlex: { flex: 1, borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, padding: 15, fontSize: 16, backgroundColor: '#FAFAFA' },
-  input: { borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, padding: 15, fontSize: 16, backgroundColor: '#FAFAFA', marginTop: 5 },
-  gpsBtn: { backgroundColor: '#F5EFEA', width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#D8D0CC' },
-  gpsIcon: { fontSize: 24 },
-  typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 5 },
-  typeButton: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#D8D0CC' },
-  typeSelected: { backgroundColor: '#025382', borderColor: '#025382' },
-  typeText: { color: '#333' },
-  typeTextSelected: { color: '#FFF' },
-  confirmBtn: { backgroundColor: '#025382', padding: 18, borderRadius: 15, marginTop: 30, alignItems: 'center' },
-  confirmBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
-  cancelText: { textAlign: 'center', color: '#B91C1C', marginTop: 20, fontWeight: 'bold', fontSize: 16 },
-  suggestionsBox: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#DDD', borderRadius: 12, marginTop: 5, maxHeight: 150 },
-  suggestionItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#EEE' },
-  suggestionText: { fontSize: 14, color: '#333' },
-  alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
-  alertContent: { backgroundColor: '#FFF', padding: 25, borderRadius: 25, width: '85%', alignItems: 'center' },
-  alertTitle: { fontSize: 20, fontWeight: 'bold', color: '#B91C1C', marginBottom: 10, textAlign: 'center' },
-  alertText: { fontSize: 16, color: '#333', textAlign: 'center', marginBottom: 15 },
-  alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
-  okButton: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 15, alignItems: 'center' },
-  okButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  
   scoreCard: { backgroundColor: "#FFF8FC", paddingVertical: 20, paddingHorizontal: 16, borderRadius: 22, marginBottom: 16, alignItems: "center", borderWidth: 1, borderColor: "#F4C7DD" },
   scoreLabel: { fontSize: 14, fontWeight: "600", color: "#666" },
   scoreValue: { fontSize: 58, fontWeight: "bold", color: "#C2185B", marginVertical: 6 },
@@ -681,15 +696,59 @@ const styles = StyleSheet.create({
   lowRisk: { backgroundColor: "#4CAF50" },
   mediumRisk: { backgroundColor: "#FF9800" },
   highRisk: { backgroundColor: "#B91C1C" },
-  safeZoneBanner: { backgroundColor: '#FFF', padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1.5, borderColor: '#025382', elevation: 1, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4 },
+  
+  safeZoneBanner: { backgroundColor: '#FFF', padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1.5, borderColor: '#025382', elevation: 1 },
   safeZoneBannerTitle: { fontSize: 16, fontWeight: 'bold', color: '#025382' },
   safeZoneBannerSubtitle: { fontSize: 13, color: '#3A7FA6', marginTop: 4, fontWeight: '500' },
+  
   metricsContainer: { flexDirection: "row", justifyContent: "space-between", marginTop: 8, marginBottom: 20 },
   metricBox: { backgroundColor: "#FFF", width: "48%", padding: 18, borderRadius: 20, alignItems: "center" },
   metricIcon: { fontSize: 26 },
   metricValue: { fontSize: 28, fontWeight: "bold", marginTop: 8 },
   metricLabel: { marginTop: 5, fontSize: 13, color: "#777" },
-  timerCircle: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: '#B91C1C', justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
-  timerCountText: { fontSize: 36, fontWeight: 'bold', color: '#B91C1C' },
-  timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' }
+  
+  // --- ESTILOS GLOBAIS DE MODAL (PADRÃO CARD AMPARA) ---
+  overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  cardModal: { backgroundColor: '#FFF', borderRadius: 25, padding: 25, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 8 },
+  cardTitle: { fontSize: 22, fontWeight: 'bold', color: '#025382', marginBottom: 5, textAlign: 'center' },
+  cardTitleCritical: { fontSize: 22, fontWeight: 'bold', color: '#B91C1C', marginBottom: 5, textAlign: 'center' },
+  cardSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
+  
+  // Estilos de Botões Padrão Card
+  btnPrimary: { backgroundColor: '#025382', paddingVertical: 16, borderRadius: 15, alignItems: 'center', width: '100%' },
+  btnPrimaryText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  btnCancelText: { textAlign: 'center', color: '#B91C1C', marginTop: 15, fontWeight: '600', fontSize: 15 },
+  btnSafe: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 15, alignItems: 'center' },
+  btnSafeText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+
+  // Estilos da caixa de Feedback SOS
+  // Estilos da caixa de Feedback SOS
+  feedbackBox: { backgroundColor: '#F5EFEA', padding: 15, borderRadius: 15, marginBottom: 25, borderWidth: 1, borderColor: '#E8E0D8' },
+  feedbackLabel: { fontSize: 12, fontWeight: 'bold', color: '#3A7FA6', marginBottom: 5 },
+  feedbackAddressText: { fontSize: 16, color: '#B91C1C', fontWeight: 'bold', marginBottom: 5 }, // <-- NOVO ESTILO AQUI
+  feedbackText: { fontSize: 14, color: '#333', fontStyle: 'italic' },
+  feedbackContact: { fontSize: 15, color: '#025382', fontWeight: '600', marginTop: 3 },
+
+  // Estilos do Formulário de Registro
+  occScrollContent: { flexGrow: 1 },
+  occLabel: { color: '#025382', fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
+  inputRow: { flexDirection: 'row', gap: 10 },
+  inputFlex: { flex: 1, borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9' },
+  input: { borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9', marginTop: 5 },
+  gpsBtn: { backgroundColor: '#F5EFEA', width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#D8D0CC' },
+  gpsIcon: { fontSize: 20 },
+  typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 5 },
+  typeButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#D8D0CC', backgroundColor: '#FFF' },
+  typeSelected: { backgroundColor: '#025382', borderColor: '#025382' },
+  typeText: { color: '#555', fontSize: 13, fontWeight: '500' },
+  typeTextSelected: { color: '#FFF', fontWeight: 'bold' },
+  suggestionsBox: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, marginTop: 5, maxHeight: 150 },
+  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#F5EFEA' },
+  suggestionText: { fontSize: 13, color: '#333' },
+
+  // Estilos do Cronômetro
+  timerCircle: { width: 90, height: 90, borderRadius: 45, borderWidth: 4, borderColor: '#B91C1C', justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
+  timerCountText: { fontSize: 32, fontWeight: 'bold', color: '#B91C1C' },
+  timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' },
+  alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
 })
