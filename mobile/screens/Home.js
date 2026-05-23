@@ -98,7 +98,6 @@ export default function Home({ navigation }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'safe_locations' },
         () => {
-          console.log('🔄 [REALTIME] Alteração detectada em safe_locations! Atualizando...');
           loadSafeLocations();
         }
       )
@@ -109,20 +108,12 @@ export default function Home({ navigation }) {
     };
   }, [])
 
-  useEffect(() => {
-  
-  if (magnitude > 1.5) {
-     console.log("⚠️ [Debug Sensores] Magnitude acima do limite! Disparando...");
-  }
-  }, [magnitude]);
-
   // 1️⃣ GATILHO DO MODAL
   useEffect(() => {
     if ((isHighRisk || riskLevel === "Crítico") && !modalVisible && !alertaDisparado) {
       setCountdown(15);
       setAlertaDisparado(false);
       setModalVisible(true);
-      console.log("⏱️ [Timer Ampara] Estado crítico detectado! Abrindo modal visual e resetando countdown para 15s.");
     }
   }, [isHighRisk, riskLevel, modalVisible, alertaDisparado]);
 
@@ -134,7 +125,6 @@ export default function Home({ navigation }) {
     }
 
     if (countdown === 0 && modalVisible && !alertaDisparado) {
-      console.log("🚀 [Timer Ampara] Zerou com precisão! Cancelando motor e disparando protocolo automático único...");
       
       setAlertaDisparado(true);
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -162,7 +152,7 @@ export default function Home({ navigation }) {
     if (!user) return;
 
     // Tenta buscar o nome (assumindo que você tem uma tabela 'profiles')
-    const { data } = await supabase.from('profiles').select('nome').eq('id', user.id).single();
+    const { data } = await supabase.from('user_profiles').select('nome').eq('id', user.id).single();
     if (data?.nome) {
      setUserName(data.nome);
    }
@@ -290,14 +280,9 @@ export default function Home({ navigation }) {
 
     // 2. Log Supabase
     try {
-      console.log("⏳ [Supabase] Verificando autenticação...");
       const { data: userData, error: authError } = await supabase.auth.getUser();
-      
-      if (authError || !userData?.user) {
-        console.error("❌ [Supabase] Usuário não está logado no App! O log foi abortado.");
-      } else {
-        console.log(`⏳ [Supabase] Gravando log para o usuário: ${userData.user.id}`);
-        
+
+      if (!authError && userData?.user) {
         const { error: insertError } = await supabase.from('alert_logs').insert([{
             user_id: userData.user.id,
             message: textoMensagem,
@@ -305,13 +290,13 @@ export default function Home({ navigation }) {
         }]);
 
         if (insertError) {
-          console.error("❌ [Supabase] O Postgres rejeitou o insert:", insertError.message, insertError.details);
+          console.error("❌ [Alerta] Falha ao gravar log:", insertError.message);
         } else {
-          console.log("✅ [Supabase] Alerta gravado com sucesso na tabela alert_logs!");
+          console.log("✅ [Alerta] Notificação enviada e gravada com sucesso.");
         }
       }
     } catch (supabaseError) {
-      console.error("❌ [Supabase] Falha grave de código no bloco alert_logs:", supabaseError);
+      console.error("❌ [Alerta] Erro inesperado ao gravar log:", supabaseError);
     }
 
     // 3. Mostrar Feedback Visual para a Usuária (agora com o endereço em destaque)
@@ -328,7 +313,6 @@ export default function Home({ navigation }) {
     setModalVisible(false)
     setCountdown(15)
     setAlertaDisparado(false)
-    console.log("🔒 [Ampara] Envio automático abortado pela usuária.")
   }
 
   useEffect(() => {
