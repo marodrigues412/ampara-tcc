@@ -9,6 +9,7 @@ import EditProfile from './screens/EditProfile'
 import EmergencyContacts from './screens/EmergencyContacts'
 import SafeLocations from './screens/SafeLocations'
 import MyReports from './screens/MyReports'
+import HelpGuide from './screens/HelpGuide'
 
 import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -98,8 +99,8 @@ export default function App() {
           <Stack.Screen name="EmergencyContacts" component={EmergencyContacts} />
           <Stack.Screen name="SafeLocations" component={SafeLocations} />
 
-          {/* 🔹 Novas Rotas para Ocorrências */}
           <Stack.Screen name="MyReports" component={MyReports} />
+          <Stack.Screen name="HelpGuide" component={HelpGuide} />
 
         </Stack.Navigator>
       )}
