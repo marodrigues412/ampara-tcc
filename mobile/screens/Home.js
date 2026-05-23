@@ -18,7 +18,7 @@ import {
 import MapView, { Marker, Circle } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { useRiskDetection } from '../hooks/useRiskDetection'
-import { buscarCrimes } from '../services/crimesService'
+import { buscarCrimes, buscarOcorrencias } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
 
@@ -31,6 +31,7 @@ export default function Home({ navigation }) {
   // --- Estados de Interface e Mapa ---
   const [modalVisible, setModalVisible] = useState(false)
   const [crimeData, setCrimeData] = useState([])
+  const [occurrenceData, setOccurrenceData] = useState([])
   const [region, setRegion] = useState(null)
   const [userRegion, setUserRegion] = useState(null)
   const [mapMoved, setMapMoved] = useState(false)
@@ -42,6 +43,7 @@ export default function Home({ navigation }) {
   const [occTipo, setOccTipo] = useState('')
   const [occDescricao, setOccDescricao] = useState('')
   const [occHorario, setOccHorario] = useState(new Date().toLocaleTimeString().slice(0, 5))
+  const [occData, setOccData] = useState(new Date().toLocaleDateString('pt-BR'))
   const [occCoords, setOccCoords] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [loadingGPS, setLoadingGPS] = useState(false)
@@ -108,7 +110,6 @@ export default function Home({ navigation }) {
   }, [])
 
   useEffect(() => {
-  console.log("🔍 [Debug Sensores] Magnitude atual:", magnitude);
   
   if (magnitude > 1.5) {
      console.log("⚠️ [Debug Sensores] Magnitude acima do limite! Disparando...");
@@ -363,6 +364,34 @@ export default function Home({ navigation }) {
     carregarCrimes()
   }, [location])
 
+  useEffect(() => {
+    async function carregarOcorrencias() {
+      if (!location) return
+      try {
+        const dados = await buscarOcorrencias()
+        const userLat = location.coords.latitude
+        const userLon = location.coords.longitude
+        const formatadas = dados.map((occ) => {
+          const lat = Number(occ.latitude)
+          const lon = Number(occ.longitude)
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+          return {
+            id: 'occ_' + occ.id,
+            lat,
+            lon,
+            tipo: occ.tipo_crime || 'Ocorrência relatada',
+            descricao: occ.descricao || '',
+            horario: occ.horario || '',
+            address: occ.address || '',
+            distancia: Math.sqrt(Math.pow((lat - userLat) * 111, 2) + Math.pow((lon - userLon) * 111, 2))
+          }
+        }).filter(Boolean).filter(occ => occ.distancia <= 20)
+        setOccurrenceData(formatadas)
+      } catch (error) { console.error('❌ ERRO AO CARREGAR OCORRÊNCIAS:', error) }
+    }
+    carregarOcorrencias()
+  }, [location])
+
   const handleUseCurrentLocation = async () => {
     setLoadingGPS(true)
     let { status } = await Location.requestForegroundPermissionsAsync()
@@ -389,16 +418,33 @@ export default function Home({ navigation }) {
   const selectSuggestion = (item) => { setOccEndereco(item.display_name); setOccCoords({ latitude: Number(item.lat), longitude: Number(item.lon) }); setSuggestions([]); Keyboard.dismiss(); }
 
   const handleSaveOccurrence = async () => {
-    if (!occTipo || !occEndereco || !occHorario) { Alert.alert('Atenção', 'Preencha o tipo, o local e o horário.'); return; }
+    if (!occTipo || !occEndereco || !occHorario || !occData) { Alert.alert('Atenção', 'Preencha o tipo, o local, a data e o horário.'); return; }
+
+    const partesData = occData.split('/')
+    if (partesData.length !== 3 || partesData[2].length !== 4) { Alert.alert('Data inválida', 'Use o formato DD/MM/AAAA.'); return; }
+    const [dia, mes, ano] = partesData
+    const dataOcorrencia = new Date(Number(ano), Number(mes) - 1, Number(dia))
+    if (isNaN(dataOcorrencia.getTime())) { Alert.alert('Data inválida', 'Verifique a data informada.'); return; }
+
+    const agora = new Date()
+    const hojeZerado = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate())
+    if (dataOcorrencia > hojeZerado) { Alert.alert('Data inválida', 'Não é possível registrar ocorrências em datas futuras.'); return; }
+
+    const partesHorario = occHorario.split(':')
+    if (partesHorario.length !== 2) { Alert.alert('Horário inválido', 'Use o formato HH:MM.'); return; }
+    const ocorrenciaDatetime = new Date(Number(ano), Number(mes) - 1, Number(dia), Number(partesHorario[0]), Number(partesHorario[1]))
+    if (ocorrenciaDatetime > agora) { Alert.alert('Horário inválido', 'Não é possível registrar ocorrências em horários futuros.'); return; }
+
     try { setIsSaving(true); const { data: userData } = await supabase.auth.getUser()
       if (!userData?.user) { Alert.alert("Erro", "Usuário não autenticado."); return; }
-      const { error } = await supabase.from('occurrences').insert([{ user_id: userData.user.id, tipo_crime: occTipo, address: occEndereco, descricao: occDescricao, horario: occHorario, latitude: occCoords?.latitude, longitude: occCoords?.longitude, risk_score: magnitude || 0 }]);
+      const dataIso = `${ano}-${mes}-${dia}`
+      const { error } = await supabase.from('occurrences').insert([{ user_id: userData.user.id, tipo_crime: occTipo, address: occEndereco, descricao: occDescricao, horario: occHorario, data_ocorrencia: dataIso, latitude: occCoords?.latitude, longitude: occCoords?.longitude, risk_score: magnitude || 0 }]);
       if (error) throw error; Alert.alert("Sucesso", "Ocorrência registrada na rede Ampara!"); setReportModalVisible(false); resetForm();
     } catch (error) { Alert.alert("Erro", `Não foi possível salvar: ${error.message}`) }
     finally { setIsSaving(false) }
   }
 
-  const resetForm = () => { setOccEndereco(''); setOccTipo(''); setOccDescricao(''); setOccCoords(null); setSuggestions([]); setOccHorario(new Date().toLocaleTimeString().slice(0, 5)); }
+  const resetForm = () => { setOccEndereco(''); setOccTipo(''); setOccDescricao(''); setOccCoords(null); setSuggestions([]); setOccHorario(new Date().toLocaleTimeString().slice(0, 5)); setOccData(new Date().toLocaleDateString('pt-BR')); }
 
   const handleRegionChange = (newRegion) => { setRegion(newRegion); if (!userRegion) return; const distance = Math.abs(newRegion.latitude - userRegion.latitude) + Math.abs(newRegion.longitude - userRegion.longitude); setMapMoved(distance > 0.002); }
 
@@ -480,6 +526,16 @@ export default function Home({ navigation }) {
                     title={crime.tipo}
                     description={`${crime.distancia.toFixed(2)} km`}
                     pinColor="#C2185B"
+                  />
+                ))}
+
+                {occurrenceData.map(occ => (
+                  <Marker
+                    key={occ.id}
+                    coordinate={{ latitude: occ.lat, longitude: occ.lon }}
+                    title={`🚨 ${occ.tipo}`}
+                    description={occ.descricao || occ.address || `${occ.distancia.toFixed(2)} km`}
+                    pinColor="magenta"
                   />
                 ))}
               </MapView>
@@ -598,6 +654,17 @@ export default function Home({ navigation }) {
                 </View>
 
                 <View style={{flexDirection: 'row', gap: 10}}>
+                  <View style={{flex: 1}}>
+                    <Text style={styles.occLabel}>Data</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="DD/MM/AAAA"
+                      value={occData}
+                      onChangeText={setOccData}
+                      maxLength={10}
+                      keyboardType="numbers-and-punctuation"
+                    />
+                  </View>
                   <View style={{flex: 1}}>
                     <Text style={styles.occLabel}>Horário</Text>
                     <TextInput
