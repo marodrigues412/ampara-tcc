@@ -5,6 +5,7 @@ import {
   View,
   Modal,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   TextInput,
   Keyboard,
@@ -26,7 +27,7 @@ import { getActivityStatus, updateActivityStatus } from "../services/activitySer
 const URL_AWS_GATEWAY = "https://2egghrwmeg.execute-api.us-east-1.amazonaws.com/default/ampara-alert-trigger";
 
 export default function Home({ navigation }) {
-  const { data, location, riskStatus, errorMsg, stepCount } = useRiskDetection()
+  const { data, location, riskStatus, errorMsg } = useRiskDetection()
   
   // --- Estados de Interface e Mapa ---
   const [modalVisible, setModalVisible] = useState(false)
@@ -77,10 +78,15 @@ export default function Home({ navigation }) {
   const [activityMode, setActivityMode] = useState(false)
 
   // --- Controle do Cronômetro de Alerta e Feedback SOS ---
-  const [countdown, setCountdown] = useState(15)
+  const [countdown, setCountdown] = useState(30)
   const [listaContatos, setListaContatos] = useState([])
   const [alertaDisparado, setAlertaDisparado] = useState(false);
   const timerRef = useRef(null);
+  const lastAlertSentRef = useRef(null);
+  const cancelCooldownRef = useRef(null);
+  const highMagnitudeTimerRef = useRef(null);
+  const [sustainedHighRisk, setSustainedHighRisk] = useState(false);
+  const [sosHolding, setSosHolding] = useState(false);
 // NOVO: Estados para a tela de confirmação do SOS
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
   const [sosFeedbackData, setSosFeedbackData] = useState({ mensagem: '', contatos: [], endereco: '' });
@@ -108,14 +114,40 @@ export default function Home({ navigation }) {
     };
   }, [])
 
-  // 1️⃣ GATILHO DO MODAL
+  // Magnitude sustentada — só marca como alto risco após 3s contínuos acima do limite
   useEffect(() => {
-    if ((isHighRisk || riskLevel === "Crítico") && !modalVisible && !alertaDisparado) {
-      setCountdown(15);
-      setAlertaDisparado(false);
-      setModalVisible(true);
+    if (isHighRisk || riskLevel === "Crítico") {
+      if (!highMagnitudeTimerRef.current) {
+        highMagnitudeTimerRef.current = setTimeout(() => {
+          setSustainedHighRisk(true);
+          highMagnitudeTimerRef.current = null;
+        }, 3000);
+      }
+    } else {
+      if (highMagnitudeTimerRef.current) {
+        clearTimeout(highMagnitudeTimerRef.current);
+        highMagnitudeTimerRef.current = null;
+      }
+      setSustainedHighRisk(false);
     }
-  }, [isHighRisk, riskLevel, modalVisible, alertaDisparado]);
+    return () => {
+      if (highMagnitudeTimerRef.current) clearTimeout(highMagnitudeTimerRef.current);
+    };
+  }, [isHighRisk, riskLevel]);
+
+  // 1️⃣ GATILHO DO MODAL — só abre se risco sustentado e fora de cooldowns
+  useEffect(() => {
+    if (!sustainedHighRisk || modalVisible || alertaDisparado) return;
+
+    const agora = Date.now();
+    const emCooldownEnvio = lastAlertSentRef.current && (agora - lastAlertSentRef.current) < 30 * 60 * 1000;
+    const emCooldownCancelamento = cancelCooldownRef.current && agora < cancelCooldownRef.current;
+
+    if (emCooldownEnvio || emCooldownCancelamento) return;
+
+    setCountdown(30);
+    setModalVisible(true);
+  }, [sustainedHighRisk, modalVisible, alertaDisparado]);
 
   // 2️⃣ O MOTOR SEGURO
   useEffect(() => {
@@ -238,9 +270,11 @@ export default function Home({ navigation }) {
       return;
     }
 
+    lastAlertSentRef.current = Date.now();
+
     const userLat = location.coords.latitude;
     const userLon = location.coords.longitude;
-    const linkMapa = `http://googleusercontent.com/maps.google.com/maps?q=${userLat},${userLon}`;
+    const linkMapa = `https://maps.google.com/?q=${userLat},${userLon}`;
     
     // 🔍 BUSCA DO ENDEREÇO LEGÍVEL (Geocodificação Reversa)
     let enderecoFormatado = "Endereço não identificado (Apenas GPS)";
@@ -268,10 +302,18 @@ export default function Home({ navigation }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nomeUsuario: userName,
+          endereco: enderecoFormatado,
           latitude: userLat,
           longitude: userLon,
           nivelRisco: riskLevel,
-          contatos: listaContatos.length > 0 ? listaContatos : ["+5511999999999"] 
+          contatos: listaContatos.length > 0
+            ? listaContatos.map(t => {
+                const cleaned = t.trim()
+                if (cleaned.startsWith('+')) return cleaned
+                const digits = cleaned.replace(/\D/g, '')
+                return digits.startsWith('55') ? `+${digits}` : `+55${digits}`
+              })
+            : []
         })
       });
     } catch (error) {
@@ -311,8 +353,10 @@ export default function Home({ navigation }) {
   const handleUserIsSafe = () => {
     if (timerRef.current) clearTimeout(timerRef.current)
     setModalVisible(false)
-    setCountdown(15)
+    setCountdown(30)
     setAlertaDisparado(false)
+    setSustainedHighRisk(false)
+    cancelCooldownRef.current = Date.now() + 5 * 60 * 1000
   }
 
   useEffect(() => {
@@ -559,13 +603,7 @@ export default function Home({ navigation }) {
 
         {/* METRICS CONTAINER */}
         <View style={styles.metricsContainer}>
-          <View style={styles.metricBox}>
-            <Text style={styles.metricIcon}>👣</Text>
-            <Text style={styles.metricValue}>{stepCount}</Text>
-            <Text style={styles.metricLabel}>passos</Text>
-          </View>
-
-          <View style={styles.metricBox}>
+          <View style={[styles.metricBox, { width: '100%' }]}>
             <Text style={styles.metricIcon}>📈</Text>
             <Text style={[styles.metricValue, { color: isHighRisk ? "#B91C1C" : "#2E8B57" }]}>
               {magnitude}
@@ -578,9 +616,16 @@ export default function Home({ navigation }) {
 
       {/* BOTÕES FLUTUANTES */}
       <View style={styles.floatingContainer}>
-        <TouchableOpacity style={styles.fabHelp} onPress={executarEnvioDeSocorro}>
+        <Pressable
+          style={[styles.fabHelp, sosHolding && styles.fabHelpHolding]}
+          onLongPress={executarEnvioDeSocorro}
+          onPressIn={() => setSosHolding(true)}
+          onPressOut={() => setSosHolding(false)}
+          delayLongPress={3000}
+        >
           <Text style={styles.fabText}>🆘 SOS</Text>
-        </TouchableOpacity>
+          {sosHolding && <Text style={styles.fabHoldHint}>segure...</Text>}
+        </Pressable>
         <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
           <Text style={styles.fabText}>🚨 REGISTRAR</Text>
         </TouchableOpacity>
@@ -777,7 +822,9 @@ const styles = StyleSheet.create({
   activityStatus: { marginTop: 10, color: "#C2185B", fontWeight: "700", fontSize: 12 },
   
   floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end' },
-  fabHelp: { backgroundColor: '#B91C1C', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
+  fabHelp: { backgroundColor: '#B91C1C', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8, alignItems: 'center' },
+  fabHelpHolding: { backgroundColor: '#7F0000', transform: [{ scale: 1.08 }] },
+  fabHoldHint: { color: '#FFB3B3', fontSize: 10, fontWeight: '600', marginTop: 2 },
   fabRegister: { backgroundColor: '#025382', marginTop: 12, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
   fabText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
   

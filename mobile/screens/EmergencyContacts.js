@@ -7,758 +7,576 @@ TextInput,
 TouchableOpacity,
 ScrollView,
 Alert,
-Modal
+Modal,
+FlatList
 } from 'react-native'
 
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '../services/supabase'
 import { getPhoneContacts } from '../services/contactService'
 
+const PAISES = [
+  { codigo: '55',  bandeira: '🇧🇷', nome: 'Brasil' },
+  { codigo: '1',   bandeira: '🇺🇸', nome: 'EUA / Canadá' },
+  { codigo: '351', bandeira: '🇵🇹', nome: 'Portugal' },
+  { codigo: '54',  bandeira: '🇦🇷', nome: 'Argentina' },
+  { codigo: '598', bandeira: '🇺🇾', nome: 'Uruguai' },
+  { codigo: '595', bandeira: '🇵🇾', nome: 'Paraguai' },
+  { codigo: '56',  bandeira: '🇨🇱', nome: 'Chile' },
+  { codigo: '591', bandeira: '🇧🇴', nome: 'Bolívia' },
+  { codigo: '57',  bandeira: '🇨🇴', nome: 'Colômbia' },
+  { codigo: '34',  bandeira: '🇪🇸', nome: 'Espanha' },
+  { codigo: '44',  bandeira: '🇬🇧', nome: 'Reino Unido' },
+  { codigo: '49',  bandeira: '🇩🇪', nome: 'Alemanha' },
+  { codigo: '33',  bandeira: '🇫🇷', nome: 'França' },
+  { codigo: '39',  bandeira: '🇮🇹', nome: 'Itália' },
+]
+
+const PAIS_PADRAO = PAISES[0]
+
+// Detecta se um número já tem DDI e retorna { pais, localNumber } ou null
+function detectarDdi(numero) {
+  const digits = numero.replace(/\D/g, '')
+  // Prefixos mais longos primeiro para evitar match parcial
+  const ordenados = [...PAISES].sort((a, b) => b.codigo.length - a.codigo.length)
+  for (const pais of ordenados) {
+    if (digits.startsWith(pais.codigo) && digits.length > pais.codigo.length) {
+      return { pais, localNumber: digits.slice(pais.codigo.length) }
+    }
+  }
+  return null
+}
+
+function validarNumeroLocal(localNumber, ddi) {
+  const digits = localNumber.replace(/\D/g, '')
+  if (ddi === '55') return digits.length >= 10 && digits.length <= 11
+  return digits.length >= 6
+}
+
 export default function EmergencyContacts({ navigation }) {
 
-const [contatos,setContatos]=useState([])
-const [nome,setNome]=useState('')
-const [telefone,setTelefone]=useState('')
-const [relacao,setRelacao]=useState('')
+const [contatos, setContatos] = useState([])
+const [nome, setNome] = useState('')
+const [telefone, setTelefone] = useState('')
+const [relacao, setRelacao] = useState('')
+const [paisSelecionado, setPaisSelecionado] = useState(PAIS_PADRAO)
 
-const [userId,setUserId]=useState(null)
+const [userId, setUserId] = useState(null)
 
-const [editingContact,setEditingContact]=useState(null)
-const [modalVisible,setModalVisible]=useState(false)
+const [editingContact, setEditingContact] = useState(null)
+const [modalVisible, setModalVisible] = useState(false)
 
-const [phoneContacts,setPhoneContacts]=useState([])
-const [contactsModalVisible,setContactsModalVisible]=useState(false)
-const [contactSearch,setContactSearch]=useState('')
+const [phoneContacts, setPhoneContacts] = useState([])
+const [contactsModalVisible, setContactsModalVisible] = useState(false)
+const [contactSearch, setContactSearch] = useState('')
 
-const MAX_CONTATOS=3
+// Modal seletor de país (campo principal)
+const [ddiModalVisible, setDdiModalVisible] = useState(false)
+const [ddiSearch, setDdiSearch] = useState('')
 
-const restante=
-MAX_CONTATOS-contatos.length
+// Modal confirmação de país ao importar contato sem DDI
+const [confirmDdiModalVisible, setConfirmDdiModalVisible] = useState(false)
+const [pendingContact, setPendingContact] = useState(null)
+const [confirmPais, setConfirmPais] = useState(PAIS_PADRAO)
+const [confirmDdiSearch, setConfirmDdiSearch] = useState('')
+const [confirmDdd, setConfirmDdd] = useState('')
 
-const textoInfo=
-restante===0
-? 'Você já adicionou o máximo de contatos'
-: restante===1
-? 'Você pode adicionar mais 1 contato'
-: `Você pode adicionar mais ${restante} contatos`
+const MAX_CONTATOS = 3
+const restante = MAX_CONTATOS - contatos.length
+const textoInfo = restante === 0
+  ? 'Você já adicionou o máximo de contatos'
+  : restante === 1
+  ? 'Você pode adicionar mais 1 contato'
+  : `Você pode adicionar mais ${restante} contatos`
 
-useEffect(()=>{
-loadUser()
-},[])
+useEffect(() => { loadUser() }, [])
 
-async function loadUser(){
-
-const {data}=await supabase.auth.getUser()
-
-if(data?.user){
-
-setUserId(data.user.id)
-
-loadContacts(data.user.id)
-
+async function loadUser() {
+  const { data } = await supabase.auth.getUser()
+  if (data?.user) {
+    setUserId(data.user.id)
+    loadContacts(data.user.id)
+  }
 }
 
+async function loadContacts(id) {
+  const { data } = await supabase
+    .from('emergency_contacts')
+    .select('*')
+    .eq('user_id', id)
+  setContatos(data || [])
 }
 
-async function loadContacts(id){
-
-const {data}=await supabase
-.from('emergency_contacts')
-.select('*')
-.eq('user_id',id)
-
-setContatos(data||[])
-
+function limparCampos() {
+  setNome('')
+  setTelefone('')
+  setRelacao('')
+  setPaisSelecionado(PAIS_PADRAO)
 }
 
-function validarTelefone(tel){
+async function handleAdd() {
+  if (!nome || !telefone) {
+    Alert.alert('Erro', 'Preencha nome e telefone')
+    return
+  }
+  if (!validarNumeroLocal(telefone, paisSelecionado.codigo)) {
+    Alert.alert('Telefone inválido', `Número inválido para ${paisSelecionado.nome}. Verifique os dígitos e o DDD.`)
+    return
+  }
+  if (contatos.length >= MAX_CONTATOS) {
+    Alert.alert('Limite', 'Máximo de contatos atingido')
+    return
+  }
 
-const cleaned=
-tel
-.replace(/\D/g,'')
-.replace(/^55/,'')
+  const localClean = telefone.replace(/\D/g, '')
+  const e164 = `+${paisSelecionado.codigo}${localClean}`
+
+  const { error } = await supabase
+    .from('emergency_contacts')
+    .insert({ user_id: userId, nome, telefone: e164, relacao })
+
+  if (error) { Alert.alert('Erro', error.message); return }
+
+  limparCampos()
+  loadContacts(userId)
+}
+
+async function handleDelete(id) {
+  await supabase.from('emergency_contacts').delete().eq('id', id)
+  loadContacts(userId)
+}
+
+function openEditModal(contact) {
+  setEditingContact(contact)
+  setModalVisible(true)
+}
+
+async function handleSaveEdit() {
+  await supabase
+    .from('emergency_contacts')
+    .update({
+      nome: editingContact.nome,
+      telefone: editingContact.telefone,
+      relacao: editingContact.relacao
+    })
+    .eq('id', editingContact.id)
+  setModalVisible(false)
+  loadContacts(userId)
+}
+
+async function openPhoneContacts() {
+  const data = await getPhoneContacts()
+  const sorted = (data || [])
+    .filter(c => c.name && c.phoneNumbers?.length)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  setPhoneContacts(sorted)
+  setContactSearch('')
+  setContactsModalVisible(true)
+}
+
+function handleSelectContact(contact) {
+  const rawNumber = contact.phoneNumbers?.[0]?.number || ''
+  const detectado = detectarDdi(rawNumber)
+
+  setContactsModalVisible(false)
+
+  if (detectado) {
+    // Número já tem DDI reconhecido — preenche direto
+    setNome(contact.name)
+    setTelefone(detectado.localNumber)
+    setPaisSelecionado(detectado.pais)
+  } else {
+    // Número sem DDI — abre modal de confirmação de país
+    setPendingContact({ name: contact.name, rawNumber })
+    setConfirmPais(PAIS_PADRAO)
+    setConfirmDdiSearch('')
+    setConfirmDdd('')
+    setConfirmDdiModalVisible(true)
+  }
+}
+
+function handleConfirmDdi() {
+  if (!pendingContact) return
+  const localClean = pendingContact.rawNumber.replace(/\D/g, '')
+  const precisaDdd = confirmPais.codigo === '55' && localClean.length < 10
+
+  if (precisaDdd) {
+    const dddClean = confirmDdd.replace(/\D/g, '')
+    if (dddClean.length !== 2) {
+      Alert.alert('DDD inválido', 'Informe o DDD com 2 dígitos. Ex: 11')
+      return
+    }
+    setTelefone(dddClean + localClean)
+  } else {
+    setTelefone(localClean)
+  }
+
+  setNome(pendingContact.name)
+  setPaisSelecionado(confirmPais)
+  setPendingContact(null)
+  setConfirmDdiModalVisible(false)
+}
+
+const filteredContacts = contactSearch.trim() === ''
+  ? phoneContacts
+  : phoneContacts.filter(c => {
+      const term = contactSearch.toLowerCase()
+      return (
+        c.name?.toLowerCase().includes(term) ||
+        c.phoneNumbers?.[0]?.number?.includes(term)
+      )
+    })
+
+const filteredDdi = ddiSearch.trim() === ''
+  ? PAISES
+  : PAISES.filter(p =>
+      p.nome.toLowerCase().includes(ddiSearch.toLowerCase()) ||
+      p.codigo.includes(ddiSearch)
+    )
+
+const filteredConfirmDdi = confirmDdiSearch.trim() === ''
+  ? PAISES
+  : PAISES.filter(p =>
+      p.nome.toLowerCase().includes(confirmDdiSearch.toLowerCase()) ||
+      p.codigo.includes(confirmDdiSearch)
+    )
 
 return (
-cleaned.length>=10 &&
-cleaned.length<=11
-)
-
-}
-
-function limparCampos(){
-
-setNome('')
-setTelefone('')
-setRelacao('')
-
-}
-
-async function handleAdd(){
-
-if(!nome||!telefone){
-
-Alert.alert(
-'Erro',
-'Preencha nome e telefone'
-)
-
-return
-
-}
-
-if(!validarTelefone(telefone)){
-
-Alert.alert(
-'Erro',
-'Telefone inválido'
-)
-
-return
-
-}
-
-if(contatos.length>=MAX_CONTATOS){
-
-Alert.alert(
-'Limite',
-'Máximo de contatos atingido'
-)
-
-return
-
-}
-
-const numeroLimpo=
-telefone
-.replace(/\D/g,'')
-.replace(/^55/,'')
-
-const {error}=await supabase
-.from('emergency_contacts')
-.insert({
-
-user_id:userId,
-nome,
-telefone:numeroLimpo,
-relacao
-
-})
-
-if(error){
-
-Alert.alert(
-'Erro',
-error.message
-)
-
-return
-
-}
-
-limparCampos()
-
-loadContacts(userId)
-
-}
-
-async function handleDelete(id){
-
-await supabase
-.from('emergency_contacts')
-.delete()
-.eq('id',id)
-
-loadContacts(userId)
-
-}
-
-function openEditModal(contact){
-
-setEditingContact(contact)
-
-setModalVisible(true)
-
-}
-
-async function handleSaveEdit(){
-
-await supabase
-.from('emergency_contacts')
-.update({
-
-nome:editingContact.nome,
-telefone:editingContact.telefone,
-relacao:editingContact.relacao
-
-})
-.eq(
-'id',
-editingContact.id
-)
-
-setModalVisible(false)
-
-loadContacts(userId)
-
-}
-
-async function openPhoneContacts(){
-
-const data=
-await getPhoneContacts()
-
-const sorted=
-(data||[])
-.filter(
-c=>
-c.name &&
-c.phoneNumbers?.length
-)
-
-.sort((a,b)=>
-
-a.name.localeCompare(
-b.name,
-'pt-BR'
-)
-
-)
-
-setPhoneContacts(sorted)
-
-setContactSearch('')
-
-setContactsModalVisible(true)
-
-}
-
-const filteredContacts=contactSearch.trim()===''
-? phoneContacts
-: phoneContacts.filter(c=>{
-const term=contactSearch.toLowerCase()
-return (
-c.name?.toLowerCase().includes(term) ||
-c.phoneNumbers?.[0]?.number?.includes(term)
-)
-})
-
-return(
-
-<SafeAreaView
-style={styles.container}
->
-
-<ScrollView
-contentContainerStyle={{
-padding:20
-}}
->
-
-<TouchableOpacity
-onPress={()=>
-navigation.goBack()
-}
->
-
-<Text style={styles.back}>
-← Voltar
-</Text>
-
-</TouchableOpacity>
-
-<Text style={styles.title}>
-Contatos de Emergência
-</Text>
-
-<Text style={styles.subtitle}>
-{textoInfo}
-</Text>
-
-<View style={styles.card}>
-
-<Text style={styles.label}>
-Nome
-</Text>
-
-<TextInput
-style={styles.input}
-value={nome}
-onChangeText={setNome}
-/>
-
-<Text style={styles.label}>
-Telefone
-</Text>
-
-<TextInput
-style={styles.input}
-value={telefone}
-onChangeText={setTelefone}
-keyboardType="phone-pad"
-/>
-
-<Text style={styles.label}>
-Relação
-</Text>
-
-<TextInput
-style={styles.input}
-value={relacao}
-onChangeText={setRelacao}
-placeholder="Ex: mãe"
-/>
-
-<TouchableOpacity
-style={styles.selectButton}
-onPress={openPhoneContacts}
->
-
-<Text style={styles.selectButtonText}>
-📱 Selecionar da agenda
-</Text>
-
-</TouchableOpacity>
-
-<TouchableOpacity
-style={styles.button}
-onPress={handleAdd}
->
-
-<Text style={styles.buttonText}>
-Adicionar
-</Text>
-
-</TouchableOpacity>
-
-<TouchableOpacity
-onPress={limparCampos}
->
-
-<Text style={styles.clearText}>
-Limpar campos
-</Text>
-
-</TouchableOpacity>
-
-</View>
-
-
-{contatos.map(item=>(
-
-<View
-key={item.id}
-style={styles.contact}
->
-
-<View>
-
-<Text style={styles.name}>
-{item.nome}
-</Text>
-
-<Text style={styles.phone}>
-{item.telefone}
-</Text>
-
-<Text style={styles.relacao}>
-{item.relacao}
-</Text>
-
-</View>
-
-<View style={styles.actions}>
-
-<TouchableOpacity
-onPress={()=>
-openEditModal(item)
-}
->
-
-<Text style={styles.icon}>
-✏️
-</Text>
-
-</TouchableOpacity>
-
-<TouchableOpacity
-onPress={()=>
-handleDelete(item.id)
-}
->
-
-<Text style={styles.icon}>
-🗑️
-</Text>
-
-</TouchableOpacity>
-
-</View>
-
-</View>
-
-))}
-
-
-<Modal
-visible={contactsModalVisible}
-animationType="slide"
->
-
-<ScrollView
-style={{
-paddingTop:80,
-paddingHorizontal:20,
-backgroundColor:"#F5EFEA"
-}}
->
-
-<TouchableOpacity
-onPress={()=>
-setContactsModalVisible(false)
-}
->
-
-<Text
-style={{
-color:"#025382",
-fontSize:18,
-marginBottom:25
-}}
->
-← Voltar
-</Text>
-
-</TouchableOpacity>
-
-
-<Text
-style={{
-fontSize:28,
-fontWeight:'bold',
-marginBottom:16
-}}
->
-
-Selecionar contato
-
-</Text>
-
-<TextInput
-style={styles.searchInput}
-value={contactSearch}
-onChangeText={setContactSearch}
-placeholder="Buscar por nome ou número..."
-placeholderTextColor="#AAA"
-autoCorrect={false}
-clearButtonMode="while-editing"
-/>
-
-{filteredContacts.length===0&&(
-<Text style={styles.emptySearch}>
-Nenhum contato encontrado
-</Text>
-)}
-
-{filteredContacts.map(contact=>(
-
-<TouchableOpacity
-
-key={contact.id}
-
-style={styles.phoneCard}
-
-onPress={()=>{
-
-setNome(contact.name)
-
-setTelefone(
-contact.phoneNumbers?.[0]
-?.number || ''
-)
-
-setContactsModalVisible(false)
-
-}}
-
->
-
-<Text style={styles.phoneName}>
-{contact.name}
-</Text>
-
-<Text style={styles.phoneNumber}>
-{contact.phoneNumbers?.[0]?.number}
-</Text>
-
-</TouchableOpacity>
-
-))}
+<SafeAreaView style={styles.container}>
+<ScrollView contentContainerStyle={{ padding: 20 }}>
+
+  <TouchableOpacity onPress={() => navigation.goBack()}>
+    <Text style={styles.back}>← Voltar</Text>
+  </TouchableOpacity>
+
+  <Text style={styles.title}>Contatos de Emergência</Text>
+  <Text style={styles.subtitle}>{textoInfo}</Text>
+
+  <View style={styles.card}>
+
+    <Text style={styles.label}>Nome</Text>
+    <TextInput style={styles.input} value={nome} onChangeText={setNome} />
+
+    <Text style={styles.label}>Telefone</Text>
+    <View style={styles.phoneRow}>
+      <TouchableOpacity
+        style={styles.ddiButton}
+        onPress={() => { setDdiSearch(''); setDdiModalVisible(true) }}
+      >
+        <Text style={styles.ddiButtonText}>
+          {paisSelecionado.bandeira} +{paisSelecionado.codigo}
+        </Text>
+        <Text style={styles.ddiChevron}>▾</Text>
+      </TouchableOpacity>
+      <TextInput
+        style={styles.phoneInput}
+        value={telefone}
+        onChangeText={setTelefone}
+        keyboardType="phone-pad"
+        placeholder={paisSelecionado.codigo === '55' ? 'DDD + número' : 'Número local'}
+        placeholderTextColor="#BBB"
+      />
+    </View>
+
+    <Text style={styles.label}>Relação</Text>
+    <TextInput
+      style={styles.input}
+      value={relacao}
+      onChangeText={setRelacao}
+      placeholder="Ex: mãe"
+    />
+
+    <TouchableOpacity style={styles.selectButton} onPress={openPhoneContacts}>
+      <Text style={styles.selectButtonText}>📱 Selecionar da agenda</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity style={styles.button} onPress={handleAdd}>
+      <Text style={styles.buttonText}>Adicionar</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity onPress={limparCampos}>
+      <Text style={styles.clearText}>Limpar campos</Text>
+    </TouchableOpacity>
+
+  </View>
+
+  {contatos.map(item => (
+    <View key={item.id} style={styles.contact}>
+      <View>
+        <Text style={styles.name}>{item.nome}</Text>
+        <Text style={styles.phone}>{item.telefone}</Text>
+        <Text style={styles.relacao}>{item.relacao}</Text>
+      </View>
+      <View style={styles.actions}>
+        <TouchableOpacity onPress={() => openEditModal(item)}>
+          <Text style={styles.icon}>✏️</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDelete(item.id)}>
+          <Text style={styles.icon}>🗑️</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  ))}
+
+
+  {/* ── MODAL AGENDA ── */}
+  <Modal visible={contactsModalVisible} animationType="slide">
+    <ScrollView style={{ paddingTop: 80, paddingHorizontal: 20, backgroundColor: '#F5EFEA' }}>
+      <TouchableOpacity onPress={() => setContactsModalVisible(false)}>
+        <Text style={{ color: '#025382', fontSize: 18, marginBottom: 25 }}>← Voltar</Text>
+      </TouchableOpacity>
+      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Selecionar contato</Text>
+      <TextInput
+        style={styles.searchInput}
+        value={contactSearch}
+        onChangeText={setContactSearch}
+        placeholder="Buscar por nome ou número..."
+        placeholderTextColor="#AAA"
+        autoCorrect={false}
+        clearButtonMode="while-editing"
+      />
+      {filteredContacts.length === 0 && (
+        <Text style={styles.emptySearch}>Nenhum contato encontrado</Text>
+      )}
+      {filteredContacts.map(contact => (
+        <TouchableOpacity
+          key={contact.id}
+          style={styles.phoneCard}
+          onPress={() => handleSelectContact(contact)}
+        >
+          <Text style={styles.phoneName}>{contact.name}</Text>
+          <Text style={styles.phoneNumber}>{contact.phoneNumbers?.[0]?.number}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  </Modal>
+
+
+  {/* ── MODAL SELETOR DDI (campo principal) ── */}
+  <Modal visible={ddiModalVisible} transparent animationType="slide">
+    <View style={styles.modalOverlay}>
+      <View style={[styles.modal, { maxHeight: '75%' }]}>
+        <Text style={styles.modalTitle}>Selecionar país</Text>
+        <TextInput
+          style={styles.searchInput}
+          value={ddiSearch}
+          onChangeText={setDdiSearch}
+          placeholder="Buscar país..."
+          placeholderTextColor="#AAA"
+          autoCorrect={false}
+        />
+        <FlatList
+          data={filteredDdi}
+          keyExtractor={p => p.codigo}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.ddiItem, item.codigo === paisSelecionado.codigo && styles.ddiItemSelected]}
+              onPress={() => { setPaisSelecionado(item); setDdiModalVisible(false) }}
+            >
+              <Text style={styles.ddiItemText}>{item.bandeira}  {item.nome}</Text>
+              <Text style={styles.ddiItemCode}>+{item.codigo}</Text>
+            </TouchableOpacity>
+          )}
+        />
+        <TouchableOpacity onPress={() => setDdiModalVisible(false)}>
+          <Text style={styles.clearText}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+
+
+  {/* ── MODAL CONFIRMAR DDI (importação de contato sem código) ── */}
+  <Modal visible={confirmDdiModalVisible} transparent animationType="slide">
+    <View style={styles.modalOverlay}>
+      <View style={[styles.modal, { maxHeight: '75%' }]}>
+        <Text style={styles.modalTitle}>Selecionar país</Text>
+        <Text style={styles.confirmHint}>
+          O número <Text style={{ fontWeight: 'bold' }}>{pendingContact?.rawNumber}</Text> não tem código de país.{'\n'}Selecione o país correto:
+        </Text>
+        <TextInput
+          style={styles.searchInput}
+          value={confirmDdiSearch}
+          onChangeText={setConfirmDdiSearch}
+          placeholder="Buscar país..."
+          placeholderTextColor="#AAA"
+          autoCorrect={false}
+        />
+        <FlatList
+          data={filteredConfirmDdi}
+          keyExtractor={p => p.codigo}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.ddiItem, item.codigo === confirmPais.codigo && styles.ddiItemSelected]}
+              onPress={() => setConfirmPais(item)}
+            >
+              <Text style={styles.ddiItemText}>{item.bandeira}  {item.nome}</Text>
+              <Text style={styles.ddiItemCode}>+{item.codigo}</Text>
+            </TouchableOpacity>
+          )}
+        />
+        {confirmPais.codigo === '55' &&
+          pendingContact &&
+          pendingContact.rawNumber.replace(/\D/g, '').length < 10 && (
+          <View style={{ marginTop: 12 }}>
+            <Text style={[styles.label, { marginTop: 0, marginBottom: 6 }]}>
+              DDD <Text style={{ color: '#B91C1C' }}>*</Text>
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={confirmDdd}
+              onChangeText={setConfirmDdd}
+              keyboardType="number-pad"
+              placeholder="Ex: 11"
+              placeholderTextColor="#BBB"
+              maxLength={2}
+            />
+          </View>
+        )}
+
+        <TouchableOpacity style={[styles.button, { marginTop: 16 }]} onPress={handleConfirmDdi}>
+          <Text style={styles.buttonText}>Confirmar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setConfirmDdiModalVisible(false)}>
+          <Text style={styles.clearText}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+
+
+  {/* ── MODAL EDITAR ── */}
+  <Modal visible={modalVisible} transparent animationType="slide">
+    <View style={styles.modalOverlay}>
+      <View style={styles.modal}>
+        <Text style={styles.modalTitle}>Editar contato</Text>
+
+        <Text style={styles.label}>Nome</Text>
+        <TextInput
+          style={styles.input}
+          value={editingContact?.nome || ''}
+          onChangeText={t => setEditingContact({ ...editingContact, nome: t })}
+        />
+
+        <Text style={styles.label}>Telefone</Text>
+        <TextInput
+          style={styles.input}
+          value={editingContact?.telefone || ''}
+          onChangeText={t => setEditingContact({ ...editingContact, telefone: t })}
+          keyboardType="phone-pad"
+        />
+
+        <Text style={styles.label}>Relação</Text>
+        <TextInput
+          style={styles.input}
+          value={editingContact?.relacao || ''}
+          onChangeText={t => setEditingContact({ ...editingContact, relacao: t })}
+        />
+
+        <TouchableOpacity style={styles.button} onPress={handleSaveEdit}>
+          <Text style={styles.buttonText}>Salvar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setModalVisible(false)}>
+          <Text style={styles.clearText}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
 
 </ScrollView>
-
-</Modal>
-
-
-<Modal
-visible={modalVisible}
-transparent
-animationType="slide"
->
-
-<View style={styles.modalOverlay}>
-
-<View style={styles.modal}>
-
-<Text style={styles.modalTitle}>
-Editar contato
-</Text>
-
-<Text style={styles.label}>
-Nome
-</Text>
-
-<TextInput
-style={styles.input}
-value={editingContact?.nome || ''}
-onChangeText={(t)=>
-
-setEditingContact({
-...editingContact,
-nome:t
-})
-
-}
-/>
-
-<Text style={styles.label}>
-Telefone
-</Text>
-
-<TextInput
-style={styles.input}
-value={editingContact?.telefone || ''}
-onChangeText={(t)=>
-
-setEditingContact({
-...editingContact,
-telefone:t
-})
-
-}
-/>
-
-<Text style={styles.label}>
-Relação
-</Text>
-
-<TextInput
-style={styles.input}
-value={editingContact?.relacao || ''}
-onChangeText={(t)=>
-
-setEditingContact({
-...editingContact,
-relacao:t
-})
-
-}
-/>
-
-<TouchableOpacity
-style={styles.button}
-onPress={handleSaveEdit}
->
-
-<Text style={styles.buttonText}>
-Salvar
-</Text>
-
-</TouchableOpacity>
-
-<TouchableOpacity
-onPress={()=>
-setModalVisible(false)
-}
->
-
-<Text style={styles.clearText}>
-Cancelar
-</Text>
-
-</TouchableOpacity>
-
-</View>
-
-</View>
-
-</Modal>
-
-</ScrollView>
-
 </SafeAreaView>
-
 )
-
 }
 
-const styles=StyleSheet.create({
+const styles = StyleSheet.create({
 
-container:{
-flex:1,
-backgroundColor:"#F5EFEA"
+container: { flex: 1, backgroundColor: '#F5EFEA' },
+
+back: { color: '#025382', marginBottom: 10 },
+
+title: { fontSize: 30, fontWeight: 'bold', color: '#025382' },
+
+subtitle: { color: '#3A7FA6', marginBottom: 20 },
+
+card: { backgroundColor: '#FFF', padding: 20, borderRadius: 20, marginBottom: 20 },
+
+label: { marginTop: 10, color: '#3A7FA6', fontSize: 16 },
+
+input: { borderWidth: 1, borderColor: '#DDD', borderRadius: 12, padding: 14, marginTop: 5 },
+
+phoneRow: { flexDirection: 'row', gap: 8, marginTop: 5 },
+
+ddiButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  borderWidth: 1,
+  borderColor: '#DDD',
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 14,
+  backgroundColor: '#F9F9F9'
 },
 
-back:{
-color:'#025382',
-marginBottom:10
+ddiButtonText: { fontSize: 15, color: '#333', fontWeight: '600' },
+
+ddiChevron: { fontSize: 12, color: '#999' },
+
+phoneInput: {
+  flex: 1,
+  borderWidth: 1,
+  borderColor: '#DDD',
+  borderRadius: 12,
+  padding: 14,
+  fontSize: 15
 },
 
-title:{
-fontSize:30,
-fontWeight:'bold',
-color:'#025382'
-},
+selectButton: { backgroundColor: '#C2185B', padding: 16, borderRadius: 14, marginTop: 25, alignItems: 'center' },
 
-subtitle:{
-color:'#3A7FA6',
-marginBottom:20
-},
+button: { backgroundColor: '#025382', padding: 16, borderRadius: 14, marginTop: 14, alignItems: 'center' },
 
-card:{
-backgroundColor:'#FFF',
-padding:20,
-borderRadius:20,
-marginBottom:20
-},
+selectButtonText: { color: '#FFF', fontWeight: 'bold' },
 
-label:{
-marginTop:10,
-color:'#3A7FA6',
-fontSize:16
-},
+buttonText: { color: '#FFF', fontWeight: 'bold' },
 
-input:{
-borderWidth:1,
-borderColor:'#DDD',
-borderRadius:12,
-padding:14,
-marginTop:5
-},
+clearText: { textAlign: 'center', marginTop: 14, color: '#999' },
 
-selectButton:{
-backgroundColor:"#C2185B",
-padding:16,
-borderRadius:14,
-marginTop:25,
-alignItems:"center"
-},
+contact: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between' },
 
-button:{
-backgroundColor:"#025382",
-padding:16,
-borderRadius:14,
-marginTop:14,
-alignItems:"center"
-},
+name: { fontWeight: 'bold', fontSize: 18 },
 
-selectButtonText:{
-color:"#FFF",
-fontWeight:"bold"
-},
+phone: { color: '#666' },
 
-buttonText:{
-color:"#FFF",
-fontWeight:"bold"
-},
+relacao: { color: '#025382' },
 
-clearText:{
-textAlign:"center",
-marginTop:14,
-color:"#999"
-},
+actions: { flexDirection: 'row', gap: 15 },
 
-contact:{
-backgroundColor:"#FFF",
-padding:15,
-borderRadius:15,
-marginBottom:10,
-flexDirection:'row',
-justifyContent:'space-between'
-},
+icon: { fontSize: 22 },
 
-name:{
-fontWeight:'bold',
-fontSize:18
-},
+searchInput: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, fontSize: 16, marginBottom: 12, borderWidth: 1, borderColor: '#DDD' },
 
-phone:{
-color:"#666"
-},
+emptySearch: { textAlign: 'center', color: '#999', marginTop: 30, fontSize: 16 },
 
-relacao:{
-color:"#025382"
-},
+phoneCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 20, marginBottom: 14 },
 
-actions:{
-flexDirection:'row',
-gap:15
-},
+phoneName: { fontWeight: 'bold', fontSize: 18 },
 
-icon:{
-fontSize:22
-},
+phoneNumber: { marginTop: 5, color: '#666' },
 
-searchInput:{
-backgroundColor:"#FFF",
-borderRadius:14,
-padding:14,
-fontSize:16,
-marginBottom:18,
-borderWidth:1,
-borderColor:'#DDD'
-},
+modalOverlay: { flex: 1, backgroundColor: '#00000066', justifyContent: 'center' },
 
-emptySearch:{
-textAlign:'center',
-color:'#999',
-marginTop:30,
-fontSize:16
-},
+modal: { backgroundColor: '#FFF', margin: 20, borderRadius: 20, padding: 20 },
 
-phoneCard:{
-backgroundColor:"#FFF",
-padding:20,
-borderRadius:20,
-marginBottom:14
-},
+modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
 
-phoneName:{
-fontWeight:'bold',
-fontSize:18
-},
+confirmHint: { fontSize: 14, color: '#555', marginBottom: 12, lineHeight: 20 },
 
-phoneNumber:{
-marginTop:5,
-color:"#666"
-},
+ddiItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
 
-modalOverlay:{
-flex:1,
-backgroundColor:"#00000066",
-justifyContent:"center"
-},
+ddiItemSelected: { backgroundColor: '#EFF6FF' },
 
-modal:{
-backgroundColor:"#FFF",
-margin:20,
-borderRadius:20,
-padding:20
-},
+ddiItemText: { fontSize: 16, color: '#333' },
 
-modalTitle:{
-fontSize:18,
-fontWeight:'bold',
-marginBottom:15
-}
+ddiItemCode: { fontSize: 15, color: '#025382', fontWeight: '700' },
 
 })
