@@ -56,5 +56,7 @@ export async function buscarCrimes(userLat, userLon, raioKm = 3) {
     return [];
   }
 
+  console.log(`[buscarCrimes] Retornou ${data.length} registros do banco para raio ${raioKm}km`);
+  if (data.length > 0) console.log('[buscarCrimes] Exemplo:', JSON.stringify(data[0]));
   return data;
 }
