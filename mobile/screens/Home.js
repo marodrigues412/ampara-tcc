@@ -108,7 +108,7 @@ export default function Home({ navigation }) {
   const searchTimeout = useRef(null)
   const [safeLocations, setSafeLocations] = useState([]);
   const [insideSafeZone, setInsideSafeZone] = useState(false);
-  const [userName, setUserName] = useState("Usuária"); // Valor padrão
+  const [userName, setUserName] = useState("Usuária");
 
   const { magnitude, isHighRisk } = riskStatus
 
@@ -143,7 +143,6 @@ export default function Home({ navigation }) {
   const highMagnitudeTimerRef = useRef(null);
   const [sustainedHighRisk, setSustainedHighRisk] = useState(false);
   const [sosHolding, setSosHolding] = useState(false);
-// NOVO: Estados para a tela de confirmação do SOS
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
   const [sosFeedbackData, setSosFeedbackData] = useState({ mensagem: '', contatos: [], endereco: '' });
   
@@ -191,7 +190,7 @@ export default function Home({ navigation }) {
     };
   }, [isHighRisk, riskLevel]);
 
-  // 1️⃣ GATILHO DO MODAL — só abre se risco sustentado e fora de cooldowns
+  // 1️⃣ GATILHO DO MODAL
   useEffect(() => {
     if (!sustainedHighRisk || modalVisible || alertaDisparado) return;
 
@@ -213,11 +212,9 @@ export default function Home({ navigation }) {
     }
 
     if (countdown === 0 && modalVisible && !alertaDisparado) {
-      
       setAlertaDisparado(true);
       if (timerRef.current) clearTimeout(timerRef.current);
       setModalVisible(false);
-      
       executarEnvioDeSocorro();
       return;
     }
@@ -225,8 +222,7 @@ export default function Home({ navigation }) {
     if (countdown > 0 && modalVisible && !alertaDisparado) {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        const proximoSegundo = countdown - 1;
-        setCountdown(proximoSegundo);
+        setCountdown(countdown - 1);
       }, 1000);
     }
 
@@ -238,12 +234,8 @@ export default function Home({ navigation }) {
   async function loadUserData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    // Tenta buscar o nome (assumindo que você tem uma tabela 'profiles')
     const { data } = await supabase.from('user_profiles').select('nome').eq('id', user.id).single();
-    if (data?.nome) {
-     setUserName(data.nome);
-   }
+    if (data?.nome) setUserName(data.nome);
   }
   
   async function loadActivity() {
@@ -319,7 +311,7 @@ export default function Home({ navigation }) {
     else { setRiskLevel("Baixo") }
   }, [magnitude, crimeData, activityMode, location, safeLocations])
 
-// --- Função do Disparo de Socorro ---
+  // --- Função do Disparo de Socorro ---
   const executarEnvioDeSocorro = async () => {
     if (!location) {
       Alert.alert("Erro", "Localização GPS ausente para o resgate.");
@@ -332,26 +324,22 @@ export default function Home({ navigation }) {
     const userLon = location.coords.longitude;
     const linkMapa = `https://maps.google.com/?q=${userLat},${userLon}`;
     
-    // 🔍 BUSCA DO ENDEREÇO LEGÍVEL (Geocodificação Reversa)
     let enderecoFormatado = "Endereço não identificado (Apenas GPS)";
     try {
       const addressArray = await Location.reverseGeocodeAsync({ latitude: userLat, longitude: userLon });
       if (addressArray && addressArray.length > 0) {
         const a = addressArray[0];
-        // Monta a string: "Nome da Rua, Número - Bairro, Cidade"
         enderecoFormatado = `${a.street || a.name || ''}${a.streetNumber ? ', ' + a.streetNumber : ''} - ${a.district || a.subregion || ''}, ${a.city || ''}`;
       }
     } catch (e) {
       console.log("Erro ao buscar endereço reverso no SOS:", e);
     }
 
-    // A mensagem de texto agora inclui o endereço em texto plano e o link do mapa
     const textoMensagem = `🚨 ALERTA AMPARA: ${userName} pode estar em perigo! Risco: ${riskLevel}. Local: ${enderecoFormatado}. Mapa: ${linkMapa}`;
     const contatosAEnviar = listaContatos.length > 0 ? listaContatos : ["Nenhum contato cadastrado"];
 
     console.log("🚀 [Ampara] Disparando protocolo de socorro automático...");
 
-    // 1. Envio AWS
     try {
       await fetch(URL_AWS_GATEWAY, {
         method: 'POST',
@@ -376,17 +364,14 @@ export default function Home({ navigation }) {
       console.error("❌ [AWS Nuvem] Falha de rede ao conectar com o API Gateway:", error);
     }
 
-    // 2. Log Supabase
     try {
       const { data: userData, error: authError } = await supabase.auth.getUser();
-
       if (!authError && userData?.user) {
         const { error: insertError } = await supabase.from('alert_logs').insert([{
             user_id: userData.user.id,
             message: textoMensagem,
             recipient_names: contatosAEnviar.join(', ')
         }]);
-
         if (insertError) {
           console.error("❌ [Alerta] Falha ao gravar log:", insertError.message);
         } else {
@@ -397,7 +382,6 @@ export default function Home({ navigation }) {
       console.error("❌ [Alerta] Erro inesperado ao gravar log:", supabaseError);
     }
 
-    // 3. Mostrar Feedback Visual para a Usuária (agora com o endereço em destaque)
     setSosFeedbackData({
       mensagem: textoMensagem,
       contatos: contatosAEnviar,
@@ -428,33 +412,49 @@ export default function Home({ navigation }) {
     }
   }, [location])
 
+  // ✅ CORRIGIDO: busca crimes filtrando por localização do usuário
   useEffect(() => {
     async function carregarCrimes() {
+      if (!location) return
       try {
-        const crimes = await buscarCrimes()
-        if (!location) return
         const userLat = location.coords.latitude
         const userLon = location.coords.longitude
+
+        const crimes = await buscarCrimes(userLat, userLon, 3)
+
         const crimesFormatados = crimes.map((crime) => {
-          const lat = Number(crime.latitude); const lon = Number(crime.longitude);
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-          return { id: crime.id || Math.random().toString(), lat, lon, tipo: crime.natureza_apurada || crime.condcta || 'Ocorrência',
-            distancia: Math.sqrt(Math.pow((lat - userLat) * 111, 2) + Math.pow((lon - userLon) * 111, 2))
+          const lat = Number(crime.latitude)
+          const lon = Number(crime.longitude)
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+          return {
+            id: crime.id || Math.random().toString(),
+            lat, lon,
+            tipo: crime.natureza_apurada || crime.conduta || 'Ocorrência',
+            distancia: Math.sqrt(
+              Math.pow((lat - userLat) * 111, 2) +
+              Math.pow((lon - userLon) * 111, 2)
+            )
           }
-        }).filter(Boolean).filter(crime => crime.distancia <= 20).sort((a, b) => a.distancia - b.distancia).slice(0, 100)
+        }).filter(Boolean).sort((a, b) => a.distancia - b.distancia)
+
         setCrimeData(crimesFormatados)
-      } catch (error) { console.error('❌ ERRO AO FILTRAR CRIMES:', error) }
+      } catch (error) {
+        console.error('❌ ERRO AO FILTRAR CRIMES:', error)
+      }
     }
     carregarCrimes()
   }, [location])
 
+  // ✅ CORRIGIDO: busca ocorrências filtrando por localização do usuário
   useEffect(() => {
     async function carregarOcorrencias() {
       if (!location) return
       try {
-        const dados = await buscarOcorrencias()
         const userLat = location.coords.latitude
         const userLon = location.coords.longitude
+
+        const dados = await buscarOcorrencias(userLat, userLon, 3)
+
         const formatadas = dados.map((occ) => {
           const lat = Number(occ.latitude)
           const lon = Number(occ.longitude)
@@ -467,11 +467,17 @@ export default function Home({ navigation }) {
             descricao: occ.descricao || '',
             horario: occ.horario || '',
             address: occ.address || '',
-            distancia: Math.sqrt(Math.pow((lat - userLat) * 111, 2) + Math.pow((lon - userLon) * 111, 2))
+            distancia: Math.sqrt(
+              Math.pow((lat - userLat) * 111, 2) +
+              Math.pow((lon - userLon) * 111, 2)
+            )
           }
-        }).filter(Boolean).filter(occ => occ.distancia <= 20)
+        }).filter(Boolean).sort((a, b) => a.distancia - b.distancia)
+
         setOccurrenceData(formatadas)
-      } catch (error) { console.error('❌ ERRO AO CARREGAR OCORRÊNCIAS:', error) }
+      } catch (error) {
+        console.error('❌ ERRO AO CARREGAR OCORRÊNCIAS:', error)
+      }
     }
     carregarOcorrencias()
   }, [location])
@@ -493,13 +499,22 @@ export default function Home({ navigation }) {
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
     if (text.trim().length < 3) { setSuggestions([]); return; }
     searchTimeout.current = setTimeout(async () => {
-      try { const query = encodeURIComponent(`${text}, São Paulo, Brasil`); const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5&countrycodes=br`;
-        const response = await fetch(url, { headers: { 'User-Agent': 'ampara-tcc-app' } }); const result = await response.json(); setSuggestions(result || []);
+      try {
+        const query = encodeURIComponent(`${text}, São Paulo, Brasil`)
+        const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5&countrycodes=br`
+        const response = await fetch(url, { headers: { 'User-Agent': 'ampara-tcc-app' } })
+        const result = await response.json()
+        setSuggestions(result || [])
       } catch (error) { setSuggestions([]); }
     }, 600)
   }
 
-  const selectSuggestion = (item) => { setOccEndereco(item.display_name); setOccCoords({ latitude: Number(item.lat), longitude: Number(item.lon) }); setSuggestions([]); Keyboard.dismiss(); }
+  const selectSuggestion = (item) => {
+    setOccEndereco(item.display_name)
+    setOccCoords({ latitude: Number(item.lat), longitude: Number(item.lon) })
+    setSuggestions([])
+    Keyboard.dismiss()
+  }
 
   const handleSaveOccurrence = async () => {
     if (!occTipo || !occEndereco || !occHorario || !occData) { Alert.alert('Atenção', 'Preencha o tipo, o local, a data e o horário.'); return; }
@@ -519,20 +534,56 @@ export default function Home({ navigation }) {
     const ocorrenciaDatetime = new Date(Number(ano), Number(mes) - 1, Number(dia), Number(partesHorario[0]), Number(partesHorario[1]))
     if (ocorrenciaDatetime > agora) { Alert.alert('Horário inválido', 'Não é possível registrar ocorrências em horários futuros.'); return; }
 
-    try { setIsSaving(true); const { data: userData } = await supabase.auth.getUser()
+    try {
+      setIsSaving(true)
+      const { data: userData } = await supabase.auth.getUser()
       if (!userData?.user) { Alert.alert("Erro", "Usuário não autenticado."); return; }
       const dataIso = `${ano}-${mes}-${dia}`
-      const { error } = await supabase.from('occurrences').insert([{ user_id: userData.user.id, tipo_crime: occTipo, address: occEndereco, descricao: occDescricao, horario: occHorario, data_ocorrencia: dataIso, latitude: occCoords?.latitude, longitude: occCoords?.longitude, risk_score: magnitude || 0 }]);
-      if (error) throw error; Alert.alert("Sucesso", "Ocorrência registrada na rede Ampara!"); setReportModalVisible(false); resetForm();
-    } catch (error) { Alert.alert("Erro", `Não foi possível salvar: ${error.message}`) }
-    finally { setIsSaving(false) }
+      const { error } = await supabase.from('occurrences').insert([{
+        user_id: userData.user.id,
+        tipo_crime: occTipo,
+        address: occEndereco,
+        descricao: occDescricao,
+        horario: occHorario,
+        data_ocorrencia: dataIso,
+        latitude: occCoords?.latitude,
+        longitude: occCoords?.longitude,
+        risk_score: magnitude || 0
+      }])
+      if (error) throw error
+      Alert.alert("Sucesso", "Ocorrência registrada na rede Ampara!")
+      setReportModalVisible(false)
+      resetForm()
+    } catch (error) {
+      Alert.alert("Erro", `Não foi possível salvar: ${error.message}`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const resetForm = () => { setOccEndereco(''); setOccTipo(''); setOccDescricao(''); setOccCoords(null); setSuggestions([]); setOccHorario(new Date().toLocaleTimeString().slice(0, 5)); setOccData(new Date().toLocaleDateString('pt-BR')); }
+  const resetForm = () => {
+    setOccEndereco('')
+    setOccTipo('')
+    setOccDescricao('')
+    setOccCoords(null)
+    setSuggestions([])
+    setOccHorario(new Date().toLocaleTimeString().slice(0, 5))
+    setOccData(new Date().toLocaleDateString('pt-BR'))
+  }
 
-  const handleRegionChange = (newRegion) => { setRegion(newRegion); if (!userRegion) return; const distance = Math.abs(newRegion.latitude - userRegion.latitude) + Math.abs(newRegion.longitude - userRegion.longitude); setMapMoved(distance > 0.002); }
+  const handleRegionChange = (newRegion) => {
+    setRegion(newRegion)
+    if (!userRegion) return
+    const distance = Math.abs(newRegion.latitude - userRegion.latitude) + Math.abs(newRegion.longitude - userRegion.longitude)
+    setMapMoved(distance > 0.002)
+  }
 
-  const recenterMap = () => { if (mapRef.current && userRegion) { mapRef.current.animateToRegion(userRegion, 500); setMapMoved(false); } }
+  const recenterMap = () => {
+    if (mapRef.current && userRegion) {
+      mapRef.current.animateToRegion(userRegion, 500)
+      setMapMoved(false)
+    }
+  }
 
   const riskBg = riskLevel === 'Crítico' ? '#FDEAEC' : riskLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
   const riskAccent = riskLevel === 'Crítico' ? '#C4687A' : riskLevel === 'Moderado' ? '#D4A017' : '#2E8B57'
@@ -550,7 +601,7 @@ export default function Home({ navigation }) {
           <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 38, height: 38 }} resizeMode="contain" />
         </View>
 
-        {/* ── RISCO — sem card ── */}
+        {/* ── RISCO ── */}
         <View style={styles.riskSection}>
           <View style={styles.riskRow}>
             <Text style={styles.riskLabel}>Risco atual</Text>
@@ -600,7 +651,7 @@ export default function Home({ navigation }) {
         </View>
         <View style={styles.separator} />
 
-        {/* ── MAPA — arredondado sem card ── */}
+        {/* ── MAPA ── */}
         <View style={styles.mapContainer}>
           {location && region ? (
             <>
@@ -653,7 +704,7 @@ export default function Home({ navigation }) {
           )}
         </View>
 
-        {/* ── CRIME STRIP — slim, sem card ── */}
+        {/* ── CRIME STRIP ── */}
         <View style={[styles.crimeStrip, { borderLeftColor: crimeData.length > 0 ? '#C4687A' : '#2E8B57' }]}>
           <Ionicons
             name={crimeData.length > 0 ? 'warning-outline' : 'checkmark-circle-outline'}
@@ -665,7 +716,7 @@ export default function Home({ navigation }) {
           </Text>
         </View>
 
-        {/* ── FORÇA G — inline, sem card ── */}
+        {/* ── FORÇA G ── */}
         <View style={styles.forceRow}>
           <Ionicons name="pulse-outline" size={20} color={isHighRisk ? '#C4687A' : '#5A8FAF'} />
           <Text style={[styles.forceValue, { color: isHighRisk ? '#C4687A' : '#1B3A6B' }]}>{magnitude}G</Text>
@@ -699,9 +750,7 @@ export default function Home({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* ========================================================= */}
-      {/* 🛑 MODAL DE FEEDBACK DE SOS ENVIADO (PADRÃO CARD AMPARA)  */}
-      {/* ========================================================= */}
+      {/* MODAL FEEDBACK SOS */}
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
@@ -741,9 +790,7 @@ export default function Home({ navigation }) {
         </View>
       </Modal>
 
-      {/* ========================================================= */}
-      {/* 🚨 MODAL DE REGISTRO (ATUALIZADO PARA PADRÃO CARD AMPARA) */}
-      {/* ========================================================= */}
+      {/* MODAL REGISTRO DE INCIDENTE */}
       <Modal visible={reportModalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flexOne}>
           <View style={styles.overlayBottom}>
@@ -787,25 +834,11 @@ export default function Home({ navigation }) {
                 <View style={{flexDirection: 'row', gap: 10}}>
                   <View style={{flex: 1}}>
                     <Text style={styles.occLabel}>Data</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="DD/MM/AAAA"
-                      value={occData}
-                      onChangeText={setOccData}
-                      maxLength={10}
-                      keyboardType="numbers-and-punctuation"
-                    />
+                    <TextInput style={styles.input} placeholder="DD/MM/AAAA" value={occData} onChangeText={setOccData} maxLength={10} keyboardType="numbers-and-punctuation" />
                   </View>
                   <View style={{flex: 1}}>
                     <Text style={styles.occLabel}>Horário</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Ex: 19:45"
-                      value={occHorario}
-                      onChangeText={setOccHorario}
-                      maxLength={5}
-                      keyboardType="numbers-and-punctuation"
-                    />
+                    <TextInput style={styles.input} placeholder="Ex: 19:45" value={occHorario} onChangeText={setOccHorario} maxLength={5} keyboardType="numbers-and-punctuation" />
                   </View>
                 </View>
 
@@ -835,9 +868,7 @@ export default function Home({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ========================================================= */}
-      {/* ⏱️ MODAL DO CRONÔMETRO DE SEGURANÇA (MANTIDO)             */}
-      {/* ========================================================= */}
+      {/* MODAL CRONÔMETRO */}
       <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
@@ -876,12 +907,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5EFE6' },
   scrollContent: { paddingBottom: 130 },
 
-  // ── Header ──
   headerContainer: { paddingTop: 52, paddingHorizontal: 22, paddingBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   header: { fontSize: 34, color: '#1B3A6B', fontWeight: '200', letterSpacing: 3 },
   subHeader: { color: '#C4687A', fontSize: 13, marginTop: 2 },
 
-  // ── Risco sem card ──
   riskSection: { paddingHorizontal: 22, paddingVertical: 16, marginBottom: 4 },
   riskRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   riskLabel: { fontSize: 13, color: '#5A8FAF', fontWeight: '700' },
@@ -892,48 +921,19 @@ const styles = StyleSheet.create({
   gaugeScoreMax: { fontSize: 20, fontWeight: '400', color: '#888' },
   gaugeDesc: { fontSize: 13, color: '#666', marginTop: 14, textAlign: 'center' },
 
-  // ── Safe zone strip ──
   safeStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 10, backgroundColor: '#EAF5EC' },
   safeStripText: { fontSize: 13, color: '#2E8B57', fontWeight: '500' },
 
-  // ── Activity row ──
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFF',
-    borderRadius: 18,
-    elevation: 2,
-    shadowColor: '#1B3A6B',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-  },
-  activityRowActive: {
-    backgroundColor: '#FDEAEC',
-  },
-  activityIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#EEF6FC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityIconWrapActive: {
-    backgroundColor: '#C4687A',
-  },
+  activityRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginHorizontal: 20, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF', borderRadius: 18, elevation: 2, shadowColor: '#1B3A6B', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6 },
+  activityRowActive: { backgroundColor: '#FDEAEC' },
+  activityIconWrap: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#EEF6FC', alignItems: 'center', justifyContent: 'center' },
+  activityIconWrapActive: { backgroundColor: '#C4687A' },
   activityTexts: { flex: 1 },
   activityTitle: { fontSize: 15, fontWeight: '700', color: '#1B3A6B' },
   activitySubtitle: { fontSize: 12, color: '#5A8FAF', marginTop: 2 },
 
   separator: { height: 1, backgroundColor: '#E8E0D8', marginHorizontal: 22 },
 
-  // ── Mapa arredondado sem card ──
   mapContainer: { height: 300, borderRadius: 20, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
   map: { flex: 1 },
   recenterButton: { position: 'absolute', bottom: 14, alignSelf: 'center', backgroundColor: '#1B3A6B', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 20 },
@@ -943,26 +943,22 @@ const styles = StyleSheet.create({
   legendText: { fontSize: 11, color: '#333', fontWeight: '600' },
   recenterText: { color: '#FFF', fontWeight: '600', fontSize: 13 },
 
-  // ── Crime strip ──
   crimeStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 22, paddingVertical: 14, borderLeftWidth: 3 },
   crimeStripText: { fontSize: 14, fontWeight: '500' },
 
-  // ── Força G inline ──
   forceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 22, paddingVertical: 16 },
   forceValue: { fontSize: 22, fontWeight: '700' },
   forceLabel: { fontSize: 13, color: '#AAA', flex: 1 },
   forcePill: { backgroundColor: '#FDEAEC', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
   forcePillText: { color: '#C4687A', fontSize: 11, fontWeight: '700' },
 
-  // ── FABs ──
   floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end' },
   fabHelp: { backgroundColor: '#E8622A', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8, alignItems: 'center' },
   fabHelpHolding: { backgroundColor: '#B84C14', transform: [{ scale: 1.08 }] },
   fabHoldHint: { color: '#FFD8B0', fontSize: 10, fontWeight: '600', marginTop: 2 },
   fabRegister: { backgroundColor: '#C4687A', marginTop: 10, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
   fabText: { color: '#FFF', fontWeight: '600', fontSize: 14, letterSpacing: 0.5 },
-  
-  // --- ESTILOS GLOBAIS DE MODAL ---
+
   overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   cardModal: { backgroundColor: '#FFF', borderRadius: 28, overflow: 'hidden', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12 },
   modalStrip: { height: 6, backgroundColor: '#C4687A', width: '100%' },
@@ -971,7 +967,6 @@ const styles = StyleSheet.create({
   cardTitleCritical: { fontSize: 22, fontWeight: '700', color: '#C4687A', marginBottom: 5, textAlign: 'center' },
   cardSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10, lineHeight: 20 },
 
-  // Botões
   btnPrimary: { backgroundColor: '#1B3A6B', paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
   btnPrimaryText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
   btnCancelText: { textAlign: 'center', color: '#C4687A', marginTop: 15, fontWeight: '600', fontSize: 15 },
@@ -980,28 +975,23 @@ const styles = StyleSheet.create({
   btnSafe: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 30, alignItems: 'center' },
   btnSafeText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
 
-  // Estilos da caixa de Feedback SOS
-  // Estilos da caixa de Feedback SOS
   feedbackBox: { backgroundColor: '#F5EFE6', padding: 15, borderRadius: 15, marginBottom: 25, borderWidth: 1, borderColor: '#E8E0D8' },
   feedbackLabel: { fontSize: 12, fontWeight: 'bold', color: '#5A8FAF', marginBottom: 5 },
-  feedbackAddressText: { fontSize: 16, color: '#C4687A', fontWeight: 'bold', marginBottom: 5 }, // <-- NOVO ESTILO AQUI
+  feedbackAddressText: { fontSize: 16, color: '#C4687A', fontWeight: 'bold', marginBottom: 5 },
   feedbackText: { fontSize: 14, color: '#333', fontStyle: 'italic' },
   feedbackContact: { fontSize: 15, color: '#1B3A6B', fontWeight: '600', marginTop: 3 },
 
-  // Bottom sheet modal (relato de incidente)
   overlayBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   cardModalBottom: { backgroundColor: '#FFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '90%', overflow: 'hidden', elevation: 20 },
   modalHandle: { width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 16 },
   btnOrange: { backgroundColor: '#E8622A', paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
 
-  // Estilos do Formulário de Registro
   occScrollContent: { flexGrow: 1, padding: 22, paddingTop: 0 },
   occLabel: { color: '#1B3A6B', fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
   inputRow: { flexDirection: 'row', gap: 10 },
   inputFlex: { flex: 1, borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9' },
   input: { borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9', marginTop: 5 },
   gpsBtn: { backgroundColor: '#F5EFE6', width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#D8D0CC' },
-  gpsIcon: { fontSize: 20 },
   typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 5 },
   typeButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#D8D0CC', backgroundColor: '#FFF' },
   typeSelected: { backgroundColor: '#1B3A6B', borderColor: '#1B3A6B' },
@@ -1011,7 +1001,6 @@ const styles = StyleSheet.create({
   suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#F5EFE6' },
   suggestionText: { fontSize: 13, color: '#333' },
 
-  // Estilos do Cronômetro
   timerCircle: { width: 90, height: 90, borderRadius: 45, borderWidth: 4, borderColor: '#C4687A', justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
   timerCountText: { fontSize: 32, fontWeight: 'bold', color: '#C4687A' },
   timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' },
