@@ -16,7 +16,7 @@ export const useRiskDetection = () => {
   const [currentScore, setCurrentScore] = useState(100);
   const [statusColor, setStatusColor] = useState('#4CAF50');
 
-  const RISK_THRESHOLD = 1.8;
+  const RISK_THRESHOLD = 2.8;
 
   const checkCrimeRisk = (userLat, userLon) => {
     const range = 0.005; 
