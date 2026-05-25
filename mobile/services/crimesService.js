@@ -1,6 +1,8 @@
 import { supabase } from "./supabase";
 
-export async function buscarOcorrencias() {
+export async function buscarOcorrencias(userLat, userLon, raioKm = 3) {
+  const delta = raioKm / 111;
+
   const { data, error } = await supabase
     .from("occurrences")
     .select(`
@@ -14,16 +16,22 @@ export async function buscarOcorrencias() {
     `)
     .not("latitude", "is", null)
     .not("longitude", "is", null)
+    .gte("latitude", userLat - delta)
+    .lte("latitude", userLat + delta)
+    .gte("longitude", userLon - delta)
+    .lte("longitude", userLon + delta)
+    .limit(200);
 
   if (error) {
-    console.error("ERRO SUPABASE (occurrences):", error)
-    return []
+    console.error("ERRO SUPABASE (occurrences):", error);
+    return [];
   }
 
-  return data
+  return data;
 }
 
-export async function buscarCrimes() {
+export async function buscarCrimes(userLat, userLon, raioKm = 3) {
+  const delta = raioKm / 111;
 
   const { data, error } = await supabase
     .from("crime_occurrences")
@@ -37,27 +45,16 @@ export async function buscarCrimes() {
     `)
     .not("latitude", "is", null)
     .not("longitude", "is", null)
-    .limit(50000)
+    .gte("latitude", userLat - delta)
+    .lte("latitude", userLat + delta)
+    .gte("longitude", userLon - delta)
+    .lte("longitude", userLon + delta)
+    .limit(500);
 
   if (error) {
-
-    console.error(
-      "ERRO SUPABASE:",
-      error
-    )
-
-    return []
+    console.error("ERRO SUPABASE:", error);
+    return [];
   }
 
-  console.log(
-    "TOTAL CRIMES:",
-    data.length
-  )
-
-  console.log(
-    "AMOSTRA:",
-    data[0]
-  )
-
-  return data
+  return data;
 }
