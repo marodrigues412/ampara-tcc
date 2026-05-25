@@ -1,5 +1,9 @@
 import React, { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native'
+import {
+  View, Text, TextInput, TouchableOpacity,
+  StyleSheet, Alert, KeyboardAvoidingView,
+  Platform, ScrollView, Image
+} from 'react-native'
 import { supabase } from '../services/supabase'
 import RegisterScreen from './RegisterScreen'
 
@@ -9,78 +13,163 @@ export default function LoginScreen({ onLogin }) {
   const [isRegistering, setIsRegistering] = useState(false)
 
   const handleLogin = async () => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (error) {
-      Alert.alert('Erro', error.message)
-    } else {
-      onLogin(data.session)
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) Alert.alert('Erro', error.message)
+    else onLogin(data.session)
   }
 
-    const handleSignUp = async () => {
-    const { error } = await supabase.auth.signUp({
-        email,
-        password,
-    })
-
-    if (error) {
-        Alert.alert('Erro', error.message)
-    } else {
-        await supabase.auth.signOut()
-        Alert.alert('Conta criada!', 'Agora faça login')
-    }
-    }
-
-    if (isRegistering) {
+  if (isRegistering) {
     return <RegisterScreen onBack={() => setIsRegistering(false)} />
-    }
+  }
 
   return (
-  <View style={styles.container}>
+    <View style={styles.root}>
+      <View style={styles.bgNavy} />
+      <View style={styles.bgRose} />
 
-    <Image
-      source={require('../assets/images/ampara-logo.png')}
-      style={styles.logo}
-      resizeMode="contain"
-    />
+      <KeyboardAvoidingView
+        style={styles.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.brandArea}>
+            <Image
+              source={require('../assets/images/maos-ampara-azul.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.brand}>Ampara</Text>
+          </View>
 
-    <Text style={styles.title}>Ampara</Text>
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-      />
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Entrar</Text>
 
-      <TextInput
-        placeholder="Senha"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        style={styles.input}
-      />
+            <TextInput
+              placeholder="E-mail"
+              placeholderTextColor="#AAA"
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Entrar</Text>
-      </TouchableOpacity>
+            <TextInput
+              placeholder="Senha"
+              placeholderTextColor="#AAA"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              style={styles.input}
+            />
 
-        <TouchableOpacity onPress={() => setIsRegistering(true)}>
-            <Text style={styles.link}>Criar conta</Text>
-      </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={handleLogin}>
+              <Text style={styles.buttonText}>Entrar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setIsRegistering(true)} style={styles.registerRow}>
+              <Text style={styles.registerText}>
+                Ainda não tem uma conta?{' '}
+                <Text style={styles.registerLink}>Cadastre-se aqui</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.navyFill} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 20 },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#025382' },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 15, marginBottom: 15, borderRadius: 10 },
-  button: { backgroundColor: '#025382', padding: 15, borderRadius: 10 },
-  buttonText: { color: '#fff', textAlign: 'center', fontWeight: 'bold' },
-  link: { marginTop: 15, textAlign: 'center', color: '#025382' },
-  logo: { width: 150, height: 150, alignSelf: 'center', marginBottom: 20 },
+  root: { flex: 1 },
+
+  bgNavy: {
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: '#1B3A6B',
+  },
+  bgRose: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: '48%',
+    backgroundColor: '#C4687A',
+    borderBottomLeftRadius: 48,
+    borderBottomRightRadius: 48,
+  },
+
+  kav: { flex: 1 },
+  scroll: { flexGrow: 1 },
+
+  brandArea: {
+    alignItems: 'center',
+    paddingTop: 72,
+    paddingBottom: 28,
+  },
+  logo: {
+    width: 72,
+    height: 72,
+    marginBottom: 10,
+  },
+  brand: {
+    fontSize: 44,
+    fontWeight: '200',
+    color: '#FFF',
+    letterSpacing: 4,
+  },
+
+  card: {
+    marginHorizontal: 24,
+    backgroundColor: '#FFF',
+    borderRadius: 32,
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1B3A6B',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  input: {
+    borderWidth: 1.5,
+    borderColor: '#DDE8F0',
+    borderRadius: 30,
+    paddingVertical: 13,
+    paddingHorizontal: 20,
+    fontSize: 15,
+    marginBottom: 12,
+    color: '#333',
+  },
+  button: {
+    backgroundColor: '#1B3A6B',
+    paddingVertical: 15,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 20,
+  },
+  buttonText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 16,
+    letterSpacing: 0.8,
+  },
+  registerRow: { alignItems: 'center' },
+  registerText: { color: '#999', fontSize: 13, textAlign: 'center' },
+  registerLink: { color: '#C4687A', fontWeight: '600' },
+
+  navyFill: { flex: 1, minHeight: 60 },
 })
