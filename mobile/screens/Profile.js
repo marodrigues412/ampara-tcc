@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   menuLabel: { flex: 1, fontSize: 15, color: '#1B3A6B', fontWeight: '600' },
 
   logoutBtn: {
-    backgroundColor: '#C4687A',
+    backgroundColor: '#5A8FAF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

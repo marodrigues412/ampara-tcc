@@ -33,15 +33,23 @@ const URL_AWS_GATEWAY = "https://2egghrwmeg.execute-api.us-east-1.amazonaws.com/
 const screenWidth = Dimensions.get('window').width
 
 const getRiskRGB = (level) => {
-  if (level === 'Crítico') return '196, 104, 122'
-  if (level === 'Moderado') return '212, 160, 23'
-  return '46, 139, 87'
+  if (level === 'Crítico') return '211, 47, 47'
+  if (level === 'Moderado') return '230, 162, 0'
+  return '39, 174, 96'
 }
 
 const getRiskLabel = (level) => {
-  if (level === 'Crítico') return 'Alto risco · tenha atenção redobrada'
-  if (level === 'Moderado') return 'Risco moderado · mantenha o cuidado'
+  if (level === 'Crítico') return 'Alto risco · contatos serão acionados automaticamente'
+  if (level === 'Moderado') return 'Risco moderado · você será consultada se necessário'
   return 'Baixo risco · ambiente monitorado'
+}
+
+const getTimeLabel = () => {
+  const h = new Date().getHours()
+  if (h >= 0 && h < 6) return 'madrugada (+3 risco)'
+  if (h >= 22) return 'noite avançada (+2 risco)'
+  if (h >= 18) return 'noite (+1 risco)'
+  return 'período diurno'
 }
 
 function HomeGaugeChart({ score, rgbColor }) {
@@ -140,11 +148,15 @@ export default function Home({ navigation }) {
   const timerRef = useRef(null);
   const lastAlertSentRef = useRef(null);
   const cancelCooldownRef = useRef(null);
-  const highMagnitudeTimerRef = useRef(null);
   const [sustainedHighRisk, setSustainedHighRisk] = useState(false);
   const [sosHolding, setSosHolding] = useState(false);
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
   const [sosFeedbackData, setSosFeedbackData] = useState({ mensagem: '', contatos: [], endereco: '' });
+  const [simpleCheckVisible, setSimpleCheckVisible] = useState(false);
+  const [alertType, setAlertType] = useState('moderado');
+  const [demoScore, setDemoScore] = useState(null);
+  const [demoBonus, setDemoBonus] = useState(0);
+  const [demoEnvLabel, setDemoEnvLabel] = useState(null);
   
   // --- Inicialização e Escuta Realtime do Supabase ---
   useEffect(() => {
@@ -169,40 +181,43 @@ export default function Home({ navigation }) {
     };
   }, [])
 
-  // Magnitude sustentada — só marca como alto risco após 3s contínuos acima do limite
+  // Movimento brusco — dispara imediatamente ao detectar pico
   useEffect(() => {
     if (isHighRisk || riskLevel === "Crítico") {
-      if (!highMagnitudeTimerRef.current) {
-        highMagnitudeTimerRef.current = setTimeout(() => {
-          setSustainedHighRisk(true);
-          highMagnitudeTimerRef.current = null;
-        }, 3000);
-      }
+      setSustainedHighRisk(true);
     } else {
-      if (highMagnitudeTimerRef.current) {
-        clearTimeout(highMagnitudeTimerRef.current);
-        highMagnitudeTimerRef.current = null;
-      }
       setSustainedHighRisk(false);
     }
-    return () => {
-      if (highMagnitudeTimerRef.current) clearTimeout(highMagnitudeTimerRef.current);
-    };
   }, [isHighRisk, riskLevel]);
 
-  // 1️⃣ GATILHO DO MODAL
+  // 1️⃣ GATILHO DO MODAL — 3 níveis baseados no riskScore
   useEffect(() => {
-    if (!sustainedHighRisk || modalVisible || alertaDisparado) return;
+    if (!sustainedHighRisk || alertaDisparado) return;
+    if (modalVisible || simpleCheckVisible) return;
 
     const agora = Date.now();
-    const emCooldownEnvio = lastAlertSentRef.current && (agora - lastAlertSentRef.current) < 30 * 60 * 1000;
+    const emCooldownEnvio = lastAlertSentRef.current && (agora - lastAlertSentRef.current) < 60 * 1000;
     const emCooldownCancelamento = cancelCooldownRef.current && agora < cancelCooldownRef.current;
-
     if (emCooldownEnvio || emCooldownCancelamento) return;
 
-    setCountdown(30);
-    setModalVisible(true);
-  }, [sustainedHighRisk, modalVisible, alertaDisparado]);
+    const scoreAtual = demoScore !== null
+      ? demoScore
+      : demoEnvLabel !== null
+        ? Math.min(10, riskScore + demoBonus)
+        : riskScore
+    if (scoreAtual > 8) {
+      setAlertType('critico');
+      setCountdown(10);
+      setModalVisible(true);
+    } else if (scoreAtual >= 5) {
+      setAlertType('moderado');
+      setCountdown(30);
+      setModalVisible(true);
+    } else {
+      setAlertType('simples');
+      setSimpleCheckVisible(true);
+    }
+  }, [sustainedHighRisk, modalVisible, simpleCheckVisible, alertaDisparado, riskScore, demoScore, demoBonus, demoEnvLabel, activityMode, insideSafeZone]);
 
   // 2️⃣ O MOTOR SEGURO
   useEffect(() => {
@@ -277,15 +292,21 @@ export default function Home({ navigation }) {
     await updateActivityStatus(user.id, value, "academia")
   }
 
-  // --- Lógica de Cálculo de Risco Adaptável ---
+  // --- Lógica de Cálculo de Risco Ambiental ---
+  // Magnitude não entra no score — só dispara o alerta (via isHighRisk)
+  // O score reflete o risco do AMBIENTE: crimes, horário, localização
   useEffect(() => {
     let score = 0
-    if (magnitude >= 4) { score += 6; }
-    else if (magnitude >= 2) { score += 3; }
-    else if (magnitude >= 1.2) { score += 1; }
 
+    // Crimes na área
     if (crimeData.length > 15) { score += 4; }
     else if (crimeData.length > 5) { score += 2; }
+
+    // Fator horário
+    const hora = new Date().getHours()
+    if (hora >= 0 && hora < 6) { score += 3; }
+    else if (hora >= 22) { score += 2; }
+    else if (hora >= 18) { score += 1; }
 
     if (activityMode) { score -= 2; }
 
@@ -306,10 +327,10 @@ export default function Home({ navigation }) {
     score = Math.max(score, 0)
     setRiskScore(score)
 
-    if (score >= 8) { setRiskLevel("Crítico") }
-    else if (score >= 4) { setRiskLevel("Moderado") }
+    if (score > 8) { setRiskLevel("Crítico") }
+    else if (score >= 5) { setRiskLevel("Moderado") }
     else { setRiskLevel("Baixo") }
-  }, [magnitude, crimeData, activityMode, location, safeLocations])
+  }, [crimeData, activityMode, location, safeLocations])
 
   // --- Função do Disparo de Socorro ---
   const executarEnvioDeSocorro = async () => {
@@ -393,10 +414,11 @@ export default function Home({ navigation }) {
   const handleUserIsSafe = () => {
     if (timerRef.current) clearTimeout(timerRef.current)
     setModalVisible(false)
+    setSimpleCheckVisible(false)
     setCountdown(30)
     setAlertaDisparado(false)
     setSustainedHighRisk(false)
-    cancelCooldownRef.current = Date.now() + 5 * 60 * 1000
+    cancelCooldownRef.current = Date.now() + 30 * 1000
   }
 
   useEffect(() => {
@@ -423,8 +445,8 @@ export default function Home({ navigation }) {
         const crimes = await buscarCrimes(userLat, userLon, 3)
 
         const crimesFormatados = crimes.map((crime) => {
-          const lat = Number(crime.latitude)
-          const lon = Number(crime.longitude)
+          const lat = Number(String(crime.latitude).replace(',', '.'))
+          const lon = Number(String(crime.longitude).replace(',', '.'))
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
           return {
             id: crime.id || Math.random().toString(),
@@ -436,6 +458,8 @@ export default function Home({ navigation }) {
             )
           }
         }).filter(Boolean).sort((a, b) => a.distancia - b.distancia)
+
+        console.log(`[Home] ${crimes.length} crimes do banco → ${crimesFormatados.length} com coords válidas`)
 
         setCrimeData(crimesFormatados)
       } catch (error) {
@@ -585,8 +609,47 @@ export default function Home({ navigation }) {
     }
   }
 
-  const riskBg = riskLevel === 'Crítico' ? '#FDEAEC' : riskLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
-  const riskAccent = riskLevel === 'Crítico' ? '#C4687A' : riskLevel === 'Moderado' ? '#D4A017' : '#2E8B57'
+  const displayScore = demoScore !== null
+    ? demoScore
+    : demoEnvLabel !== null
+      ? Math.min(10, riskScore + demoBonus)
+      : riskScore
+  const displayLevel = displayScore > 8 ? 'Crítico' : displayScore >= 5 ? 'Moderado' : 'Baixo'
+  const riskBg = displayLevel === 'Crítico' ? '#FDEAEA' : displayLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
+  const riskAccent = displayLevel === 'Crítico' ? '#D32F2F' : displayLevel === 'Moderado' ? '#E6A200' : '#27AE60'
+
+  const limparEstadoDemo = () => {
+    setModalVisible(false)
+    setSimpleCheckVisible(false)
+    setAlertaDisparado(false)
+    cancelCooldownRef.current = null
+    lastAlertSentRef.current = null
+  }
+
+  const simularNivel = (score) => {
+    limparEstadoDemo()
+    setDemoEnvLabel(null)
+    setDemoBonus(0)
+    setDemoScore(score)
+    setSustainedHighRisk(true)
+  }
+
+  const setDemoEnvironment = (bonus, label) => {
+    limparEstadoDemo()
+    setDemoScore(null)
+    setDemoBonus(bonus)
+    setDemoEnvLabel(label)
+  }
+
+  const resetDemo = () => {
+    setDemoScore(null)
+    setDemoBonus(0)
+    setDemoEnvLabel(null)
+    setSustainedHighRisk(false)
+    setModalVisible(false)
+    setSimpleCheckVisible(false)
+    setAlertaDisparado(false)
+  }
 
   return (
     <View style={styles.container}>
@@ -606,21 +669,33 @@ export default function Home({ navigation }) {
           <View style={styles.riskRow}>
             <Text style={styles.riskLabel}>Risco atual</Text>
             <View style={[styles.riskBadge, { backgroundColor: riskAccent }]}>
-              <Text style={styles.riskBadgeText}>{riskLevel}</Text>
+              <Text style={styles.riskBadgeText}>
+                {displayLevel}{demoScore !== null ? ' · DEMO' : ''}
+              </Text>
             </View>
           </View>
 
           <View style={{ alignItems: 'center' }}>
             <View>
-              <HomeGaugeChart score={riskScore} rgbColor={getRiskRGB(riskLevel)} />
+              <HomeGaugeChart score={displayScore} rgbColor={getRiskRGB(displayLevel)} />
               <View style={styles.gaugeScoreOverlay}>
                 <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
-                  {riskScore}
+                  {displayScore}
                   <Text style={styles.gaugeScoreMax}>/10</Text>
                 </Text>
               </View>
             </View>
-            <Text style={styles.gaugeDesc}>{getRiskLabel(riskLevel)}</Text>
+            <Text style={styles.gaugeDesc}>{getRiskLabel(displayLevel)}</Text>
+            <View style={styles.timeFactorRow}>
+              <Ionicons name="time-outline" size={13} color="#5A8FAF" />
+              <Text style={styles.timeFactorText}>
+                {demoEnvLabel === 'risco-noite'
+                  ? 'noite avançada (+2 risco) · DEMO'
+                  : demoEnvLabel === 'risco-dia'
+                    ? 'período diurno · DEMO'
+                    : getTimeLabel()}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -664,7 +739,7 @@ export default function Home({ navigation }) {
                 <Marker coordinate={location.coords} title="Você" pinColor="#5A8FAF" />
                 <Circle
                   center={location.coords}
-                  radius={500}
+                  radius={3000}
                   fillColor="rgba(196,104,122,0.10)"
                   strokeColor="#C4687A"
                 />
@@ -712,7 +787,7 @@ export default function Home({ navigation }) {
             color={crimeData.length > 0 ? '#C4687A' : '#2E8B57'}
           />
           <Text style={[styles.crimeStripText, { color: crimeData.length > 0 ? '#C4687A' : '#2E8B57' }]}>
-            {crimeData.length > 0 ? `${crimeData.length} registros na área` : 'Região sem alertas recentes'}
+            {crimeData.length > 0 ? `${crimeData.length} registros em 3 km ao redor` : 'Nenhum registro nos 3 km ao redor'}
           </Text>
         </View>
 
@@ -724,6 +799,82 @@ export default function Home({ navigation }) {
           {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
         </View>
         <View style={styles.separator} />
+
+        {/* ── MODO APRESENTAÇÃO ── */}
+        <View style={styles.demoPanel}>
+          <View style={styles.demoPanelHeader}>
+            <Ionicons name="flask-outline" size={16} color="#5A8FAF" />
+            <Text style={styles.demoPanelTitle}>Modo Apresentação</Text>
+          </View>
+
+          {/* Seção 1: Ambiente + sacudir */}
+          <Text style={styles.demoSectionLabel}>① Simular ambiente · depois sacuda o celular</Text>
+          <View style={styles.demoBtnRow}>
+            <TouchableOpacity
+              style={[
+                styles.demoBtn,
+                { borderColor: '#E6A200', borderWidth: demoEnvLabel === 'risco-dia' ? 2.5 : 1.5 },
+                demoEnvLabel === 'risco-dia' && { backgroundColor: '#FFF8E6' }
+              ]}
+              onPress={() => setDemoEnvironment(1, 'risco-dia')}
+            >
+              {demoEnvLabel === 'risco-dia'
+                ? <Ionicons name="checkmark-circle" size={18} color="#E6A200" />
+                : <Ionicons name="sunny-outline" size={16} color="#E6A200" />
+              }
+              <Text style={[styles.demoBtnText, { color: '#E6A200' }]}>Risco (dia)</Text>
+              <Text style={styles.demoBtnSub}>Sacuda → Moderado</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.demoBtn,
+                { borderColor: '#D32F2F', borderWidth: demoEnvLabel === 'risco-noite' ? 2.5 : 1.5 },
+                demoEnvLabel === 'risco-noite' && { backgroundColor: '#FDEAEA' }
+              ]}
+              onPress={() => setDemoEnvironment(3, 'risco-noite')}
+            >
+              {demoEnvLabel === 'risco-noite'
+                ? <Ionicons name="checkmark-circle" size={18} color="#D32F2F" />
+                : <Ionicons name="moon-outline" size={16} color="#D32F2F" />
+              }
+              <Text style={[styles.demoBtnText, { color: '#D32F2F' }]}>Risco noturno</Text>
+              <Text style={styles.demoBtnSub}>Sacuda → Crítico</Text>
+            </TouchableOpacity>
+          </View>
+
+          {demoEnvLabel && (
+            <View style={styles.demoEnvActive}>
+              <Ionicons name="radio-outline" size={13} color="#27AE60" />
+              <Text style={styles.demoEnvActiveText}>
+                {demoEnvLabel === 'risco-dia' ? 'Região de risco (dia) ativa' : 'Risco noturno ativo'} · Sacuda para acionar
+              </Text>
+            </View>
+          )}
+
+          {/* Seção 2: Acionamento direto */}
+          <Text style={[styles.demoSectionLabel, { marginTop: 14 }]}>② Ou acione diretamente</Text>
+          <View style={styles.demoBtnRow}>
+            <TouchableOpacity style={[styles.demoBtn, { borderColor: '#27AE60' }]} onPress={() => simularNivel(3)}>
+              <Text style={[styles.demoBtnText, { color: '#27AE60' }]}>Nível 1</Text>
+              <Text style={styles.demoBtnSub}>Tudo bem?</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.demoBtn, { borderColor: '#E6A200' }]} onPress={() => simularNivel(6)}>
+              <Text style={[styles.demoBtnText, { color: '#E6A200' }]}>Nível 2</Text>
+              <Text style={styles.demoBtnSub}>Confirmar (30s)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.demoBtn, { borderColor: '#D32F2F' }]} onPress={() => simularNivel(9)}>
+              <Text style={[styles.demoBtnText, { color: '#D32F2F' }]}>Nível 3</Text>
+              <Text style={styles.demoBtnSub}>Alerta (10s)</Text>
+            </TouchableOpacity>
+          </View>
+
+          {(demoScore !== null || demoEnvLabel !== null) && (
+            <TouchableOpacity style={styles.demoResetBtn} onPress={resetDemo}>
+              <Ionicons name="refresh-outline" size={14} color="#5A8FAF" />
+              <Text style={styles.demoResetText}>Resetar demo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
       </ScrollView>
 
@@ -775,7 +926,7 @@ export default function Home({ navigation }) {
                 ))}
               </View>
 
-              <TouchableOpacity style={styles.btnPrimary} onPress={() => setSosFeedbackVisible(false)}>
+              <TouchableOpacity style={styles.btnPrimary} onPress={() => { setSosFeedbackVisible(false); setAlertaDisparado(false); setSustainedHighRisk(false); }}>
                 <Text style={styles.btnPrimaryText}>Entendido</Text>
               </TouchableOpacity>
 
@@ -793,8 +944,8 @@ export default function Home({ navigation }) {
       {/* MODAL REGISTRO DE INCIDENTE */}
       <Modal visible={reportModalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flexOne}>
-          <View style={styles.overlayBottom}>
-            <View style={styles.cardModalBottom}>
+          <Pressable style={styles.overlayBottom} onPress={() => { setReportModalVisible(false); resetForm(); }}>
+            <Pressable style={styles.cardModalBottom} onPress={() => {}}>
               <View style={[styles.modalStrip, { backgroundColor: '#E8622A' }]} />
               <ScrollView contentContainerStyle={styles.occScrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={styles.modalHandle} />
@@ -863,25 +1014,54 @@ export default function Home({ navigation }) {
                   <Text style={styles.btnCancelText}>Cancelar e Voltar</Text>
                 </TouchableOpacity>
               </ScrollView>
-            </View>
-          </View>
+            </Pressable>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* MODAL CRONÔMETRO */}
+      {/* MODAL CHECK SIMPLES — Nível 1 (score ≤ 5) */}
+      <Modal transparent visible={simpleCheckVisible} animationType="fade">
+        <View style={styles.overlayCentered}>
+          <View style={styles.cardModal}>
+            <View style={[styles.modalStrip, { backgroundColor: '#2E8B57' }]} />
+            <View style={styles.modalInner}>
+              <Ionicons name="heart-outline" size={36} color="#2E8B57" style={{ alignSelf: 'center', marginBottom: 10 }} />
+              <Text style={[styles.cardTitleCritical, { color: '#2E8B57' }]}>Tudo bem?</Text>
+              <Text style={styles.cardSubtitle}>
+                O Ampara está monitorando você. Confirme que está segura.
+              </Text>
+              <TouchableOpacity style={[styles.btnSafe, { backgroundColor: '#2E8B57' }]} onPress={handleUserIsSafe}>
+                <Text style={styles.btnSafeText}>Sim, estou bem</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnPrimary, { marginTop: 10, backgroundColor: '#C4687A' }]}
+                onPress={() => { setSimpleCheckVisible(false); executarEnvioDeSocorro(); }}
+              >
+                <Text style={styles.btnPrimaryText}>Preciso de ajuda</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL CRONÔMETRO — Nível 2 (score 5-8) e Nível 3 (score > 8) */}
       <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={styles.modalStrip} />
+            <View style={[styles.modalStrip, { backgroundColor: alertType === 'critico' ? '#C4687A' : '#D4A017' }]} />
             <View style={styles.modalInner}>
-              <Text style={styles.cardTitleCritical}>Contato de Segurança</Text>
+              <Text style={styles.cardTitleCritical}>
+                {alertType === 'critico' ? 'Alerta Crítico' : 'Confirma bem-estar?'}
+              </Text>
               <Text style={styles.cardSubtitle}>
-                Movimento incomum de {magnitude}G detectado.
+                {alertType === 'critico'
+                  ? `Score ${displayScore}/10 · Risco alto detectado. Seus contatos serão acionados em:`
+                  : `Score ${displayScore}/10 · Movimento incomum detectado. Confirme que está segura.`}
               </Text>
 
               <View style={{alignItems: 'center', marginVertical: 10}}>
-                <View style={styles.timerCircle}>
-                  <Text style={styles.timerCountText}>{countdown}</Text>
+                <View style={[styles.timerCircle, { borderColor: alertType === 'critico' ? '#C4687A' : '#D4A017' }]}>
+                  <Text style={[styles.timerCountText, { color: alertType === 'critico' ? '#C4687A' : '#D4A017' }]}>{countdown}</Text>
                   <Text style={styles.timerSecondsText}>seg</Text>
                 </View>
               </View>
@@ -920,6 +1100,8 @@ const styles = StyleSheet.create({
   gaugeScoreBig: { fontSize: 44, fontWeight: '900', lineHeight: 50 },
   gaugeScoreMax: { fontSize: 20, fontWeight: '400', color: '#888' },
   gaugeDesc: { fontSize: 13, color: '#666', marginTop: 14, textAlign: 'center' },
+  timeFactorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  timeFactorText: { fontSize: 11, color: '#5A8FAF', fontWeight: '600' },
 
   safeStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 10, backgroundColor: '#EAF5EC' },
   safeStripText: { fontSize: 13, color: '#2E8B57', fontWeight: '500' },
@@ -1005,4 +1187,18 @@ const styles = StyleSheet.create({
   timerCountText: { fontSize: 32, fontWeight: 'bold', color: '#C4687A' },
   timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' },
   alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
+
+  demoPanel: { marginHorizontal: 20, marginTop: 16, marginBottom: 8, backgroundColor: '#EEF6FC', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#B8D6E8' },
+  demoPanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  demoPanelTitle: { fontSize: 13, fontWeight: '700', color: '#1B3A6B' },
+  demoSectionLabel: { fontSize: 11, color: '#5A8FAF', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 },
+  demoBtnRow: { flexDirection: 'row', gap: 8 },
+  demoBtn: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 10, alignItems: 'center', backgroundColor: '#FFF', gap: 2 },
+  demoBtnActive: { backgroundColor: '#F0F8FF' },
+  demoBtnText: { fontSize: 12, fontWeight: '700' },
+  demoBtnSub: { fontSize: 10, color: '#888' },
+  demoEnvActive: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EAF5EC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
+  demoEnvActiveText: { fontSize: 11, color: '#27AE60', fontWeight: '600', flex: 1 },
+  demoResetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 12 },
+  demoResetText: { fontSize: 12, color: '#5A8FAF', fontWeight: '600' },
 })
