@@ -6,44 +6,51 @@
   <meta charset="UTF-8" />
   <title>Ampara</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/png" href="/ampara-logo.png" />
+  <link rel="icon" href="/maos-ampara-rosa.png" />
+  <script type="module" src="https://unpkg.com/ionicons@7/dist/ionicons/ionicons.esm.js"></script>
 </head>
 
 <body>
 
 <!-- NAV -->
 <nav>
-  <h2>Ampara</h2>
+  <div class="nav-brand">
+    <img src="/maos-ampara-azul.png" class="nav-logo" alt="Ampara" />
+    <span class="brand-name">Ampara</span>
+  </div>
 </nav>
 
 <!-- HERO -->
 <section class="hero">
+  <div class="hero-rose-bg"></div>
 
   <div class="hero-content">
+    <span class="hero-label">Segurança feminina inteligente</span>
     <h1>Sinta-se mais segura nos seus trajetos</h1>
-
     <p>
-	Monitoramento em tempo real que combina localização, comportamento e contexto para identificar situações de risco com precisão, de forma inteligente, não invasiva e integrada ao seu celular e smartwatch.
+      Monitoramento em tempo real que combina localização, comportamento e
+      contexto para identificar situações de risco com precisão — de forma
+      inteligente, não invasiva e integrada ao seu celular.
     </p>
-
+    <div class="buttons">
+      <a href="#" class="btn primary">Baixar o app</a>
+      <a href="#sobre" class="btn outline">Saiba mais</a>
+    </div>
   </div>
 
-  <!-- MOCKUP PREMIUM -->
   <div class="phone-wrapper">
     <div class="glow"></div>
-
     <div class="phone">
       <img src="/app.png" alt="App Ampara" />
     </div>
   </div>
-
 </section>
 
+<!-- IMPACTO -->
 <section class="impact">
-
   <div class="impact-text">
+    <span class="section-label">Por que o Ampara</span>
     <h2>Mais tranquilidade em cada deslocamento</h2>
-
     <p>
       O Ampara acompanha você em tempo real e entende o contexto ao seu redor,
       oferecendo suporte inteligente quando algo foge do padrão.
@@ -51,37 +58,47 @@
   </div>
 
   <div class="impact-cards">
-
     <div class="impact-card">
+      <ion-icon name="navigate-outline" class="card-icon"></ion-icon>
       <h3>Monitoramento contínuo</h3>
       <p>Seu trajeto é acompanhado de forma inteligente.</p>
     </div>
-
     <div class="impact-card">
+      <ion-icon name="warning-outline" class="card-icon"></ion-icon>
       <h3>Detecção de risco</h3>
       <p>Identificação de situações incomuns com base em comportamento.</p>
     </div>
-
     <div class="impact-card">
+      <ion-icon name="people-outline" class="card-icon"></ion-icon>
       <h3>Suporte imediato</h3>
-      <p>Contato rápido com contatos de confiança.</p>
+      <p>Contato rápido com seus contatos de confiança.</p>
     </div>
-
   </div>
+</section>
 
+<!-- DADO DE IMPACTO -->
+<section class="section stat-section">
+  <div class="container">
+    <div class="stat-card">
+      <img src="/maos-ampara-rosa.png" class="stat-logo" alt="" />
+      <blockquote>
+        Mulheres frequentemente modificam hábitos, trajetos e horários por receio
+        de sofrer algum tipo de violência, especialmente durante deslocamentos urbanos.
+      </blockquote>
+      <span class="stat-source">Contexto que motivou o Ampara</span>
+    </div>
+  </div>
 </section>
 
 <!-- PROBLEMA -->
 <section class="section light">
   <div class="container">
+    <span class="section-label">O problema</span>
     <h2>Por que o Ampara existe?</h2>
-
     <p>
       Se deslocar pela cidade ainda é uma experiência insegura para muitas mulheres,
-      especialmente à noite ou em regiões desconhecidas.
-      
-      Mesmo com tantos aplicativos disponíveis, poucos realmente entendem o contexto
-      da usuária em tempo real.
+      especialmente à noite ou em regiões desconhecidas. Mesmo com tantos aplicativos
+      disponíveis, poucos realmente entendem o contexto da usuária em tempo real.
     </p>
   </div>
 </section>
@@ -89,20 +106,21 @@
 <!-- DIFERENCIAL -->
 <section class="section">
   <div class="container">
+    <span class="section-label">Diferenciais</span>
     <h2>O que torna o Ampara diferente?</h2>
-
     <div class="cards">
       <div class="card">
+        <ion-icon name="eye-outline" class="card-icon"></ion-icon>
         <h3>Contexto real</h3>
         <p>Não depende apenas de localização: considera comportamento e ambiente.</p>
       </div>
-
       <div class="card">
+        <ion-icon name="heart-outline" class="card-icon"></ion-icon>
         <h3>Não invasivo</h3>
         <p>Interage com a usuária de forma leve, sem gerar alarmes desnecessários.</p>
       </div>
-
       <div class="card">
+        <ion-icon name="person-outline" class="card-icon"></ion-icon>
         <h3>Foco na usuária</h3>
         <p>Construído pensando na experiência real de quem usa.</p>
       </div>
@@ -113,23 +131,21 @@
 <!-- COMO FUNCIONA -->
 <section class="section light">
   <div class="container">
+    <span class="section-label">Funcionamento</span>
     <h2>Como funciona</h2>
-
     <div class="cards">
       <div class="card">
-        <span>📍</span>
+        <ion-icon name="location-outline" class="card-icon"></ion-icon>
         <h3>Localização</h3>
         <p>O app acompanha seu trajeto e entende o contexto ao seu redor.</p>
       </div>
-
       <div class="card">
-        <span>⚡</span>
+        <ion-icon name="flash-outline" class="card-icon"></ion-icon>
         <h3>Sensores</h3>
-        <p>Através do seu smartwatch, analisa padrões de movimento para identificar comportamentos fora do normal.</p>
+        <p>Analisa padrões de movimento para identificar comportamentos fora do normal.</p>
       </div>
-
       <div class="card">
-        <span>🛡️</span>
+        <ion-icon name="shield-checkmark-outline" class="card-icon"></ion-icon>
         <h3>Proteção</h3>
         <p>Gera alertas inteligentes e aciona contatos de emergência quando necessário.</p>
       </div>
@@ -140,12 +156,11 @@
 <!-- SOBRE -->
 <section class="section" id="sobre">
   <div class="container">
+    <span class="section-label">Projeto</span>
     <h2>Sobre o projeto</h2>
-
     <p>
       O Ampara nasceu como um Trabalho de Conclusão de Curso com um objetivo claro:
       usar tecnologia de forma prática e acessível para aumentar a segurança feminina.
-      
       Mais do que um aplicativo, buscamos criar uma solução que se adapta ao contexto
       da usuária e contribui para uma experiência mais segura no dia a dia.
     </p>
@@ -155,17 +170,16 @@
 <!-- EQUIPE -->
 <section class="section light" id="time">
   <div class="container">
+    <span class="section-label">Quem faz</span>
     <h2>Equipe</h2>
-
     <div class="team">
       <div class="member">
-		<img src="/maria.jpg" class="avatar" />
+        <img src="/maria.jpg" class="avatar" alt="Maria Eduarda" />
         <h3>Maria Eduarda</h3>
         <p>Dados, Desenvolvimento & Produto</p>
       </div>
-
       <div class="member">
-		<img src="/amanda.jpg" class="avatar" />
+        <img src="/amanda.jpg" class="avatar" alt="Amanda" />
         <h3>Amanda</h3>
         <p>Experiência, Arquitetura & Integrações</p>
       </div>
@@ -173,94 +187,149 @@
   </div>
 </section>
 
+<!-- FOOTER -->
 <footer>
-  Projeto Ampara • TCC 2026
+  <img src="/maos-ampara-azul.png" class="footer-logo" alt="Ampara" />
+  <span class="footer-brand">Ampara</span>
+  <p>Projeto TCC 2026 · Segurança Feminina Inteligente</p>
 </footer>
 
 </body>
 
 <style>
-/* RESET */
-body {
-  margin: 0;
-  font-family: -apple-system, sans-serif;
-  background: #F8FAFC;
-  color: #1A1A1A;
+/* ── Variáveis ── */
+:root {
+  --navy:      #1B3A6B;
+  --rose:      #C4687A;
+  --blue-mid:  #5A8FAF;
+  --cream:     #F5EFE6;
+  --pink-tint: #FDEAEC;
+  --white:     #FFFFFF;
 }
 
-/* NAV */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--cream);
+  color: var(--navy);
+}
+
+/* ── Nav ── */
 nav {
   position: absolute;
   top: 0;
   width: 100%;
   display: flex;
-  justify-content: space-between;
-  padding: 25px 60px;
-  color: white;
+  align-items: center;
+  padding: 24px 60px;
+  z-index: 10;
 }
 
-nav a {
-  margin-left: 40px; /* 👈 arrumado */
-  text-decoration: none;
-  color: white;
-  opacity: 0.85;
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-/* HERO */
+.nav-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.brand-name {
+  font-size: 26px;
+  font-weight: 200;
+  color: white;
+  letter-spacing: 0.2em;
+}
+
+/* ── Hero ── */
 .hero {
   min-height: 100vh;
+  position: relative;
+  background-color: var(--navy);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 10%;
   gap: 80px;
-
-  background: radial-gradient(circle at top, #0A2F4F 0%, #025382 70%);
   color: white;
+  overflow: hidden;
 }
 
-/* TEXTO */
-.hero-content {
-  max-width: 520px;
+.hero-rose-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 62%;
+  background: var(--rose);
+  border-bottom-left-radius: 80px;
+  border-bottom-right-radius: 80px;
+  z-index: 0;
+}
+
+.hero > *:not(.hero-rose-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 14px;
 }
 
 .hero h1 {
-  font-size: 52px;
-  line-height: 1.2;
-  margin-bottom: 20px;
+  font-size: 50px;
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0 0 20px;
 }
 
-.hero p {
-  font-size: 18px;
-  opacity: 0.9;
-  text-align: justify;
+.hero-content p {
+  font-size: 17px;
+  line-height: 1.75;
+  opacity: 0.88;
+  max-width: 460px;
+  margin: 0;
 }
 
-/* BOTÕES */
+/* ── Buttons ── */
 .buttons {
-  margin-top: 30px;
+  margin-top: 32px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .btn {
-  padding: 14px 26px;
-  border-radius: 14px;
+  padding: 14px 30px;
+  border-radius: 30px;
   text-decoration: none;
-  margin-right: 10px;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 15px;
   transition: 0.2s;
+  display: inline-block;
 }
 
 .primary {
   background: white;
-  color: #025382;
+  color: var(--rose);
 }
 
 .primary:hover {
   transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
 }
 
 .outline {
-  border: 2px solid white;
+  border: 2px solid rgba(255,255,255,0.55);
   color: white;
 }
 
@@ -268,18 +337,19 @@ nav a {
   background: rgba(255,255,255,0.1);
 }
 
-/* MOCKUP */
+/* ── Mockup ── */
 .phone-wrapper {
   position: relative;
+  flex-shrink: 0;
 }
 
 .glow {
   position: absolute;
-  width: 300px;
-  height: 300px;
-  background: #4FA3D1;
+  width: 320px;
+  height: 320px;
+  background: var(--rose);
   filter: blur(120px);
-  opacity: 0.4;
+  opacity: 0.22;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -304,202 +374,294 @@ nav a {
 }
 
 @keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
 }
 
-/* ========================= */
-/* IMPACT (AGORA BONITO MESMO) */
-/* ========================= */
+/* ── Section label ── */
+.section-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--rose);
+  margin-bottom: 10px;
+}
 
+/* ── Impact ── */
 .impact {
-  padding: 140px 10%;
-  background: linear-gradient(180deg, #F8FAFC 0%, #EEF3F8 100%);
-  border-bottom: 1px solid rgba(0,0,0,0.06);
+  padding: 120px 10%;
+  background: var(--cream);
 }
 
 .impact-text {
-  max-width: 650px;
-  margin-bottom: 70px;
+  max-width: 640px;
+  margin-bottom: 56px;
 }
 
 .impact-text h2 {
-  font-size: 40px;
-  color: #0A2F4F;
+  font-size: 38px;
+  margin: 0 0 14px;
+  color: var(--navy);
 }
 
 .impact-text p {
-  margin-top: 15px;
-  color: #475569;
-  font-size: 18px;
-  line-height: 1.7;
+  color: var(--blue-mid);
+  font-size: 17px;
+  line-height: 1.75;
+  margin: 0;
 }
 
-/* CARDS IMPACT */
 .impact-cards {
   display: flex;
-  gap: 25px;
+  gap: 24px;
   flex-wrap: wrap;
 }
 
 .impact-card {
   flex: 1;
-  min-width: 260px;
-
-  background: rgba(255,255,255,0.7);
-  backdrop-filter: blur(10px);
-
-  padding: 30px;
-  border-radius: 20px;
-
-  border: 1px solid rgba(2, 83, 130, 0.08);
-
-  box-shadow: 
-    0 10px 25px rgba(2, 83, 130, 0.08),
-    0 2px 6px rgba(0,0,0,0.04);
-
-  transition: all 0.25s ease;
+  min-width: 240px;
+  background: var(--white);
+  padding: 28px;
+  border-radius: 24px;
+  box-shadow: 0 4px 20px rgba(27,58,107,0.08);
+  transition: 0.25s;
 }
 
 .impact-card:hover {
   transform: translateY(-6px);
-  box-shadow: 
-    0 20px 40px rgba(2, 83, 130, 0.15),
-    0 5px 10px rgba(0,0,0,0.08);
+  box-shadow: 0 14px 36px rgba(27,58,107,0.14);
 }
 
 .impact-card h3 {
-  color: #025382;
-  margin-bottom: 10px;
+  color: var(--navy);
+  font-size: 17px;
+  margin: 12px 0 8px;
 }
 
 .impact-card p {
-  color: #475569;
+  color: var(--blue-mid);
+  margin: 0;
+  line-height: 1.6;
 }
 
-/* ========================= */
-/* SECTIONS (FIX DO PROBLEMA) */
-/* ========================= */
+/* ── Card icon ── */
+.card-icon {
+  font-size: 30px;
+  color: var(--rose);
+}
 
+/* ── Stat section ── */
+.stat-section {
+  background: var(--navy);
+  padding: 80px 20px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  max-width: 700px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.stat-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  opacity: 0.9;
+}
+
+blockquote {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: white;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.stat-source {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.45);
+}
+
+/* ── Sections ── */
 .section {
-  padding: 120px 20px;
+  padding: 100px 20px;
+  background: var(--cream);
 }
 
 .section.light {
-  background: #ffffff;
-  border-top: 1px solid rgba(0,0,0,0.05);
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  background: var(--white);
 }
 
-/* TEXTO CENTRAL */
 .container {
   max-width: 1000px;
   margin: 0 auto;
   text-align: center;
 }
 
-.container p {
-  max-width: 700px;
-  margin: 0 auto;
-  line-height: 1.7;
-  color: #475569;
+.container h2 {
+  font-size: 34px;
+  color: var(--navy);
+  margin: 0 0 16px;
 }
 
-/* ========================= */
-/* CARDS NORMAL */
-/* ========================= */
+.container > p {
+  max-width: 680px;
+  margin: 0 auto;
+  line-height: 1.75;
+  color: var(--blue-mid);
+  font-size: 16px;
+}
 
+/* ── Cards ── */
 .cards {
   display: flex;
   justify-content: center;
-  gap: 30px;
-  margin-top: 50px;
+  gap: 24px;
+  margin-top: 48px;
   flex-wrap: wrap;
 }
 
 .card {
-  background: white;
-  padding: 35px;
-  border-radius: 18px;
+  background: var(--white);
+  padding: 32px 26px;
+  border-radius: 24px;
   width: 260px;
-
-  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-
+  box-shadow: 0 4px 20px rgba(27,58,107,0.07);
   transition: 0.2s;
+  text-align: center;
 }
 
 .card:hover {
   transform: translateY(-6px);
+  box-shadow: 0 14px 36px rgba(27,58,107,0.13);
 }
 
-.card span {
-  font-size: 24px;
+.card h3 {
+  color: var(--navy);
+  font-size: 16px;
+  margin: 12px 0 8px;
 }
 
-/* ========================= */
-/* TEAM */
-/* ========================= */
+.card p {
+  color: var(--blue-mid);
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+}
 
+/* ── Team ── */
 .team {
   display: flex;
   justify-content: center;
-  gap: 40px;
-  margin-top: 50px;
+  gap: 32px;
+  margin-top: 48px;
+  flex-wrap: wrap;
 }
 
 .member {
-  background: white;
-  padding: 30px;
-  border-radius: 18px;
+  background: var(--white);
+  padding: 28px;
+  border-radius: 24px;
   width: 220px;
+  box-shadow: 0 4px 20px rgba(27,58,107,0.07);
+  text-align: center;
+  transition: 0.2s;
+}
 
-  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+.member:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 36px rgba(27,58,107,0.13);
+}
+
+.member h3 {
+  color: var(--navy);
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.member p {
+  color: var(--blue-mid);
+  font-size: 13px;
+  margin: 0;
 }
 
 .avatar {
-  width: 100px;
-  height: 100px;
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
   object-fit: cover;
-
-  margin: 0 auto 15px;
-
-  border: 4px solid white;
-
-  box-shadow: 
-    0 15px 30px rgba(2, 83, 130, 0.25),
-    0 5px 10px rgba(0,0,0,0.08);
-
+  display: block;
+  margin: 0 auto 16px;
+  border: 3px solid var(--rose);
+  box-shadow: 0 8px 24px rgba(196,104,122,0.25);
   transition: 0.3s;
 }
 
 .member:hover .avatar {
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 
-/* FOOTER */
+/* ── Footer ── */
 footer {
+  background: var(--navy);
   text-align: center;
-  padding: 50px;
-  color: #64748B;
+  padding: 56px 20px;
+  color: rgba(255,255,255,0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
-/* RESPONSIVO */
+.footer-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  margin-bottom: 6px;
+}
+
+.footer-brand {
+  font-size: 30px;
+  font-weight: 200;
+  color: white;
+  letter-spacing: 0.22em;
+}
+
+footer p {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+/* ── Responsive ── */
 @media (max-width: 900px) {
+  nav { padding: 20px 24px; }
+
   .hero {
     flex-direction: column;
     text-align: center;
-    padding-top: 100px;
+    padding: 130px 6% 70px;
+    gap: 50px;
   }
-}
 
+  .hero-content p { margin: 0 auto; }
+  .buttons { justify-content: center; }
+  .hero-rose-bg { height: 52%; border-bottom-left-radius: 48px; border-bottom-right-radius: 48px; }
+
+  .impact { padding: 80px 6%; }
+  .section { padding: 72px 20px; }
+
+  blockquote { font-size: 18px; }
+}
 </style>
-
-<script>
-function showComingSoon() {
-  alert("Demo em breve 🚀");
-}
-</script>
 
 </html>
