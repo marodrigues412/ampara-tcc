@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native'
+import { Image } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
 
 export default function MyReports({ navigation }) {
@@ -66,7 +68,10 @@ export default function MyReports({ navigation }) {
       <View style={styles.reportInfo}>
         <Text style={styles.reportType}>{item.tipo_crime}</Text>
 
-        <Text style={styles.reportLocal}>📍 {item.address}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          <Ionicons name="location-outline" size={14} color="#555" />
+          <Text style={[styles.reportLocal, { marginTop: 0 }]}>{item.address}</Text>
+        </View>
 
         {item.descricao ? (
           <Text style={styles.reportDescription}>"{item.descricao}"</Text>
@@ -97,16 +102,20 @@ export default function MyReports({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#025382" />
+        <ActivityIndicator size="large" color="#1B3A6B" />
       </View>
     )
   }
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-        <Text style={styles.backText}>← Voltar</Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
+          <Text style={styles.backText}>Voltar</Text>
+        </TouchableOpacity>
+        <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
+      </View>
 
       <Text style={styles.title}>Meus Registros</Text>
       <Text style={styles.subtitle}>Suas contribuições para a comunidade Ampara</Text>
@@ -131,34 +140,37 @@ export default function MyReports({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFEA',
+    backgroundColor: '#F5EFE6',
     padding: 20
   },
   backButton: {
     marginTop: 40,
-    marginBottom: 10
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   backText: {
     fontSize: 16,
-    color: '#025382',
+    color: '#1B3A6B',
     fontWeight: '600'
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#025382',
-    marginTop: 10
+    color: '#1B3A6B',
+    marginTop: 10,
   },
   subtitle: {
     fontSize: 16,
-    color: '#3A7FA6',
+    color: '#5A8FAF',
     marginBottom: 20
   },
   listContent: {
     paddingBottom: 40
   },
   reportCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#FDEAEC',
     padding: 18,
     borderRadius: 20,
     marginBottom: 12,
@@ -177,7 +189,7 @@ const styles = StyleSheet.create({
   reportType: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#B91C1C'
+    color: '#C4687A'
   },
   reportLocal: {
     fontSize: 14,
@@ -207,7 +219,7 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     fontSize: 11,
-    color: '#3A7FA6',
+    color: '#5A8FAF',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from './services/supabase'
 
 import LoginScreen from './screens/LoginScreen'
+import OnboardingScreen from './screens/OnboardingScreen'
 import Dashboard from './screens/Dashboard'
 import Home from './screens/Home'
 import Profile from './screens/Profile'
@@ -15,7 +16,8 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
-import { Text } from 'react-native'
+import { Text, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
@@ -28,33 +30,36 @@ function Tabs() {
         headerShown: false,
 
         tabBarStyle: {
-          backgroundColor: '#FFF',
+          backgroundColor: '#1B3A6B',
           borderTopWidth: 0,
-          height: 80,
-          paddingBottom: 10,
-          paddingTop: 5,
+          height: 72,
+          paddingBottom: 12,
+          paddingTop: 12,
         },
 
-        tabBarActiveTintColor: '#025382',
-        tabBarInactiveTintColor: '#B0A9A3',
+        tabBarActiveTintColor: '#C4687A',
+        tabBarInactiveTintColor: '#8EB4D0',
 
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-          marginBottom: 5,
-        },
+        tabBarShowLabel: false,
 
-        tabBarIcon: ({ focused }) => {
-          let icon
+        tabBarIcon: ({ focused, color }) => {
+          let iconName
 
-          if (route.name === 'Início') icon = '🏠'
-          else if (route.name === 'Dashboard') icon = '📊'
-          else if (route.name === 'Perfil') icon = '👤'
+          if (route.name === 'Início') iconName = focused ? 'home' : 'home-outline'
+          else if (route.name === 'Dashboard') iconName = focused ? 'bar-chart' : 'bar-chart-outline'
+          else if (route.name === 'Perfil') iconName = focused ? 'person' : 'person-outline'
 
           return (
-            <Text style={{ fontSize: focused ? 22 : 18 }}>
-              {icon}
-            </Text>
+            <View style={{
+              backgroundColor: focused ? 'rgba(196, 104, 122, 0.22)' : 'transparent',
+              borderRadius: 12,
+              width: 48,
+              height: 32,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Ionicons name={iconName} size={22} color={color} />
+            </View>
           )
         },
       })}
@@ -69,6 +74,7 @@ function Tabs() {
 // 🔹 App principal
 export default function App() {
   const [session, setSession] = useState(null)
+  const [onboardingSeen, setOnboardingSeen] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -83,6 +89,10 @@ export default function App() {
       listener.subscription.unsubscribe()
     }
   }, [])
+
+  if (!onboardingSeen) {
+    return <OnboardingScreen onDone={() => setOnboardingSeen(true)} />
+  }
 
   return (
     <NavigationContainer>

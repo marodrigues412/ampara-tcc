@@ -7,11 +7,13 @@ import {
   TouchableOpacity
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Image } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 
 const secoes = [
   {
     titulo: 'Faça agora',
-    cor: '#B91C1C',
+    cor: '#C4687A',
     corFundo: '#FFF0F0',
     itens: [
       'Respire fundo. Manter a calma ajuda a tomar decisões melhores.',
@@ -22,7 +24,7 @@ const secoes = [
   },
   {
     titulo: 'Vá para um local seguro',
-    cor: '#025382',
+    cor: '#1B3A6B',
     corFundo: '#EFF6FF',
     itens: [
       'Farmácias, supermercados e lojas abertas são bons pontos de apoio.',
@@ -71,9 +73,13 @@ export default function HelpGuide({ navigation }) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
 
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backText}>← Voltar</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
+            <Text style={styles.backText}>Voltar</Text>
+          </TouchableOpacity>
+          <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
+        </View>
 
         <Text style={styles.title}>Precisa de Ajuda?</Text>
         <Text style={styles.subtitle}>
@@ -106,26 +112,29 @@ export default function HelpGuide({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFEA'
+    backgroundColor: '#F5EFE6'
   },
   content: {
     padding: 20,
     paddingBottom: 50
   },
   backButton: {
-    marginBottom: 10
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   backText: {
     fontSize: 16,
-    color: '#025382',
+    color: '#1B3A6B',
     fontWeight: '600'
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#B91C1C',
+    color: '#C4687A',
     marginTop: 8,
-    marginBottom: 6
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 15,
@@ -164,12 +173,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#FFF',
+    backgroundColor: '#D4E9F7',
     borderRadius: 18
   },
   rodapeTexto: {
     fontSize: 15,
-    color: '#025382',
+    color: '#1B3A6B',
     fontWeight: '600',
     textAlign: 'center'
   }

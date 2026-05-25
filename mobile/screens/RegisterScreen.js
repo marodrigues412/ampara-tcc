@@ -1,5 +1,9 @@
 import React, { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
+import {
+  View, Text, TextInput, TouchableOpacity,
+  StyleSheet, Alert, KeyboardAvoidingView,
+  Platform, ScrollView, Image
+} from 'react-native'
 import { supabase } from '../services/supabase'
 
 export default function RegisterScreen({ onBack }) {
@@ -12,108 +16,172 @@ export default function RegisterScreen({ onBack }) {
       Alert.alert('Erro', 'Preencha todos os campos')
       return
     }
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-
-    if (error) {
-      Alert.alert('Erro', error.message)
-      return
-    }
-
-    // 👇 ID correto
+    const { data, error } = await supabase.auth.signUp({ email, password })
+    if (error) { Alert.alert('Erro', error.message); return }
     const userId = data.user?.id
-
     if (userId) {
-      const { error: insertError } = await supabase
-        .from('user_profiles')
-        .insert([
-          {
-            id: userId,
-            nome: nome,
-          },
-        ])
-
+      const { error: insertError } = await supabase.from('user_profiles').insert([{ id: userId, nome }])
       console.log('INSERT ERROR:', insertError)
     }
-
     await supabase.auth.signOut()
     Alert.alert('Conta criada!', 'Agora faça login')
     onBack()
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Criar conta</Text>
+    <View style={styles.root}>
+      <View style={styles.bgNavy} />
+      <View style={styles.bgRose} />
 
-      <TextInput
-        placeholder="Nome"
-        value={nome}
-        onChangeText={setNome}
-        style={styles.input}
-      />
+      <KeyboardAvoidingView
+        style={styles.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.brandArea}>
+            <Image
+              source={require('../assets/images/maos-ampara-azul.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.brand}>Ampara</Text>
+          </View>
 
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-      />
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Cadastro</Text>
 
-      <TextInput
-        placeholder="Senha"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        style={styles.input}
-      />
+            <TextInput
+              placeholder="Nome Completo"
+              placeholderTextColor="#AAA"
+              value={nome}
+              onChangeText={setNome}
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="E-mail"
+              placeholderTextColor="#AAA"
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              placeholder="Senha"
+              placeholderTextColor="#AAA"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              style={styles.input}
+            />
 
-      <TouchableOpacity style={styles.button} onPress={handleRegister}>
-        <Text style={styles.buttonText}>Cadastrar</Text>
-      </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={handleRegister}>
+              <Text style={styles.buttonText}>Cadastrar</Text>
+            </TouchableOpacity>
 
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.link}>Voltar para login</Text>
-      </TouchableOpacity>
+            <TouchableOpacity onPress={onBack} style={styles.backRow}>
+              <Text style={styles.backText}>
+                Já tem uma conta?{' '}
+                <Text style={styles.backLink}>Entrar aqui</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.navyFill} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 20
+  root: { flex: 1 },
+
+  bgNavy: {
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: '#1B3A6B',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 30,
+  bgRose: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: '48%',
+    backgroundColor: '#C4687A',
+    borderBottomLeftRadius: 48,
+    borderBottomRightRadius: 48,
+  },
+
+  kav: { flex: 1 },
+  scroll: { flexGrow: 1 },
+
+  brandArea: {
+    alignItems: 'center',
+    paddingTop: 72,
+    paddingBottom: 28,
+  },
+  logo: {
+    width: 72,
+    height: 72,
+    marginBottom: 10,
+  },
+  brand: {
+    fontSize: 44,
+    fontWeight: '200',
+    color: '#FFF',
+    letterSpacing: 4,
+  },
+
+  card: {
+    marginHorizontal: 24,
+    backgroundColor: '#FFF',
+    borderRadius: 32,
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1B3A6B',
     textAlign: 'center',
-    color: '#025382'
+    marginBottom: 24,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 15,
-    marginBottom: 15,
-    borderRadius: 10
+    borderWidth: 1.5,
+    borderColor: '#DDE8F0',
+    borderRadius: 30,
+    paddingVertical: 13,
+    paddingHorizontal: 20,
+    fontSize: 15,
+    marginBottom: 12,
+    color: '#333',
   },
   button: {
-    backgroundColor: '#025382',
-    padding: 15,
-    borderRadius: 10
+    backgroundColor: '#C4687A',
+    paddingVertical: 15,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 20,
   },
   buttonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold'
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 16,
+    letterSpacing: 0.8,
   },
-  link: {
-    marginTop: 15,
-    textAlign: 'center',
-    color: '#025382'
-  }
+  backRow: { alignItems: 'center' },
+  backText: { color: '#999', fontSize: 13, textAlign: 'center' },
+  backLink: { color: '#C4687A', fontWeight: '600' },
+
+  navyFill: { flex: 1, minHeight: 60 },
 })
