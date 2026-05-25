@@ -13,11 +13,15 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
   Switch
 } from 'react-native'
 
 import MapView, { Marker, Circle } from 'react-native-maps'
 import * as Location from 'expo-location'
+import { Ionicons } from '@expo/vector-icons'
+import { Image } from 'react-native'
+import { Svg, Path } from 'react-native-svg'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import { buscarCrimes, buscarOcorrencias } from '../services/crimesService'
 import { supabase } from '../services/supabase'
@@ -25,6 +29,58 @@ import { getActivityStatus, updateActivityStatus } from "../services/activitySer
 
 // 🛑 URL DO API ENDPOINT NO API GATEWAY DA AWS
 const URL_AWS_GATEWAY = "https://2egghrwmeg.execute-api.us-east-1.amazonaws.com/default/ampara-alert-trigger";
+
+const screenWidth = Dimensions.get('window').width
+
+const getRiskRGB = (level) => {
+  if (level === 'Crítico') return '196, 104, 122'
+  if (level === 'Moderado') return '212, 160, 23'
+  return '46, 139, 87'
+}
+
+const getRiskLabel = (level) => {
+  if (level === 'Crítico') return 'Alto risco · tenha atenção redobrada'
+  if (level === 'Moderado') return 'Risco moderado · mantenha o cuidado'
+  return 'Baixo risco · ambiente monitorado'
+}
+
+function HomeGaugeChart({ score, rgbColor }) {
+  const cx = 100, cy = 100, r = 70, sw = 22
+  const viewH = 112
+  const svgWidth = screenWidth - 140
+  const svgHeight = svgWidth * viewH / 200
+
+  const bgPath = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`
+
+  let fgPath = null
+  if (score > 0) {
+    const angleRad = Math.PI * (1 - score / 10)
+    const xEnd = cx + r * Math.cos(angleRad)
+    const yEnd = cy - r * Math.sin(angleRad)
+    fgPath = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${xEnd.toFixed(2)} ${yEnd.toFixed(2)}`
+  }
+
+  return (
+    <Svg width={svgWidth} height={svgHeight} viewBox={`0 0 200 ${viewH}`}>
+      <Path
+        d={bgPath}
+        stroke="rgba(180,180,180,0.25)"
+        strokeWidth={sw}
+        fill="none"
+        strokeLinecap="round"
+      />
+      {fgPath && (
+        <Path
+          d={fgPath}
+          stroke={`rgb(${rgbColor})`}
+          strokeWidth={sw}
+          fill="none"
+          strokeLinecap="round"
+        />
+      )}
+    </Svg>
+  )
+}
 
 export default function Home({ navigation }) {
   const { data, location, riskStatus, errorMsg } = useRiskDetection()
@@ -478,59 +534,74 @@ export default function Home({ navigation }) {
 
   const recenterMap = () => { if (mapRef.current && userRegion) { mapRef.current.animateToRegion(userRegion, 500); setMapMoved(false); } }
 
+  const riskBg = riskLevel === 'Crítico' ? '#FDEAEC' : riskLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
+  const riskAccent = riskLevel === 'Crítico' ? '#C4687A' : riskLevel === 'Moderado' ? '#D4A017' : '#2E8B57'
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        
-        {/* HEADER */}
+
+        {/* ── HEADER ── */}
         <View style={styles.headerContainer}>
-          <Text style={styles.header}>Ampara</Text>
-          <Text style={styles.subHeader}>Monitoramento ativo</Text>
+          <View>
+            <Text style={styles.header}>Ampara</Text>
+            <Text style={styles.subHeader}>Monitoramento ativo</Text>
+          </View>
+          <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 38, height: 38 }} resizeMode="contain" />
         </View>
 
-        {/* SCORE CARD */}
-        <View style={styles.scoreCard}>
-          <Text style={styles.scoreLabel}>Risco atual</Text>
-          <Text style={styles.scoreValue}>{riskScore}</Text>
-          <View style={[
-            styles.scoreBadge,
-            riskLevel === "Baixo" && styles.lowRisk,
-            riskLevel === "Moderado" && styles.mediumRisk,
-            riskLevel === "Crítico" && styles.highRisk
-          ]}>
-            <Text style={styles.scoreBadgeText}>{riskLevel}</Text>
+        {/* ── RISCO — sem card ── */}
+        <View style={styles.riskSection}>
+          <View style={styles.riskRow}>
+            <Text style={styles.riskLabel}>Risco atual</Text>
+            <View style={[styles.riskBadge, { backgroundColor: riskAccent }]}>
+              <Text style={styles.riskBadgeText}>{riskLevel}</Text>
+            </View>
           </View>
-          <Text style={styles.scoreDescription}>Monitoramento em tempo real baseado em contexto</Text>
+
+          <View style={{ alignItems: 'center' }}>
+            <View>
+              <HomeGaugeChart score={riskScore} rgbColor={getRiskRGB(riskLevel)} />
+              <View style={styles.gaugeScoreOverlay}>
+                <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
+                  {riskScore}
+                  <Text style={styles.gaugeScoreMax}>/10</Text>
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.gaugeDesc}>{getRiskLabel(riskLevel)}</Text>
+          </View>
         </View>
-        
+
         {insideSafeZone && (
-          <View style={styles.safeZoneBanner}>
-            <Text style={styles.safeZoneBannerTitle}>Perímetro Seguro Ativo</Text>
-            <Text style={styles.safeZoneBannerSubtitle}>O nível de risco local foi ajustado para este estabelecimento cadastrado.</Text>
+          <View style={styles.safeStrip}>
+            <Ionicons name="checkmark-circle" size={16} color="#2E8B57" />
+            <Text style={styles.safeStripText}>Você está em um perímetro seguro cadastrado</Text>
           </View>
         )}
-  
-        {/* MODO ATIVIDADE */}
-        <View style={[styles.activityBanner, activityMode && styles.activityBannerActive]}>
-          <View style={styles.activityHeader}>
-            <View>
-              <Text style={[styles.activityTitle, activityMode && styles.activityTitleActive]}>🏋️ Modo atividade</Text>
-              <Text style={styles.activitySubtitle}>
-                {activityMode ? "Monitoramento adaptado para exercícios" : "Evita falsos alertas durante exercícios"}
-              </Text>
-            </View>
-            <Switch
-              value={activityMode}
-              onValueChange={toggleActivity}
-              trackColor={{ false: "#DDD", true: "#C2185B" }}
-              thumbColor="#FFF"
-            />
-          </View>
-          {activityMode && <Text style={styles.activityStatus}>● Ativo agora</Text>}
-        </View>
 
-        {/* MAPA */}
-        <View style={styles.mapFixedContainer}>
+        {/* ── MODO ATIVIDADE ── */}
+        <View style={[styles.activityRow, activityMode && styles.activityRowActive]}>
+          <View style={[styles.activityIconWrap, activityMode && styles.activityIconWrapActive]}>
+            <Ionicons name="fitness-outline" size={20} color={activityMode ? '#FFF' : '#5A8FAF'} />
+          </View>
+          <View style={styles.activityTexts}>
+            <Text style={[styles.activityTitle, activityMode && { color: '#C4687A' }]}>Modo atividade</Text>
+            <Text style={styles.activitySubtitle}>
+              {activityMode ? 'Adaptado para exercícios' : 'Evita falsos alertas durante treinos'}
+            </Text>
+          </View>
+          <Switch
+            value={activityMode}
+            onValueChange={toggleActivity}
+            trackColor={{ false: '#D0C8C0', true: '#C4687A' }}
+            thumbColor="#FFF"
+          />
+        </View>
+        <View style={styles.separator} />
+
+        {/* ── MAPA — arredondado sem card ── */}
+        <View style={styles.mapContainer}>
           {location && region ? (
             <>
               <MapView
@@ -539,53 +610,41 @@ export default function Home({ navigation }) {
                 region={region}
                 onRegionChangeComplete={handleRegionChange}
               >
-                <Marker coordinate={location.coords} title="Você" pinColor="blue" />
+                <Marker coordinate={location.coords} title="Você" pinColor="#5A8FAF" />
                 <Circle
                   center={location.coords}
                   radius={500}
-                  fillColor="rgba(194,24,91,0.10)"
-                  strokeColor="#C2185B"
+                  fillColor="rgba(196,104,122,0.10)"
+                  strokeColor="#C4687A"
                 />
-
                 {crimeData.map(crime => (
-                  <Marker
-                    key={crime.id}
+                  <Marker key={crime.id}
                     coordinate={{ latitude: crime.lat, longitude: crime.lon }}
                     title={crime.tipo}
                     description={`${crime.distancia.toFixed(2)} km`}
-                    pinColor="red"
+                    pinColor="#6B1A2E"
                   />
                 ))}
-
                 {occurrenceData.map(occ => (
-                  <Marker
-                    key={occ.id}
+                  <Marker key={occ.id}
                     coordinate={{ latitude: occ.lat, longitude: occ.lon }}
-                    title={`🚨 ${occ.tipo}`}
+                    title={occ.tipo}
                     description={occ.descricao || occ.address || `${occ.distancia.toFixed(2)} km`}
-                    pinColor="orange"
+                    pinColor="#C4687A"
                   />
                 ))}
               </MapView>
 
               <View style={styles.mapLegend}>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: 'blue' }]} />
-                  <Text style={styles.legendText}>Você</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: 'red' }]} />
-                  <Text style={styles.legendText}>Crimes SSP</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: 'orange' }]} />
-                  <Text style={styles.legendText}>Rede Ampara</Text>
-                </View>
+                <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#5A8FAF' }]} /><Text style={styles.legendText}>Você</Text></View>
+                <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#6B1A2E' }]} /><Text style={styles.legendText}>SSP</Text></View>
+                <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C4687A' }]} /><Text style={styles.legendText}>Ampara</Text></View>
               </View>
 
               {mapMoved && (
                 <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}>
-                  <Text style={styles.recenterText}>📍 Voltar para mim</Text>
+                  <Ionicons name="locate" size={16} color="#FFF" />
+                  <Text style={styles.recenterText}>Voltar para mim</Text>
                 </TouchableOpacity>
               )}
             </>
@@ -594,23 +653,26 @@ export default function Home({ navigation }) {
           )}
         </View>
 
-        {/* ALERTA CRIMES PRÓXIMOS */}
-        <View style={[styles.crimeAlert, { backgroundColor: crimeData.length > 0 ? '#FFEBEE' : '#E8F5E9' }]}>
-          <Text style={[styles.crimeAlertText, { color: crimeData.length > 0 ? '#C2185B' : '#2E8B57' }]}>
-            {crimeData.length > 0 ? `⚠️ Área com registros recentes` : '✅ Região segura'}
+        {/* ── CRIME STRIP — slim, sem card ── */}
+        <View style={[styles.crimeStrip, { borderLeftColor: crimeData.length > 0 ? '#C4687A' : '#2E8B57' }]}>
+          <Ionicons
+            name={crimeData.length > 0 ? 'warning-outline' : 'checkmark-circle-outline'}
+            size={16}
+            color={crimeData.length > 0 ? '#C4687A' : '#2E8B57'}
+          />
+          <Text style={[styles.crimeStripText, { color: crimeData.length > 0 ? '#C4687A' : '#2E8B57' }]}>
+            {crimeData.length > 0 ? `${crimeData.length} registros na área` : 'Região sem alertas recentes'}
           </Text>
         </View>
 
-        {/* METRICS CONTAINER */}
-        <View style={styles.metricsContainer}>
-          <View style={[styles.metricBox, { width: '100%' }]}>
-            <Text style={styles.metricIcon}>📈</Text>
-            <Text style={[styles.metricValue, { color: isHighRisk ? "#B91C1C" : "#2E8B57" }]}>
-              {magnitude}
-            </Text>
-            <Text style={styles.metricLabel}>Força G</Text>
-          </View>
+        {/* ── FORÇA G — inline, sem card ── */}
+        <View style={styles.forceRow}>
+          <Ionicons name="pulse-outline" size={20} color={isHighRisk ? '#C4687A' : '#5A8FAF'} />
+          <Text style={[styles.forceValue, { color: isHighRisk ? '#C4687A' : '#1B3A6B' }]}>{magnitude}G</Text>
+          <Text style={styles.forceLabel}>Força de aceleração</Text>
+          {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
         </View>
+        <View style={styles.separator} />
 
       </ScrollView>
 
@@ -623,11 +685,17 @@ export default function Home({ navigation }) {
           onPressOut={() => setSosHolding(false)}
           delayLongPress={3000}
         >
-          <Text style={styles.fabText}>🆘 SOS</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="alert-circle" size={18} color="#FFF" />
+            <Text style={styles.fabText}>SOS</Text>
+          </View>
           {sosHolding && <Text style={styles.fabHoldHint}>segure...</Text>}
         </Pressable>
         <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
-          <Text style={styles.fabText}>🚨 REGISTRAR</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="clipboard-outline" size={18} color="#FFF" />
+            <Text style={styles.fabText}>REGISTRAR</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -637,35 +705,38 @@ export default function Home({ navigation }) {
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <Text style={styles.cardTitleCritical}>✅ Alerta Enviado</Text>
-            <Text style={styles.cardSubtitle}>Sua rede de apoio recebeu um SMS com a sua localização em tempo real.</Text>
-            
-            <View style={styles.feedbackBox}>
-              <Text style={styles.feedbackLabel}>📍 Localização enviada:</Text>
-              <Text style={styles.feedbackAddressText}>{sosFeedbackData.endereco}</Text>
-              
-              <Text style={[styles.feedbackLabel, { marginTop: 15 }]}>✉️ Mensagem exata:</Text>
-              <Text style={styles.feedbackText}>{sosFeedbackData.mensagem}</Text>
-              
-              <Text style={[styles.feedbackLabel, { marginTop: 15 }]}>📞 Contatos acionados:</Text>
-              {sosFeedbackData.contatos.map((c, i) => (
-                <Text key={i} style={styles.feedbackContact}>{c}</Text>
-              ))}
+            <View style={[styles.modalStrip, { backgroundColor: '#4CAF50' }]} />
+            <View style={styles.modalInner}>
+              <Text style={styles.cardTitleCritical}>Alerta Enviado</Text>
+              <Text style={styles.cardSubtitle}>Sua rede de apoio recebeu um SMS com sua localização.</Text>
+
+              <View style={styles.feedbackBox}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Ionicons name="location" size={14} color="#5A8FAF" />
+                  <Text style={styles.feedbackLabel}>Localização enviada</Text>
+                </View>
+                <Text style={styles.feedbackAddressText}>{sosFeedbackData.endereco}</Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 4 }}>
+                  <Ionicons name="call" size={14} color="#5A8FAF" />
+                  <Text style={styles.feedbackLabel}>Contatos acionados</Text>
+                </View>
+                {sosFeedbackData.contatos.map((c, i) => (
+                  <Text key={i} style={styles.feedbackContact}>{c}</Text>
+                ))}
+              </View>
+
+              <TouchableOpacity style={styles.btnPrimary} onPress={() => setSosFeedbackVisible(false)}>
+                <Text style={styles.btnPrimaryText}>Entendido</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnHelpGuide}
+                onPress={() => { setSosFeedbackVisible(false); navigation.navigate('HelpGuide') }}
+              >
+                <Text style={styles.btnHelpGuideText}>O que fazer agora?</Text>
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => setSosFeedbackVisible(false)}>
-              <Text style={styles.btnPrimaryText}>Entendido</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.btnHelpGuide}
-              onPress={() => {
-                setSosFeedbackVisible(false)
-                navigation.navigate('HelpGuide')
-              }}
-            >
-              <Text style={styles.btnHelpGuideText}>O que fazer agora? Ver orientações</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -673,19 +744,24 @@ export default function Home({ navigation }) {
       {/* ========================================================= */}
       {/* 🚨 MODAL DE REGISTRO (ATUALIZADO PARA PADRÃO CARD AMPARA) */}
       {/* ========================================================= */}
-      <Modal visible={reportModalVisible} animationType="fade" transparent>
+      <Modal visible={reportModalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flexOne}>
-          <View style={styles.overlayCentered}>
-            <View style={[styles.cardModal, { maxHeight: '85%' }]}>
+          <View style={styles.overlayBottom}>
+            <View style={styles.cardModalBottom}>
+              <View style={[styles.modalStrip, { backgroundColor: '#E8622A' }]} />
               <ScrollView contentContainerStyle={styles.occScrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <Text style={styles.cardTitle}>Relatar Incidente</Text>
+                <View style={styles.modalHandle} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 6 }}>
+                  <Ionicons name="warning-outline" size={22} color="#E8622A" />
+                  <Text style={styles.cardTitle}>Relatar Incidente</Text>
+                </View>
                 <Text style={styles.cardSubtitle}>Ajude a mapear áreas de risco compartilhando dados com a rede.</Text>
 
                 <Text style={styles.occLabel}>Onde ocorreu?</Text>
                 <View style={styles.inputRow}>
                   <TextInput style={styles.inputFlex} placeholder="Buscar endereço..." value={occEndereco} onChangeText={searchAddress} />
                   <TouchableOpacity style={styles.gpsBtn} onPress={handleUseCurrentLocation}>
-                    {loadingGPS ? <ActivityIndicator size="small" color="#025382" /> : <Text style={styles.gpsIcon}>📍</Text>}
+                    {loadingGPS ? <ActivityIndicator size="small" color="#1B3A6B" /> : <Ionicons name="locate" size={18} color="#1B3A6B" />}
                   </TouchableOpacity>
                 </View>
 
@@ -742,8 +818,8 @@ export default function Home({ navigation }) {
                   multiline
                 />
 
-                <TouchableOpacity 
-                  style={[styles.btnPrimary, { marginTop: 25 }, isSaving && { opacity: 0.7 }]} 
+                <TouchableOpacity
+                  style={[styles.btnOrange, { marginTop: 25 }, isSaving && { opacity: 0.7 }]}
                   onPress={handleSaveOccurrence}
                   disabled={isSaving}
                 >
@@ -765,25 +841,28 @@ export default function Home({ navigation }) {
       <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <Text style={styles.cardTitleCritical}>🚨 CONTATO DE SEGURANÇA</Text>
-            <Text style={styles.cardSubtitle}>
-              Detectamos um movimento incomum de {magnitude}G no dispositivo.
-            </Text>
-            
-            <View style={{alignItems: 'center'}}>
-              <View style={styles.timerCircle}>
-                <Text style={styles.timerCountText}>{countdown}</Text>
-                <Text style={styles.timerSecondsText}>segundos</Text>
+            <View style={styles.modalStrip} />
+            <View style={styles.modalInner}>
+              <Text style={styles.cardTitleCritical}>Contato de Segurança</Text>
+              <Text style={styles.cardSubtitle}>
+                Movimento incomum de {magnitude}G detectado.
+              </Text>
+
+              <View style={{alignItems: 'center', marginVertical: 10}}>
+                <View style={styles.timerCircle}>
+                  <Text style={styles.timerCountText}>{countdown}</Text>
+                  <Text style={styles.timerSecondsText}>seg</Text>
+                </View>
               </View>
+
+              <Text style={styles.alertWarningText}>
+                Seus contatos serão acionados automaticamente quando o contador zerar.
+              </Text>
+
+              <TouchableOpacity style={styles.btnSafe} onPress={handleUserIsSafe}>
+                <Text style={styles.btnSafeText}>Estou bem — Cancelar</Text>
+              </TouchableOpacity>
             </View>
-
-            <Text style={styles.alertWarningText}>
-              Os contatos de emergência serão acionados automaticamente após o limite.
-            </Text>
-
-            <TouchableOpacity style={styles.btnSafe} onPress={handleUserIsSafe}>
-              <Text style={styles.btnSafeText}>Estou bem, cancelar envio</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -794,104 +873,147 @@ export default function Home({ navigation }) {
 
 const styles = StyleSheet.create({
   flexOne: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F5EFEA' },
-  scrollContent: { padding: 20, paddingBottom: 120 },
-  
-  headerContainer: { paddingTop: 40, marginBottom: 20 },
-  header: { fontSize: 42, color: '#025382', fontWeight: '700' },
-  subHeader: { color: '#3A7FA6', fontSize: 18 },
-  
-  mapFixedContainer: { height: 350, borderRadius: 25, overflow: 'hidden', backgroundColor: '#FFF', marginBottom: 14 },
+  container: { flex: 1, backgroundColor: '#F5EFE6' },
+  scrollContent: { paddingBottom: 130 },
+
+  // ── Header ──
+  headerContainer: { paddingTop: 52, paddingHorizontal: 22, paddingBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  header: { fontSize: 34, color: '#1B3A6B', fontWeight: '200', letterSpacing: 3 },
+  subHeader: { color: '#C4687A', fontSize: 13, marginTop: 2 },
+
+  // ── Risco sem card ──
+  riskSection: { paddingHorizontal: 22, paddingVertical: 16, marginBottom: 4 },
+  riskRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  riskLabel: { fontSize: 13, color: '#5A8FAF', fontWeight: '700' },
+  riskBadge: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20 },
+  riskBadgeText: { color: '#FFF', fontWeight: '600', fontSize: 13, letterSpacing: 0.5 },
+  gaugeScoreOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center' },
+  gaugeScoreBig: { fontSize: 44, fontWeight: '900', lineHeight: 50 },
+  gaugeScoreMax: { fontSize: 20, fontWeight: '400', color: '#888' },
+  gaugeDesc: { fontSize: 13, color: '#666', marginTop: 14, textAlign: 'center' },
+
+  // ── Safe zone strip ──
+  safeStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 10, backgroundColor: '#EAF5EC' },
+  safeStripText: { fontSize: 13, color: '#2E8B57', fontWeight: '500' },
+
+  // ── Activity row ──
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    elevation: 2,
+    shadowColor: '#1B3A6B',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+  },
+  activityRowActive: {
+    backgroundColor: '#FDEAEC',
+  },
+  activityIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#EEF6FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityIconWrapActive: {
+    backgroundColor: '#C4687A',
+  },
+  activityTexts: { flex: 1 },
+  activityTitle: { fontSize: 15, fontWeight: '700', color: '#1B3A6B' },
+  activitySubtitle: { fontSize: 12, color: '#5A8FAF', marginTop: 2 },
+
+  separator: { height: 1, backgroundColor: '#E8E0D8', marginHorizontal: 22 },
+
+  // ── Mapa arredondado sem card ──
+  mapContainer: { height: 300, borderRadius: 20, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
   map: { flex: 1 },
-  recenterButton: { position: 'absolute', bottom: 15, alignSelf: 'center', backgroundColor: '#025382', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 20 },
+  recenterButton: { position: 'absolute', bottom: 14, alignSelf: 'center', backgroundColor: '#1B3A6B', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 20 },
   mapLegend: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
   legendText: { fontSize: 11, color: '#333', fontWeight: '600' },
-  recenterText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-  
-  crimeAlert: { padding: 14, borderRadius: 16, marginBottom: 16 },
-  crimeAlertText: { fontWeight: '700', fontSize: 16 },
-  
-  activityBanner: { backgroundColor: "#FFF", padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: "#E8E0D8" },
-  activityBannerActive: { backgroundColor: "#FFF0F7", borderColor: "#C2185B" },
-  activityHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  activityTitle: { fontSize: 16, fontWeight: "700", color: "#333" },
-  activityTitleActive: { color: "#C2185B" },
-  activitySubtitle: { fontSize: 13, color: "#666", marginTop: 4, maxWidth: 220 },
-  activityStatus: { marginTop: 10, color: "#C2185B", fontWeight: "700", fontSize: 12 },
-  
+  recenterText: { color: '#FFF', fontWeight: '600', fontSize: 13 },
+
+  // ── Crime strip ──
+  crimeStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 22, paddingVertical: 14, borderLeftWidth: 3 },
+  crimeStripText: { fontSize: 14, fontWeight: '500' },
+
+  // ── Força G inline ──
+  forceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 22, paddingVertical: 16 },
+  forceValue: { fontSize: 22, fontWeight: '700' },
+  forceLabel: { fontSize: 13, color: '#AAA', flex: 1 },
+  forcePill: { backgroundColor: '#FDEAEC', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
+  forcePillText: { color: '#C4687A', fontSize: 11, fontWeight: '700' },
+
+  // ── FABs ──
   floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end' },
-  fabHelp: { backgroundColor: '#B91C1C', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8, alignItems: 'center' },
-  fabHelpHolding: { backgroundColor: '#7F0000', transform: [{ scale: 1.08 }] },
-  fabHoldHint: { color: '#FFB3B3', fontSize: 10, fontWeight: '600', marginTop: 2 },
-  fabRegister: { backgroundColor: '#025382', marginTop: 12, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
-  fabText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
+  fabHelp: { backgroundColor: '#E8622A', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8, alignItems: 'center' },
+  fabHelpHolding: { backgroundColor: '#B84C14', transform: [{ scale: 1.08 }] },
+  fabHoldHint: { color: '#FFD8B0', fontSize: 10, fontWeight: '600', marginTop: 2 },
+  fabRegister: { backgroundColor: '#C4687A', marginTop: 10, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
+  fabText: { color: '#FFF', fontWeight: '600', fontSize: 14, letterSpacing: 0.5 },
   
-  scoreCard: { backgroundColor: "#FFF8FC", paddingVertical: 20, paddingHorizontal: 16, borderRadius: 22, marginBottom: 16, alignItems: "center", borderWidth: 1, borderColor: "#F4C7DD" },
-  scoreLabel: { fontSize: 14, fontWeight: "600", color: "#666" },
-  scoreValue: { fontSize: 58, fontWeight: "bold", color: "#C2185B", marginVertical: 6 },
-  scoreBadge: { paddingVertical: 6, paddingHorizontal: 18, borderRadius: 18 },
-  scoreBadgeText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
-  scoreDescription: { marginTop: 10, fontSize: 12, color: "#777", textAlign: 'center' },
-  lowRisk: { backgroundColor: "#4CAF50" },
-  mediumRisk: { backgroundColor: "#FF9800" },
-  highRisk: { backgroundColor: "#B91C1C" },
-  
-  safeZoneBanner: { backgroundColor: '#FFF', padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1.5, borderColor: '#025382', elevation: 1 },
-  safeZoneBannerTitle: { fontSize: 16, fontWeight: 'bold', color: '#025382' },
-  safeZoneBannerSubtitle: { fontSize: 13, color: '#3A7FA6', marginTop: 4, fontWeight: '500' },
-  
-  metricsContainer: { flexDirection: "row", justifyContent: "space-between", marginTop: 8, marginBottom: 20 },
-  metricBox: { backgroundColor: "#FFF", width: "48%", padding: 18, borderRadius: 20, alignItems: "center" },
-  metricIcon: { fontSize: 26 },
-  metricValue: { fontSize: 28, fontWeight: "bold", marginTop: 8 },
-  metricLabel: { marginTop: 5, fontSize: 13, color: "#777" },
-  
-  // --- ESTILOS GLOBAIS DE MODAL (PADRÃO CARD AMPARA) ---
+  // --- ESTILOS GLOBAIS DE MODAL ---
   overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  cardModal: { backgroundColor: '#FFF', borderRadius: 25, padding: 25, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 8 },
-  cardTitle: { fontSize: 22, fontWeight: 'bold', color: '#025382', marginBottom: 5, textAlign: 'center' },
-  cardTitleCritical: { fontSize: 22, fontWeight: 'bold', color: '#B91C1C', marginBottom: 5, textAlign: 'center' },
-  cardSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
-  
-  // Estilos de Botões Padrão Card
-  btnPrimary: { backgroundColor: '#025382', paddingVertical: 16, borderRadius: 15, alignItems: 'center', width: '100%' },
-  btnPrimaryText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
-  btnCancelText: { textAlign: 'center', color: '#B91C1C', marginTop: 15, fontWeight: '600', fontSize: 15 },
-  btnHelpGuide: { marginTop: 12, paddingVertical: 12, borderRadius: 15, alignItems: 'center', borderWidth: 1.5, borderColor: '#025382' },
-  btnHelpGuideText: { color: '#025382', fontWeight: '700', fontSize: 14 },
-  btnSafe: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 15, alignItems: 'center' },
-  btnSafeText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  cardModal: { backgroundColor: '#FFF', borderRadius: 28, overflow: 'hidden', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12 },
+  modalStrip: { height: 6, backgroundColor: '#C4687A', width: '100%' },
+  modalInner: { padding: 25 },
+  cardTitle: { fontSize: 22, fontWeight: '700', color: '#1B3A6B', marginBottom: 5, textAlign: 'center' },
+  cardTitleCritical: { fontSize: 22, fontWeight: '700', color: '#C4687A', marginBottom: 5, textAlign: 'center' },
+  cardSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10, lineHeight: 20 },
+
+  // Botões
+  btnPrimary: { backgroundColor: '#1B3A6B', paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
+  btnPrimaryText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  btnCancelText: { textAlign: 'center', color: '#C4687A', marginTop: 15, fontWeight: '600', fontSize: 15 },
+  btnHelpGuide: { marginTop: 12, paddingVertical: 14, borderRadius: 30, alignItems: 'center', backgroundColor: '#F5EFE6' },
+  btnHelpGuideText: { color: '#1B3A6B', fontWeight: '700', fontSize: 14 },
+  btnSafe: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 30, alignItems: 'center' },
+  btnSafeText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
 
   // Estilos da caixa de Feedback SOS
   // Estilos da caixa de Feedback SOS
-  feedbackBox: { backgroundColor: '#F5EFEA', padding: 15, borderRadius: 15, marginBottom: 25, borderWidth: 1, borderColor: '#E8E0D8' },
-  feedbackLabel: { fontSize: 12, fontWeight: 'bold', color: '#3A7FA6', marginBottom: 5 },
-  feedbackAddressText: { fontSize: 16, color: '#B91C1C', fontWeight: 'bold', marginBottom: 5 }, // <-- NOVO ESTILO AQUI
+  feedbackBox: { backgroundColor: '#F5EFE6', padding: 15, borderRadius: 15, marginBottom: 25, borderWidth: 1, borderColor: '#E8E0D8' },
+  feedbackLabel: { fontSize: 12, fontWeight: 'bold', color: '#5A8FAF', marginBottom: 5 },
+  feedbackAddressText: { fontSize: 16, color: '#C4687A', fontWeight: 'bold', marginBottom: 5 }, // <-- NOVO ESTILO AQUI
   feedbackText: { fontSize: 14, color: '#333', fontStyle: 'italic' },
-  feedbackContact: { fontSize: 15, color: '#025382', fontWeight: '600', marginTop: 3 },
+  feedbackContact: { fontSize: 15, color: '#1B3A6B', fontWeight: '600', marginTop: 3 },
+
+  // Bottom sheet modal (relato de incidente)
+  overlayBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  cardModalBottom: { backgroundColor: '#FFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '90%', overflow: 'hidden', elevation: 20 },
+  modalHandle: { width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 16 },
+  btnOrange: { backgroundColor: '#E8622A', paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
 
   // Estilos do Formulário de Registro
-  occScrollContent: { flexGrow: 1 },
-  occLabel: { color: '#025382', fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
+  occScrollContent: { flexGrow: 1, padding: 22, paddingTop: 0 },
+  occLabel: { color: '#1B3A6B', fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
   inputRow: { flexDirection: 'row', gap: 10 },
   inputFlex: { flex: 1, borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9' },
   input: { borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9', marginTop: 5 },
-  gpsBtn: { backgroundColor: '#F5EFEA', width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#D8D0CC' },
+  gpsBtn: { backgroundColor: '#F5EFE6', width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#D8D0CC' },
   gpsIcon: { fontSize: 20 },
   typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 5 },
   typeButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#D8D0CC', backgroundColor: '#FFF' },
-  typeSelected: { backgroundColor: '#025382', borderColor: '#025382' },
+  typeSelected: { backgroundColor: '#1B3A6B', borderColor: '#1B3A6B' },
   typeText: { color: '#555', fontSize: 13, fontWeight: '500' },
   typeTextSelected: { color: '#FFF', fontWeight: 'bold' },
   suggestionsBox: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, marginTop: 5, maxHeight: 150 },
-  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#F5EFEA' },
+  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#F5EFE6' },
   suggestionText: { fontSize: 13, color: '#333' },
 
   // Estilos do Cronômetro
-  timerCircle: { width: 90, height: 90, borderRadius: 45, borderWidth: 4, borderColor: '#B91C1C', justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
-  timerCountText: { fontSize: 32, fontWeight: 'bold', color: '#B91C1C' },
+  timerCircle: { width: 90, height: 90, borderRadius: 45, borderWidth: 4, borderColor: '#C4687A', justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
+  timerCountText: { fontSize: 32, fontWeight: 'bold', color: '#C4687A' },
   timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' },
   alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
 })

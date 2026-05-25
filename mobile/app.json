@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
 
-    "icon": "./assets/images/ampara-logo.png",
+    "icon": "./assets/images/maos-ampara-rosa.png",
 
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
@@ -18,15 +18,15 @@
 
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#025382",
-        "foregroundImage": "./assets/images/ampara-logo.png"
+        "backgroundColor": "#F5EFE6",
+        "foregroundImage": "./assets/images/maos-ampara-rosa.png"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.amparaapp"
     },
 
     "web": {
-      "favicon": "./assets/images/ampara-logo.png"
+      "favicon": "./assets/images/maos-ampara-rosa.png"
     },
 
     "plugins": [
@@ -34,10 +34,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/ampara-logo.png",
+          "image": "./assets/images/maos-ampara-rosa.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#025382"
+          "backgroundColor": "#F5EFE6"
         }
       ]
     ]
