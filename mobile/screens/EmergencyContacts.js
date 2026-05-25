@@ -8,10 +8,12 @@ TouchableOpacity,
 ScrollView,
 Alert,
 Modal,
-FlatList
+FlatList,
+Image
 } from 'react-native'
 
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
 import { getPhoneContacts } from '../services/contactService'
 
@@ -245,9 +247,13 @@ return (
 <SafeAreaView style={styles.container}>
 <ScrollView contentContainerStyle={{ padding: 20 }}>
 
-  <TouchableOpacity onPress={() => navigation.goBack()}>
-    <Text style={styles.back}>← Voltar</Text>
-  </TouchableOpacity>
+  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 }}>
+      <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
+      <Text style={styles.back}>Voltar</Text>
+    </TouchableOpacity>
+    <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
+  </View>
 
   <Text style={styles.title}>Contatos de Emergência</Text>
   <Text style={styles.subtitle}>{textoInfo}</Text>
@@ -287,7 +293,10 @@ return (
     />
 
     <TouchableOpacity style={styles.selectButton} onPress={openPhoneContacts}>
-      <Text style={styles.selectButtonText}>📱 Selecionar da agenda</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <Ionicons name="people-outline" size={18} color="#FFF" />
+        <Text style={styles.selectButtonText}>Selecionar da agenda</Text>
+      </View>
     </TouchableOpacity>
 
     <TouchableOpacity style={styles.button} onPress={handleAdd}>
@@ -309,10 +318,10 @@ return (
       </View>
       <View style={styles.actions}>
         <TouchableOpacity onPress={() => openEditModal(item)}>
-          <Text style={styles.icon}>✏️</Text>
+          <Ionicons name="create-outline" size={22} color="#5A8FAF" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleDelete(item.id)}>
-          <Text style={styles.icon}>🗑️</Text>
+          <Ionicons name="trash-outline" size={22} color="#C4687A" />
         </TouchableOpacity>
       </View>
     </View>
@@ -321,9 +330,9 @@ return (
 
   {/* ── MODAL AGENDA ── */}
   <Modal visible={contactsModalVisible} animationType="slide">
-    <ScrollView style={{ paddingTop: 80, paddingHorizontal: 20, backgroundColor: '#F5EFEA' }}>
+    <ScrollView style={{ paddingTop: 80, paddingHorizontal: 20, backgroundColor: '#F5EFE6' }}>
       <TouchableOpacity onPress={() => setContactsModalVisible(false)}>
-        <Text style={{ color: '#025382', fontSize: 18, marginBottom: 25 }}>← Voltar</Text>
+        <Text style={{ color: '#1B3A6B', fontSize: 18, marginBottom: 25 }}>← Voltar</Text>
       </TouchableOpacity>
       <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Selecionar contato</Text>
       <TextInput
@@ -420,7 +429,7 @@ return (
           pendingContact.rawNumber.replace(/\D/g, '').length < 10 && (
           <View style={{ marginTop: 12 }}>
             <Text style={[styles.label, { marginTop: 0, marginBottom: 6 }]}>
-              DDD <Text style={{ color: '#B91C1C' }}>*</Text>
+              DDD <Text style={{ color: '#C4687A' }}>*</Text>
             </Text>
             <TextInput
               style={styles.input}
@@ -490,17 +499,17 @@ return (
 
 const styles = StyleSheet.create({
 
-container: { flex: 1, backgroundColor: '#F5EFEA' },
+container: { flex: 1, backgroundColor: '#F5EFE6' },
 
-back: { color: '#025382', marginBottom: 10 },
+back: { color: '#1B3A6B', marginBottom: 10 },
 
-title: { fontSize: 30, fontWeight: 'bold', color: '#025382' },
+title: { fontSize: 30, fontWeight: 'bold', color: '#1B3A6B' },
 
-subtitle: { color: '#3A7FA6', marginBottom: 20 },
+subtitle: { color: '#5A8FAF', marginBottom: 20 },
 
-card: { backgroundColor: '#FFF', padding: 20, borderRadius: 20, marginBottom: 20 },
+card: { backgroundColor: '#FFF', padding: 20, borderRadius: 20, marginBottom: 20, elevation: 2, shadowColor: '#1B3A6B', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8 },
 
-label: { marginTop: 10, color: '#3A7FA6', fontSize: 16 },
+label: { marginTop: 10, color: '#5A8FAF', fontSize: 16 },
 
 input: { borderWidth: 1, borderColor: '#DDD', borderRadius: 12, padding: 14, marginTop: 5 },
 
@@ -531,9 +540,9 @@ phoneInput: {
   fontSize: 15
 },
 
-selectButton: { backgroundColor: '#C2185B', padding: 16, borderRadius: 14, marginTop: 25, alignItems: 'center' },
+selectButton: { backgroundColor: '#C4687A', padding: 16, borderRadius: 14, marginTop: 25, alignItems: 'center' },
 
-button: { backgroundColor: '#025382', padding: 16, borderRadius: 14, marginTop: 14, alignItems: 'center' },
+button: { backgroundColor: '#1B3A6B', padding: 16, borderRadius: 14, marginTop: 14, alignItems: 'center' },
 
 selectButtonText: { color: '#FFF', fontWeight: 'bold' },
 
@@ -541,13 +550,13 @@ buttonText: { color: '#FFF', fontWeight: 'bold' },
 
 clearText: { textAlign: 'center', marginTop: 14, color: '#999' },
 
-contact: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between' },
+contact: { backgroundColor: '#FDEAEC', padding: 15, borderRadius: 15, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between' },
 
 name: { fontWeight: 'bold', fontSize: 18 },
 
 phone: { color: '#666' },
 
-relacao: { color: '#025382' },
+relacao: { color: '#1B3A6B' },
 
 actions: { flexDirection: 'row', gap: 15 },
 
@@ -573,10 +582,10 @@ confirmHint: { fontSize: 14, color: '#555', marginBottom: 12, lineHeight: 20 },
 
 ddiItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
 
-ddiItemSelected: { backgroundColor: '#EFF6FF' },
+ddiItemSelected: { backgroundColor: '#D4E9F7' },
 
 ddiItemText: { fontSize: 16, color: '#333' },
 
-ddiItemCode: { fontSize: 15, color: '#025382', fontWeight: '700' },
+ddiItemCode: { fontSize: 15, color: '#1B3A6B', fontWeight: '700' },
 
 })

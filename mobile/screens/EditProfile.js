@@ -6,8 +6,10 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  ScrollView
+  ScrollView,
+  Image
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
 
 export default function EditProfile({ navigation }) {
@@ -69,6 +71,14 @@ export default function EditProfile({ navigation }) {
       style={styles.container}
       contentContainerStyle={styles.content}
     >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
+          <Text style={{ fontSize: 16, color: '#1B3A6B', fontWeight: '600' }}>Voltar</Text>
+        </TouchableOpacity>
+        <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
+      </View>
+
       <Text style={styles.title}>Editar Perfil</Text>
 
       <View style={styles.card}>
@@ -115,7 +125,7 @@ export default function EditProfile({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFEA'
+    backgroundColor: '#F5EFE6'
   },
 
   content: {
@@ -126,27 +136,39 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#025382',
+    color: '#1B3A6B',
     marginBottom: 20
   },
 
   card: {
     backgroundColor: '#FFF',
     padding: 20,
-    borderRadius: 20
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#1B3A6B',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
   },
 
   label: {
-    color: '#3A7FA6',
-    marginBottom: 5
+    color: '#5A8FAF',
+    fontWeight: '600',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 5,
   },
 
   input: {
     borderWidth: 1,
-    borderColor: '#E1D7D2',
+    borderColor: '#E8E0DA',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 15
+    marginBottom: 15,
+    fontSize: 15,
+    color: '#222',
+    backgroundColor: '#FAFAFA',
   },
 
   email: {
@@ -156,7 +178,7 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    backgroundColor: '#025382',
+    backgroundColor: '#C4687A',
     padding: 15,
     borderRadius: 12,
     alignItems: 'center'
@@ -173,6 +195,6 @@ const styles = StyleSheet.create({
   },
 
   cancelText: {
-    color: '#3A7FA6'
+    color: '#5A8FAF'
   }
 })

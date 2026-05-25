@@ -9,10 +9,12 @@ import {
   FlatList,
   Modal,
   ScrollView,
-  Keyboard
+  Keyboard,
+  Image
 } from 'react-native'
 import * as Location from 'expo-location'
 import MapView, { Marker, Circle } from 'react-native-maps'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
 
 export default function SafeLocations({ navigation }) {
@@ -338,13 +340,13 @@ export default function SafeLocations({ navigation }) {
 
       <View style={styles.locationActions}>
         <TouchableOpacity onPress={() => handleEdit(item)}>
-          <Text style={styles.icon}>✏️</Text>
+          <Ionicons name="create-outline" size={22} color="#5A8FAF" />
         </TouchableOpacity>
 
         <View style={styles.divider} />
 
         <TouchableOpacity onPress={() => handleDelete(item.id)}>
-          <Text style={styles.icon}>🗑️</Text>
+          <Ionicons name="trash-outline" size={22} color="#C4687A" />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -352,9 +354,13 @@ export default function SafeLocations({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.goBack()}>
-        <Text style={styles.back}>←</Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 6 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
+          <Text style={styles.back}>Voltar</Text>
+        </TouchableOpacity>
+        <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
+      </View>
 
       <Text style={styles.title}>Locais Seguros</Text>
       <Text style={styles.subtitle}>Salve lugares importantes para você</Text>
@@ -377,7 +383,7 @@ export default function SafeLocations({ navigation }) {
                 longitude: currentLocation.longitude
               }}
               title="Você"
-              pinColor="#025382"
+              pinColor="#1B3A6B"
             />
           )}
 
@@ -398,7 +404,7 @@ export default function SafeLocations({ navigation }) {
                   longitude: Number(loc.longitude)
                 }}
                 radius={80}
-                strokeColor="#025382"
+                strokeColor="#1B3A6B"
                 fillColor="rgba(107, 43, 56, 0.14)"
               />
             </React.Fragment>
@@ -406,16 +412,22 @@ export default function SafeLocations({ navigation }) {
         </MapView>
 
         <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}>
-          <Text style={styles.recenterIcon}>📍</Text>
+          <Ionicons name="locate" size={22} color="#1B3A6B" />
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.primaryButton} onPress={openGPSMode}>
-        <Text style={styles.primaryText}>📍 Usar minha localização</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <Ionicons name="locate" size={18} color="#FFF" />
+          <Text style={styles.primaryText}>Usar minha localização</Text>
+        </View>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.secondaryButton} onPress={openManualMode}>
-        <Text style={styles.secondaryText}>✏️ Inserir manualmente</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <Ionicons name="create-outline" size={18} color="#1B3A6B" />
+          <Text style={styles.secondaryText}>Inserir manualmente</Text>
+        </View>
       </TouchableOpacity>
 
       <FlatList
@@ -526,25 +538,25 @@ export default function SafeLocations({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFEA',
+    backgroundColor: '#F5EFE6',
     padding: 20
   },
 
   back: {
-    marginTop: 40,
-    fontSize: 28,
-    color: '#025382'
+    fontSize: 16,
+    color: '#1B3A6B',
+    fontWeight: '600',
   },
 
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#025382',
-    marginTop: 8
+    color: '#1B3A6B',
+    marginTop: 8,
   },
 
   subtitle: {
-    color: '#3A7FA6',
+    color: '#5A8FAF',
     marginBottom: 14
   },
 
@@ -578,7 +590,7 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    backgroundColor: '#025382',
+    backgroundColor: '#C4687A',
     padding: 15,
     borderRadius: 14,
     marginBottom: 10
@@ -592,14 +604,14 @@ const styles = StyleSheet.create({
 
   secondaryButton: {
     borderWidth: 1,
-    borderColor: '#025382',
+    borderColor: '#C4687A',
     padding: 15,
     borderRadius: 14,
     marginBottom: 18
   },
 
   secondaryText: {
-    color: '#025382',
+    color: '#C4687A',
     textAlign: 'center',
     fontWeight: '600'
   },
@@ -609,7 +621,7 @@ const styles = StyleSheet.create({
   },
 
   locationCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#D4E9F7',
     padding: 16,
     borderRadius: 18,
     marginBottom: 12,
@@ -631,7 +643,7 @@ const styles = StyleSheet.create({
 
   locationType: {
     fontSize: 15,
-    color: '#025382',
+    color: '#1B3A6B',
     marginTop: 2
   },
 
@@ -685,7 +697,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: '#025382',
+    color: '#1B3A6B',
     fontSize: 15,
     fontWeight: '600',
     marginTop: 14,
@@ -701,7 +713,7 @@ const styles = StyleSheet.create({
   },
 
   gpsAddressBox: {
-    backgroundColor: '#F5EFEA',
+    backgroundColor: '#F5EFE6',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
@@ -748,8 +760,8 @@ const styles = StyleSheet.create({
   },
 
   typeSelected: {
-    backgroundColor: '#025382',
-    borderColor: '#025382'
+    backgroundColor: '#1B3A6B',
+    borderColor: '#1B3A6B'
   },
 
   typeText: {
@@ -762,7 +774,7 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    backgroundColor: '#025382',
+    backgroundColor: '#C4687A',
     padding: 15,
     borderRadius: 14,
     marginTop: 22,
@@ -777,7 +789,7 @@ const styles = StyleSheet.create({
 
   cancelText: {
     textAlign: 'center',
-    color: '#3A7FA6',
+    color: '#5A8FAF',
     fontSize: 16,
     marginTop: 14
   }
