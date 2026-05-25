@@ -1,165 +1,259 @@
 # 🛡️ Ampara
 
-Sistema inteligente para detecção de situações de vulnerabilidade para a segurança de mulheres, utilizando dados de sensores de smartwatches e aprendizado de máquina.
+Sistema inteligente de apoio à segurança feminina, utilizando dados contextuais, sensores móveis e wearables para identificação de possíveis situações de vulnerabilidade.
 
 ---
 
 ## 📌 Sobre o Projeto
 
-O Ampara é um sistema que monitora dados fisiológicos, comportamentais e contextuais para identificar possíveis situações de risco durante deslocamentos e atividades do dia a dia.
+O Ampara é um sistema desenvolvido como Trabalho de Conclusão de Curso do Instituto Mauá de Tecnologia que busca oferecer suporte preventivo à segurança de mulheres durante deslocamentos e atividades do cotidiano.
 
-Diferente de soluções tradicionais baseadas apenas em acionamento manual, o sistema utiliza inteligência computacional para identificar padrões anômalos e oferecer suporte à usuária de forma discreta e preventiva.
+A solução utiliza informações comportamentais, contextuais e futuramente dados fisiológicos provenientes de smartwatch para identificar situações potencialmente vulneráveis de maneira discreta e não invasiva.
 
-Além disso, o sistema incorpora mecanismos de personalização, permitindo que o comportamento da usuária seja interpretado de forma mais precisa e contextualizada.
+Diferente de aplicativos tradicionais baseados apenas em acionamentos manuais, o Ampara propõe uma abordagem híbrida: combinação entre análise automática de contexto e validação da usuária, reduzindo falsos positivos.
 
 ---
 
 ## 🚨 Problema
 
-A violência contra a mulher é um problema global de grande escala, afetando milhões de mulheres todos os anos.
+A violência contra a mulher permanece um problema social de grande escala.
 
-Grande parte das soluções atuais:
+Grande parte das soluções existentes:
 
-* dependem exclusivamente da ação da usuária
-* não utilizam análise inteligente de dados
-* apresentam alta taxa de falsos positivos
-* não consideram o contexto da situação
+- dependem exclusivamente da ação manual da usuária
+- utilizam apenas botões de emergência
+- não consideram contexto
+- apresentam alta ocorrência de falsos positivos
+- não personalizam o comportamento individual
 
 ---
 
 ## 💡 Proposta
 
-O Ampara propõe um sistema que:
+O Ampara propõe um sistema capaz de:
 
-* realiza monitoramento contínuo via smartwatch
-* analisa padrões de comportamento da usuária
-* detecta anomalias com base em aprendizado de máquina
-* considera contexto (localização, horário, histórico)
-* permite personalização por meio de atividades e locais seguros
-* atua de forma não invasiva
-
----
-
-## ⚙️ Como Funciona
-
-1. Coleta de dados via sensores:
-
-   * localização (GPS)
-   * frequência cardíaca
-   * movimento (acelerômetro)
-   * padrões de deslocamento
-
-2. Processamento dos dados:
-
-   * análise de séries temporais
-   * modelagem de comportamento padrão
-
-3. Detecção de anomalias:
-
-   * identificação de desvios significativos
-
-4. Interação com a usuária:
-
-   * alerta discreto via vibração
-   * possibilidade de cancelamento
-
-5. Ação:
-
-   * envio de alerta e localização para contatos de emergência
+- analisar informações contextuais e comportamentais
+- identificar situações potencialmente vulneráveis
+- considerar localização, horário e ambiente
+- permitir personalização por atividades e locais seguros
+- validar alertas antes do acionamento
+- atuar de maneira preventiva e não invasiva
 
 ---
 
-## ⚠️ Diferencial
+## ⚙️ Como funciona
 
-O sistema adota uma abordagem híbrida entre detecção automática e validação da usuária, reduzindo significativamente falsos positivos.
+### 1. Coleta de dados
 
-O botão possui duas funções:
+Atualmente:
 
-* acionamento manual de emergência
-* cancelamento de alertas automáticos
+- GPS
+- localização em tempo real
+- movimentação do dispositivo
+- informações de contexto
 
-Além disso, o sistema incorpora mecanismos de contexto para melhorar a precisão:
+Próxima etapa:
 
-* cadastro de atividades (ex: academia, corrida, caminhada)
-* definição de locais seguros (ex: casa, trabalho)
-* adaptação ao comportamento individual da usuária ao longo do tempo
-
----
-
-## 📊 Funcionalidades adicionais
-
-* 📍 Cadastro de locais seguros
-* 🏃 Cadastro de atividades recorrentes
-* 📈 Aba de relatórios com histórico de eventos
-* 🧠 Score de vulnerabilidade baseado em comportamento
-* 🕒 Histórico de deslocamentos e ocorrências
+- frequência cardíaca
+- acelerômetro do smartwatch
+- sensores fisiológicos
 
 ---
 
-## 🧠 Tecnologias Envolvidas
+### 2. Análise contextual
 
-* Wearables (smartwatch)
-* Sensores (acelerômetro, GPS, batimentos)
-* Machine Learning (detecção de anomalias)
-* Backend em nuvem
+O sistema considera:
 
----
-
-## 🔐 Segurança e Privacidade
-
-O sistema lida com dados altamente sensíveis, como localização e informações fisiológicas, sendo necessário:
-
-* criptografia de dados
-* controle de acesso
-* armazenamento seguro
-* conformidade com LGPD
+- horário
+- localização
+- proximidade de locais seguros
+- modo alerta
+- atividades informadas
+- dados regionais de criminalidade (SSP-SP)
 
 ---
 
-## 🚀 Como rodar o projeto
+### 3. Geração do score de vulnerabilidade
 
-### Pré-requisitos
+As informações são combinadas para gerar um score contextual que representa possíveis níveis de vulnerabilidade.
 
-* Node.js instalado
-* Expo (via npx ou app Expo Go)
-* Celular ou emulador
+Exemplo:
 
-### Passos
+- região com maior incidência criminal
+- horário crítico
+- movimentação incomum
+- distância de locais seguros
 
-```
-# 1. Clone o repositório
+→ score aumenta
+
+---
+
+### 4. Fluxo de confirmação
+
+Ao detectar um comportamento potencialmente anômalo:
+
+- aplicativo realiza confirmação discreta
+- usuária pode cancelar
+- caso necessário ocorre acionamento do SOS
+
+---
+
+### 5. Ação
+
+Em situações críticas:
+
+- envio de localização
+- acionamento de contatos de emergência
+- registro de ocorrência
+
+---
+
+## 📱 Funcionalidades implementadas
+
+### Conta e perfil
+
+- cadastro
+- login
+- edição de perfil
+
+### Segurança
+
+- cadastro de até 3 contatos de emergência
+- cadastro de locais seguros
+- modo alerta
+
+### Mapa e contexto
+
+- visualização de crimes próximos
+- integração com dados SSP
+- ocorrências da comunidade
+- análise geográfica contextual
+
+### Alertas
+
+- fluxo de falso alerta
+- cancelamento de alerta
+- orientação pós-SOS
+
+---
+
+## 🚧 Em desenvolvimento
+
+- integração com smartwatch (Galaxy Watch)
+- Health Connect
+- sensores fisiológicos
+- envio automático de SMS
+- integração AWS
+- algoritmo refinado de score
+- histórico de eventos
+- simulador de risco
+
+---
+
+## ⚠️ Diferenciais
+
+O Ampara utiliza uma abordagem híbrida:
+
+- detecção automática
+- análise contextual
+- confirmação da usuária
+
+Além disso:
+
+- reduz falsos positivos
+- considera comportamento individual
+- utiliza locais seguros
+- adapta-se ao contexto
+- evita experiências invasivas
+
+---
+
+## 🧠 Tecnologias
+
+### Mobile
+
+- React Native
+- Expo
+
+### Backend
+
+- Supabase
+- PostgreSQL
+
+### Dados
+
+- SSP-SP
+- PostGIS
+
+### Cloud (em evolução)
+
+- AWS
+- API Gateway
+- Lambda
+- DynamoDB
+- S3
+
+### Futuro
+
+- Health Connect
+- Smartwatch Samsung
+- Machine Learning
+
+---
+
+## 🔐 Segurança e privacidade
+
+O sistema lida com dados sensíveis como localização e informações comportamentais.
+
+Princípios considerados:
+
+- LGPD
+- criptografia de dados
+- autenticação segura
+- controle de acesso
+- armazenamento seguro
+
+---
+
+## 🚀 Como executar
+
+### Clone:
+
+```bash
 git clone https://github.com/marodrigues412/ampara-tcc.git
+```
 
-# 2. Entre na pasta do projeto
-cd ampara-tcc
+### Entre no projeto:
 
-# 3. Entre na pasta do aplicativo mobile
-cd mobile
+```bash
+cd ampara-tcc/mobile
+```
 
-# 4. Instale as dependências
+### Instale dependências:
+
+```bash
 npm install
+```
 
-# 5. Inicie o projeto
+### Execute:
+
+```bash
 npx expo start
 ```
 
-### Executando o app
+Abra no:
 
-* Abra o app Expo Go no celular
-* Escaneie o QR Code exibido
-* Ou rode em um emulador
-
----
-
-## 🎯 Objetivo
-
-Desenvolver um sistema capaz de auxiliar na identificação de situações de vulnerabilidade, aumentando a segurança e o suporte à usuária sem substituir sua autonomia.
+- Expo Go
+- Emulador Android
+- dispositivo físico
 
 ---
 
 ## 📊 Status
 
-🚧 Em desenvolvimento (TCC – Instituto Mauá de Tecnologia)
+🚧 Em desenvolvimento — TCC Instituto Mauá de Tecnologia
+
+Pré-banca: MVP funcional em evolução
 
 ---
 
@@ -195,6 +289,8 @@ Desenvolvido como Trabalho de Conclusão de Curso – Instituto Mauá de Tecnolo
 
 ## 📚 Referências
 
-* WHO – Violence against women
-* Fórum Brasileiro de Segurança Pública
-* Estudos sobre wearable computing e segurança
+- Organização Mundial da Saúde (WHO)
+- Fórum Brasileiro de Segurança Pública
+- Secretaria de Segurança Pública do Estado de São Paulo
+- Estudos sobre wearables e detecção de anomalias
+
