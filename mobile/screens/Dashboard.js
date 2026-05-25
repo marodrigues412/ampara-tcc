@@ -18,9 +18,9 @@ const screenWidth = Dimensions.get('window').width
 const CHART_WIDTH = screenWidth - 80
 
 const getScoreRGB = (score) => {
-  if (score >= 80) return '46, 139, 87'
-  if (score >= 50) return '212, 160, 23'
-  return '196, 104, 122'
+  if (score >= 80) return '39, 174, 96'
+  if (score >= 50) return '230, 162, 0'
+  return '211, 47, 47'
 }
 
 const getScoreLabel = (score) => {
@@ -30,9 +30,9 @@ const getScoreLabel = (score) => {
 }
 
 const barColor = (score) => {
-  if (score >= 80) return '#2E8B57'
-  if (score >= 50) return '#E8622A'
-  return '#C4687A'
+  if (score >= 80) return '#27AE60'
+  if (score >= 50) return '#E6A200'
+  return '#D32F2F'
 }
 
 function GaugeChart({ score, rgbColor }) {
@@ -149,7 +149,7 @@ export default function Dashboard() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: '#C4687A' }]}>{Math.round(worstScore / 10)}</Text>
+              <Text style={[styles.statValue, { color: '#D32F2F' }]}>{Math.round(worstScore / 10)}</Text>
               <Text style={styles.statLabel}>Pior dia</Text>
             </View>
           </View>
