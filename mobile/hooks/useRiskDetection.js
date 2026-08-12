@@ -68,20 +68,38 @@ export const useRiskDetection = () => {
       });
     });
 
+    return () => {
+      if (subscription) subscription.remove();
+      if (stepSub) stepSub.remove();
+    };
+  }, [stepCount, nearbyCrimes]); // Adicionado nearbyCrimes aqui para atualizar o score se os crimes mudarem
+
+  // Efeito separado: rastreamento de localização com throttle (50m OU 5min).
+  // Fica fora do efeito acima porque aquele reinicia a cada passo do pedômetro —
+  // juntos, o GPS seria re-inscrito a cada passo e o throttle nunca funcionaria.
+  useEffect(() => {
+    let locationSub;
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         let loc = await Location.getCurrentPositionAsync({});
         setLocation(loc);
         checkCrimeRisk(loc.coords.latitude, loc.coords.longitude);
+
+        locationSub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, distanceInterval: 50, timeInterval: 5 * 60 * 1000 },
+          (newLoc) => {
+            setLocation(newLoc);
+            checkCrimeRisk(newLoc.coords.latitude, newLoc.coords.longitude);
+          }
+        );
       }
     })();
 
     return () => {
-      if (subscription) subscription.remove();
-      if (stepSub) stepSub.remove(); 
+      if (locationSub) locationSub.remove();
     };
-  }, [stepCount, nearbyCrimes]); // Adicionado nearbyCrimes aqui para atualizar o score se os crimes mudarem
+  }, []);
 
   // RETORNA TAMBÉM O SCORE E A COR PARA O DASHBOARD
   return { 

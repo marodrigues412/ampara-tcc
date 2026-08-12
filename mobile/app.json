@@ -4,18 +4,14 @@
     "slug": "ampara-app",
     "version": "1.0.0",
     "orientation": "portrait",
-
     "icon": "./assets/images/maos-ampara-rosa.png",
-
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.amparaapp"
     },
-
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F5EFE6",
@@ -24,11 +20,9 @@
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.amparaapp"
     },
-
     "web": {
       "favicon": "./assets/images/maos-ampara-rosa.png"
     },
-
     "plugins": [
       "expo-router",
       [
@@ -39,7 +33,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#F5EFE6"
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

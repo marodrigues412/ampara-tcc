@@ -149,3 +149,26 @@ alter table emergency_contacts drop column prioridade;
 alter table emergency_contacts
 add column relacao text;
 
+-- pontuação de segurança (0-100, mesma escala do calculateSecurityScore)
+-- no momento em que o ponto de localização foi gravado, para alimentar os dashboards
+alter table location_history
+add column risk_score float;
+
+-- log de alertas enviados (SOS automático ou manual) — tabela já existia em produção
+-- via dashboard do Supabase, adicionada aqui para ficar versionada
+create table if not exists alert_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  message text,
+  recipient_names text,
+  created_at timestamp default now()
+);
+
+alter table alert_logs enable row level security;
+
+create policy "user owns alert logs"
+on alert_logs
+for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
