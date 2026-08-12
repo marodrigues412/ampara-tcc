@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   StyleSheet,
   Text,
@@ -6,13 +6,16 @@ import {
   Image,
   Dimensions,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native'
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LineChart } from 'react-native-chart-kit'
 import { Svg, Path } from 'react-native-svg'
-import { calculateWeeklyMetrics } from '../utils/weeklyCalculator'
-import weeklyData from '../data/weekly_history.json'
+import { calculateWeeklyMetrics, aggregateDailyScores, aggregateHourlyScores } from '../utils/weeklyCalculator'
+import { supabase } from '../services/supabase'
+import { getRecentLocationHistory } from '../services/locationService'
+import { getRecentAlerts } from '../services/alertService'
 
 const screenWidth = Dimensions.get('window').width
 const CHART_WIDTH = screenWidth - 80
@@ -75,18 +78,47 @@ function HBar({ label, score, maxScore, color }) {
   )
 }
 
+function EmptyState({ text }) {
+  return (
+    <View style={{ paddingVertical: 10 }}>
+      <Text style={{ fontSize: 13, color: '#999', textAlign: 'center' }}>{text}</Text>
+    </View>
+  )
+}
+
 export default function Dashboard() {
   const insets = useSafeAreaInsets()
-  const metrics = calculateWeeklyMetrics(weeklyData.weekly_scores)
+  const [loading, setLoading] = useState(true)
+  const [dailyScores, setDailyScores] = useState([])
+  const [hourlyScores, setHourlyScores] = useState([])
+  const [alertCount, setAlertCount] = useState(0)
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
+
+  async function loadDashboardData() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setLoading(false); return }
+
+    const [history, alerts] = await Promise.all([
+      getRecentLocationHistory(user.id, 7),
+      getRecentAlerts(user.id, 7),
+    ])
+
+    setDailyScores(aggregateDailyScores(history))
+    setHourlyScores(aggregateHourlyScores(history))
+    setAlertCount(alerts.length)
+    setLoading(false)
+  }
+
+  const metrics = calculateWeeklyMetrics(dailyScores)
   const dynamicRGB = getScoreRGB(metrics.averageScore)
   const riskColor = `rgb(${dynamicRGB})`
 
-  const scores = weeklyData.weekly_scores.map(d => d.score)
-  const bestScore = Math.max(...scores)
-  const worstScore = Math.min(...scores)
-
-  const totalAlerts = weeklyData.alerts_distribution.reduce((s, a) => s + a.count, 0)
-  const alertColors = ['#C4687A', '#5A8FAF', '#E8622A']
+  const scores = dailyScores.map(d => d.score)
+  const bestScore = scores.length > 0 ? Math.max(...scores) : 0
+  const worstScore = scores.length > 0 ? Math.min(...scores) : 0
 
   const chartConfig = {
     backgroundGradientFrom: '#FFF',
@@ -109,13 +141,21 @@ export default function Dashboard() {
     },
   }
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#1B3A6B" />
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={[styles.container, { paddingTop: Math.max(insets.top - 30, 10) }]}>
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
 
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerSub}>Semana atual</Text>
+            <Text style={styles.headerSub}>Últimos 7 dias</Text>
             <Text style={styles.headerTitle}>Relatório Ampara</Text>
           </View>
           <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
@@ -124,78 +164,98 @@ export default function Dashboard() {
         {/* Gauge + stats */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Índice de Segurança Semanal</Text>
-          <View style={{ alignItems: 'center' }}>
-            <View>
-              <GaugeChart score={metrics.averageScore} rgbColor={dynamicRGB} />
-              <View style={styles.gaugeOverlay}>
-                <Text style={[styles.gaugeBig, { color: riskColor }]}>
-                  {Math.round(metrics.averageScore / 10)}
-                  <Text style={styles.gaugeMax}>/10</Text>
-                </Text>
+          {dailyScores.length === 0 ? (
+            <EmptyState text="Ainda não há dados suficientes. Use o app com o monitoramento ativo por alguns dias para ver seu histórico aqui." />
+          ) : (
+            <>
+              <View style={{ alignItems: 'center' }}>
+                <View>
+                  <GaugeChart score={metrics.averageScore} rgbColor={dynamicRGB} />
+                  <View style={styles.gaugeOverlay}>
+                    <Text style={[styles.gaugeBig, { color: riskColor }]}>
+                      {Math.round(metrics.averageScore / 10)}
+                      <Text style={styles.gaugeMax}>/10</Text>
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.gaugeLabel, { color: riskColor }]}>{getScoreLabel(metrics.averageScore)}</Text>
               </View>
-            </View>
-            <Text style={[styles.gaugeLabel, { color: riskColor }]}>{getScoreLabel(metrics.averageScore)}</Text>
-          </View>
 
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: '#1B3A6B' }]}>{Math.round(metrics.averageScore / 10)}</Text>
-              <Text style={styles.statLabel}>Média</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: '#2E8B57' }]}>{Math.round(bestScore / 10)}</Text>
-              <Text style={styles.statLabel}>Melhor dia</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: '#D32F2F' }]}>{Math.round(worstScore / 10)}</Text>
-              <Text style={styles.statLabel}>Pior dia</Text>
-            </View>
-          </View>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: '#1B3A6B' }]}>{Math.round(metrics.averageScore / 10)}</Text>
+                  <Text style={styles.statLabel}>Média</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: '#2E8B57' }]}>{Math.round(bestScore / 10)}</Text>
+                  <Text style={styles.statLabel}>Melhor dia</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: '#D32F2F' }]}>{Math.round(worstScore / 10)}</Text>
+                  <Text style={styles.statLabel}>Pior dia</Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Line chart */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Variação de Segurança (7 dias)</Text>
+          <Text style={styles.cardTitle}>Variação de Segurança</Text>
           <Text style={styles.cardSubtitle}>Pontuação diária de segurança</Text>
-          <LineChart
-            data={{
-              labels: weeklyData.weekly_scores.map(d => d.dia),
-              datasets: [{ data: scores }],
-            }}
-            width={CHART_WIDTH + 10}
-            height={150}
-            chartConfig={chartConfig}
-            bezier
-            withInnerLines={false}
-            withOuterLines={false}
-            style={styles.chartStyle}
-          />
+          {dailyScores.length === 0 ? (
+            <EmptyState text="Sem pontos de localização registrados ainda." />
+          ) : (
+            <>
+              <LineChart
+                data={{
+                  labels: dailyScores.map(d => d.dia),
+                  datasets: [{ data: scores }],
+                }}
+                width={CHART_WIDTH}
+                height={140}
+                chartConfig={chartConfig}
+                bezier
+                withInnerLines={false}
+                withOuterLines={false}
+                withHorizontalLabels={false}
+                withVerticalLabels={false}
+                style={styles.chartStyle}
+              />
+              {/* Rótulos dos dias desenhados à parte: o LineChart da lib sempre encosta
+                  o último ponto na borda do SVG e corta o rótulo dele no clipping do próprio SVG. */}
+              <View style={styles.chartLabelsRow}>
+                {dailyScores.map(d => (
+                  <Text key={d.dia} style={styles.chartLabelText}>{d.dia}</Text>
+                ))}
+              </View>
+            </>
+          )}
         </View>
 
-        {/* Hourly bars */}
+        {/* Period bars */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Segurança por Horário</Text>
+          <Text style={styles.cardTitle}>Segurança por Período</Text>
           <Text style={styles.cardSubtitle}>Índice de segurança por período do dia</Text>
-          {weeklyData.hourly_risk_score.map((h) => (
-            <HBar key={h.hora} label={h.hora} score={h.score} maxScore={100} color={barColor(h.score)} />
-          ))}
+          {hourlyScores.length === 0 ? (
+            <EmptyState text="Sem dados suficientes ainda." />
+          ) : (
+            hourlyScores.map((h) => (
+              <HBar key={h.hora} label={h.hora} score={h.score} maxScore={100} color={barColor(h.score)} />
+            ))
+          )}
         </View>
 
-        {/* Alerts distribution */}
+        {/* Alerts */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Distribuição de Alertas</Text>
-          <Text style={styles.cardSubtitle}>{totalAlerts} alertas registrados no total</Text>
-          {weeklyData.alerts_distribution.map((a, i) => (
-            <HBar
-              key={a.name}
-              label={`${a.name}  (${Math.round((a.count / totalAlerts) * 100)}%)`}
-              score={a.count}
-              maxScore={totalAlerts}
-              color={alertColors[i]}
-            />
-          ))}
+          <Text style={styles.cardTitle}>Alertas Enviados</Text>
+          <Text style={styles.cardSubtitle}>Total nos últimos 7 dias</Text>
+          <View style={{ alignItems: 'center', paddingVertical: 6 }}>
+            <Text style={[styles.statValue, { fontSize: 40, color: alertCount > 0 ? '#C4687A' : '#2E8B57' }]}>{alertCount}</Text>
+            <Text style={styles.statLabel}>{alertCount === 1 ? 'alerta enviado' : 'alertas enviados'}</Text>
+          </View>
         </View>
 
       </ScrollView>
@@ -254,5 +314,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: '#5A8FAF', fontWeight: '600', marginTop: 2 },
   statDivider: { width: 1, backgroundColor: 'rgba(27,58,107,0.1)', marginVertical: 4 },
 
-  chartStyle: { borderRadius: 12, marginLeft: -16 },
+  chartStyle: { borderRadius: 12, paddingRight: 10, paddingTop: 10 },
+  chartLabelsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginTop: -6 },
+  chartLabelText: { fontSize: 11, color: '#5A8FAF', fontWeight: '600' },
 })

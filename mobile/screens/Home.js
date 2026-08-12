@@ -26,6 +26,7 @@ import { useRiskDetection } from '../hooks/useRiskDetection'
 import { buscarCrimes, buscarOcorrencias } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
+import { saveLocationPoint } from "../services/locationService"
 
 // 🛑 URL DO API ENDPOINT NO API GATEWAY DA AWS
 const URL_AWS_GATEWAY = "https://2egghrwmeg.execute-api.us-east-1.amazonaws.com/default/ampara-alert-trigger";
@@ -91,7 +92,7 @@ function HomeGaugeChart({ score, rgbColor }) {
 }
 
 export default function Home({ navigation }) {
-  const { data, location, riskStatus, errorMsg } = useRiskDetection()
+  const { data, location, riskStatus, errorMsg, currentScore } = useRiskDetection()
   
   // --- Estados de Interface e Mapa ---
   const [modalVisible, setModalVisible] = useState(false)
@@ -117,6 +118,7 @@ export default function Home({ navigation }) {
   const [safeLocations, setSafeLocations] = useState([]);
   const [insideSafeZone, setInsideSafeZone] = useState(false);
   const [userName, setUserName] = useState("Usuária");
+  const [userId, setUserId] = useState(null);
 
   const { magnitude, isHighRisk } = riskStatus
 
@@ -157,7 +159,10 @@ export default function Home({ navigation }) {
   const [demoScore, setDemoScore] = useState(null);
   const [demoBonus, setDemoBonus] = useState(0);
   const [demoEnvLabel, setDemoEnvLabel] = useState(null);
-  
+
+  // --- Modo Monitoramento (liga/desliga detecção automática de risco) ---
+  const [monitoramentoAtivo, setMonitoramentoAtivo] = useState(true);
+
   // --- Inicialização e Escuta Realtime do Supabase ---
   useEffect(() => {
     loadActivity();
@@ -181,17 +186,28 @@ export default function Home({ navigation }) {
     };
   }, [])
 
+  // Grava histórico de localização (já throttled a 50m/5min no hook) para alimentar os dashboards
+  useEffect(() => {
+    if (!location || !userId) return
+    saveLocationPoint(userId, location.coords.latitude, location.coords.longitude, location.coords.speed, currentScore)
+  }, [location, userId])
+
   // Movimento brusco — dispara imediatamente ao detectar pico
   useEffect(() => {
+    if (!monitoramentoAtivo) {
+      setSustainedHighRisk(false);
+      return;
+    }
     if (isHighRisk || riskLevel === "Crítico") {
       setSustainedHighRisk(true);
     } else {
       setSustainedHighRisk(false);
     }
-  }, [isHighRisk, riskLevel]);
+  }, [monitoramentoAtivo, isHighRisk, riskLevel]);
 
   // 1️⃣ GATILHO DO MODAL — 3 níveis baseados no riskScore
   useEffect(() => {
+    if (!monitoramentoAtivo) return;
     if (!sustainedHighRisk || alertaDisparado) return;
     if (modalVisible || simpleCheckVisible) return;
 
@@ -217,7 +233,7 @@ export default function Home({ navigation }) {
       setAlertType('simples');
       setSimpleCheckVisible(true);
     }
-  }, [sustainedHighRisk, modalVisible, simpleCheckVisible, alertaDisparado, riskScore, demoScore, demoBonus, demoEnvLabel, activityMode, insideSafeZone]);
+  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, simpleCheckVisible, alertaDisparado, riskScore, demoScore, demoBonus, demoEnvLabel, activityMode, insideSafeZone]);
 
   // 2️⃣ O MOTOR SEGURO
   useEffect(() => {
@@ -249,6 +265,7 @@ export default function Home({ navigation }) {
   async function loadUserData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    setUserId(user.id);
     const { data } = await supabase.from('user_profiles').select('nome').eq('id', user.id).single();
     if (data?.nome) setUserName(data.nome);
   }
@@ -290,6 +307,21 @@ export default function Home({ navigation }) {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
     await updateActivityStatus(user.id, value, "academia")
+  }
+
+  function toggleMonitoramento(value) {
+    setMonitoramentoAtivo(value)
+    if (!value) {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      setModalVisible(false)
+      setSimpleCheckVisible(false)
+      setAlertaDisparado(false)
+      setSustainedHighRisk(false)
+      setDemoScore(null)
+      setDemoBonus(0)
+      setDemoEnvLabel(null)
+      cancelCooldownRef.current = Date.now() + 30 * 1000
+    }
   }
 
   // --- Lógica de Cálculo de Risco Ambiental ---
@@ -609,14 +641,17 @@ export default function Home({ navigation }) {
     }
   }
 
-  const displayScore = demoScore !== null
-    ? demoScore
-    : demoEnvLabel !== null
-      ? Math.min(10, riskScore + demoBonus)
-      : riskScore
+  const displayScore = !monitoramentoAtivo
+    ? 0
+    : demoScore !== null
+      ? demoScore
+      : demoEnvLabel !== null
+        ? Math.min(10, riskScore + demoBonus)
+        : riskScore
   const displayLevel = displayScore > 8 ? 'Crítico' : displayScore >= 5 ? 'Moderado' : 'Baixo'
-  const riskBg = displayLevel === 'Crítico' ? '#FDEAEA' : displayLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
-  const riskAccent = displayLevel === 'Crítico' ? '#D32F2F' : displayLevel === 'Moderado' ? '#E6A200' : '#27AE60'
+  const riskBg = !monitoramentoAtivo ? '#EDEDED' : displayLevel === 'Crítico' ? '#FDEAEA' : displayLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
+  const riskAccent = !monitoramentoAtivo ? '#9AA0A6' : displayLevel === 'Crítico' ? '#D32F2F' : displayLevel === 'Moderado' ? '#E6A200' : '#27AE60'
+  const riskRgb = !monitoramentoAtivo ? '154, 160, 166' : getRiskRGB(displayLevel)
 
   const limparEstadoDemo = () => {
     setModalVisible(false)
@@ -659,7 +694,7 @@ export default function Home({ navigation }) {
         <View style={styles.headerContainer}>
           <View>
             <Text style={styles.header}>Ampara</Text>
-            <Text style={styles.subHeader}>Monitoramento ativo</Text>
+            <Text style={styles.subHeader}>{monitoramentoAtivo ? 'Monitoramento ativo' : 'Monitoramento desativado'}</Text>
           </View>
           <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 38, height: 38 }} resizeMode="contain" />
         </View>
@@ -670,14 +705,14 @@ export default function Home({ navigation }) {
             <Text style={styles.riskLabel}>Risco atual</Text>
             <View style={[styles.riskBadge, { backgroundColor: riskAccent }]}>
               <Text style={styles.riskBadgeText}>
-                {displayLevel}{demoScore !== null ? ' · DEMO' : ''}
+                {!monitoramentoAtivo ? 'Monitoramento desativado' : `${displayLevel}${demoScore !== null ? ' · DEMO' : ''}`}
               </Text>
             </View>
           </View>
 
           <View style={{ alignItems: 'center' }}>
             <View>
-              <HomeGaugeChart score={displayScore} rgbColor={getRiskRGB(displayLevel)} />
+              <HomeGaugeChart score={displayScore} rgbColor={riskRgb} />
               <View style={styles.gaugeScoreOverlay}>
                 <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
                   {displayScore}
@@ -685,17 +720,21 @@ export default function Home({ navigation }) {
                 </Text>
               </View>
             </View>
-            <Text style={styles.gaugeDesc}>{getRiskLabel(displayLevel)}</Text>
-            <View style={styles.timeFactorRow}>
-              <Ionicons name="time-outline" size={13} color="#5A8FAF" />
-              <Text style={styles.timeFactorText}>
-                {demoEnvLabel === 'risco-noite'
-                  ? 'noite avançada (+2 risco) · DEMO'
-                  : demoEnvLabel === 'risco-dia'
-                    ? 'período diurno · DEMO'
-                    : getTimeLabel()}
-              </Text>
-            </View>
+            <Text style={styles.gaugeDesc}>
+              {!monitoramentoAtivo ? 'Alertas automáticos pausados' : getRiskLabel(displayLevel)}
+            </Text>
+            {monitoramentoAtivo && (
+              <View style={styles.timeFactorRow}>
+                <Ionicons name="time-outline" size={13} color="#5A8FAF" />
+                <Text style={styles.timeFactorText}>
+                  {demoEnvLabel === 'risco-noite'
+                    ? 'noite avançada (+2 risco) · DEMO'
+                    : demoEnvLabel === 'risco-dia'
+                      ? 'período diurno · DEMO'
+                      : getTimeLabel()}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -721,6 +760,25 @@ export default function Home({ navigation }) {
             value={activityMode}
             onValueChange={toggleActivity}
             trackColor={{ false: '#D0C8C0', true: '#C4687A' }}
+            thumbColor="#FFF"
+          />
+        </View>
+
+        {/* ── MODO MONITORAMENTO ── */}
+        <View style={[styles.activityRow, !monitoramentoAtivo && styles.monitoringRowOff]}>
+          <View style={[styles.activityIconWrap, !monitoramentoAtivo && styles.monitoringIconWrapOff]}>
+            <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={20} color={monitoramentoAtivo ? '#5A8FAF' : '#9AA0A6'} />
+          </View>
+          <View style={styles.activityTexts}>
+            <Text style={[styles.activityTitle, !monitoramentoAtivo && { color: '#9AA0A6' }]}>Modo monitoramento</Text>
+            <Text style={styles.activitySubtitle}>
+              {monitoramentoAtivo ? 'Detectando riscos e sensores automaticamente' : 'Alertas automáticos pausados'}
+            </Text>
+          </View>
+          <Switch
+            value={monitoramentoAtivo}
+            onValueChange={toggleMonitoramento}
+            trackColor={{ false: '#D0C8C0', true: '#5A8FAF' }}
             thumbColor="#FFF"
           />
         </View>
@@ -1110,6 +1168,8 @@ const styles = StyleSheet.create({
   activityRowActive: { backgroundColor: '#FDEAEC' },
   activityIconWrap: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#EEF6FC', alignItems: 'center', justifyContent: 'center' },
   activityIconWrapActive: { backgroundColor: '#C4687A' },
+  monitoringRowOff: { backgroundColor: '#F2F2F2' },
+  monitoringIconWrapOff: { backgroundColor: '#E5E5E5' },
   activityTexts: { flex: 1 },
   activityTitle: { fontSize: 15, fontWeight: '700', color: '#1B3A6B' },
   activitySubtitle: { fontSize: 12, color: '#5A8FAF', marginTop: 2 },
