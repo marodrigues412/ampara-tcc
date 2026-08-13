@@ -1,7 +1,7 @@
 /**
  * Lógica central de cálculo de risco do Projeto Ampara
  */
-export const calculateSecurityScore = ({ magnitudeG, isNearCrimeZone, currentHour, bpmPanico }) => {
+export const calculateSecurityScore = ({ magnitudeG, isNearCrimeZone, currentHour, bpmPanico, isInSafeZone = false, isActivityModeOn = false }) => {
   let score = 100;
 
   // 1. Impacto Cinético (Acelerômetro)
@@ -27,7 +27,16 @@ export const calculateSecurityScore = ({ magnitudeG, isNearCrimeZone, currentHou
     score -= 25;
   }
 
-  const finalScore = Math.max(0, Math.round(score));
+  // 5. Contexto protetivo — estar em local seguro cadastrado ou em modo atividade
+  // reduz o risco percebido, simetricamente aos fatores que o aumentam acima
+  if (isInSafeZone) {
+    score += 15;
+  }
+  if (isActivityModeOn) {
+    score += 10;
+  }
+
+  const finalScore = Math.min(100, Math.max(0, Math.round(score)));
 
   // Retornamos um objeto completo para facilitar o gráfico e a UI
   return {
