@@ -7,7 +7,7 @@ desde.setDate(desde.getDate() - days);
 
 const {data, error} = await supabase
 .from("alert_logs")
-.select("id, created_at")
+.select("id, created_at, message, recipient_names")
 .eq("user_id", userId)
 .gte("created_at", desde.toISOString())
 .order("created_at", {ascending: true});
