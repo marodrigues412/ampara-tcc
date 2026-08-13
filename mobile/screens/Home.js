@@ -18,6 +18,7 @@ import {
 } from 'react-native'
 
 import MapView, { Marker, Circle } from 'react-native-maps'
+import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'react-native'
@@ -92,8 +93,14 @@ function HomeGaugeChart({ score, rgbColor }) {
 }
 
 export default function Home({ navigation }) {
-  const { data, location, riskStatus, errorMsg, currentScore } = useRiskDetection()
-  
+  // Precisam existir antes da chamada do hook porque são passados como entrada dele
+  // (zona segura / modo atividade agora também pesam no score salvo no histórico).
+  const [safeLocations, setSafeLocations] = useState([]);
+  const [insideSafeZone, setInsideSafeZone] = useState(false);
+  const [activityMode, setActivityMode] = useState(false)
+
+  const { data, location, riskStatus, errorMsg, currentScore } = useRiskDetection({ insideSafeZone, activityMode })
+
   // --- Estados de Interface e Mapa ---
   const [modalVisible, setModalVisible] = useState(false)
   const [crimeData, setCrimeData] = useState([])
@@ -115,8 +122,6 @@ export default function Home({ navigation }) {
   const [loadingGPS, setLoadingGPS] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const searchTimeout = useRef(null)
-  const [safeLocations, setSafeLocations] = useState([]);
-  const [insideSafeZone, setInsideSafeZone] = useState(false);
   const [userName, setUserName] = useState("Usuária");
   const [userId, setUserId] = useState(null);
 
@@ -139,9 +144,6 @@ export default function Home({ navigation }) {
   // --- Estados do Score de Risco ---
   const [riskScore, setRiskScore] = useState(0)
   const [riskLevel, setRiskLevel] = useState("Baixo")
-
-  // --- Estado do Modo Atividade ---
-  const [activityMode, setActivityMode] = useState(false)
 
   // --- Controle do Cronômetro de Alerta e Feedback SOS ---
   const [countdown, setCountdown] = useState(30)
@@ -186,11 +188,34 @@ export default function Home({ navigation }) {
     };
   }, [])
 
+  // Recarrega locais seguros e status de atividade sempre que a tela volta a ficar em foco —
+  // garante que apagar um local seguro (ou sair do modo atividade) em outra tela libere o
+  // recálculo do score mesmo que o evento realtime tenha sido perdido durante a navegação.
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSafeLocations();
+      loadActivity();
+    }, [])
+  );
+
   // Grava histórico de localização (já throttled a 50m/5min no hook) para alimentar os dashboards
   useEffect(() => {
     if (!location || !userId) return
     saveLocationPoint(userId, location.coords.latitude, location.coords.longitude, location.coords.speed, currentScore)
   }, [location, userId])
+
+  // Grava um ponto extra fora do throttle de GPS quando zona segura ou modo atividade mudam —
+  // esses eventos alteram o score (via useRiskDetection) mesmo sem a usuária ter se movido,
+  // e sem isso o dashboard só veria a mudança no próximo ponto de GPS (até 5min depois).
+  const isFirstZoneActivityRender = useRef(true);
+  useEffect(() => {
+    if (isFirstZoneActivityRender.current) {
+      isFirstZoneActivityRender.current = false;
+      return;
+    }
+    if (!location || !userId) return;
+    saveLocationPoint(userId, location.coords.latitude, location.coords.longitude, location.coords.speed, currentScore, "recalculo");
+  }, [insideSafeZone, activityMode])
 
   // Movimento brusco — dispara imediatamente ao detectar pico
   useEffect(() => {
