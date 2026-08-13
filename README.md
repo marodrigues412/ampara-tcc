@@ -249,6 +249,57 @@ Abra no:
 
 ---
 
+## 📊 Atualizar dados da SSP-SP no Supabase
+
+O app lê os crimes da tabela `crime_occurrences`. Para atualizar essa tabela automaticamente com os arquivos da SSP-SP:
+
+### 1. Instale as dependências Python
+
+Na raiz do projeto:
+
+```bash
+python3 -m pip install -r data-processing/requirements.txt
+```
+
+### 2. Configure a conexão do Supabase
+
+Crie um arquivo `.env` a partir de `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Preencha os dados de conexão do Supabase em campos separados. Esse formato evita erro quando a senha tem caracteres especiais:
+
+```text
+SUPABASE_DB_HOST=aws-1-us-east-2.pooler.supabase.com
+SUPABASE_DB_PORT=5432
+SUPABASE_DB_NAME=postgres
+SUPABASE_DB_USER=postgres.hhlxgtwvoxpvyvejvxwt
+SUPABASE_DB_PASSWORD=sua_senha
+SUPABASE_DB_SSLMODE=require
+```
+
+O `.env` não deve ser enviado ao Git, porque contém senha.
+
+### 3. Importe os meses novos
+
+Exemplo para verificar 2026:
+
+```bash
+python data-processing/importar_ssp_supabase.py --anos 2026
+```
+
+O script baixa o arquivo mais recente da SSP-SP, aplica os mesmos filtros usados no processamento manual e insere apenas meses ainda não registrados em `ssp_imported_months`.
+
+Se a SSP retificar algum mês e for necessário recarregar:
+
+```bash
+python data-processing/importar_ssp_supabase.py --anos 2026 --replace-existing
+```
+
+---
+
 ## 📊 Status
 
 🚧 Em desenvolvimento — TCC Instituto Mauá de Tecnologia
@@ -293,4 +344,3 @@ Desenvolvido como Trabalho de Conclusão de Curso – Instituto Mauá de Tecnolo
 - Fórum Brasileiro de Segurança Pública
 - Secretaria de Segurança Pública do Estado de São Paulo
 - Estudos sobre wearables e detecção de anomalias
-

@@ -20,6 +20,7 @@ npm-debug.log*
 # Dados pesados SSP
 data/raw/*
 !data/raw/.gitkeep
+data/ssp_downloads.csv
 
 # Android/iOS build (caso use)
 android/build/
