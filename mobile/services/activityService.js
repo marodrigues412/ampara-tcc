@@ -1,5 +1,28 @@
 import { supabase } from "./supabase";
 
+export async function getRecentActivityPeriods(userId, days = 7){
+
+const desde = new Date();
+desde.setDate(desde.getDate() - days);
+
+const {data, error} = await supabase
+.from("user_activity_status")
+.select("tipo, started_at, ended_at")
+.eq("user_id", userId)
+.gte("started_at", desde.toISOString())
+.order("started_at", {ascending: true});
+
+if(error){
+
+console.log(error);
+return [];
+
+}
+
+return data || [];
+
+}
+
 export async function getActivityStatus(userId){
 
 const {data,error}=await supabase

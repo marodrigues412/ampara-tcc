@@ -4,7 +4,7 @@ import * as Location from 'expo-location';
 import { calculateSecurityScore } from '../utils/scoreCalculator'; // Importação do util
 import crimeData from '../data/crimes_mock.json';
 
-export const useRiskDetection = () => {
+export const useRiskDetection = ({ insideSafeZone = false, activityMode = false } = {}) => {
   const [data, setData] = useState({ x: 0, y: 0, z: 0 });
   const [stepCount, setStepCount] = useState(0);
   const [location, setLocation] = useState(null);
@@ -56,7 +56,9 @@ export const useRiskDetection = () => {
         magnitudeG: mag,
         isNearCrimeZone: nearbyCrimes > 0,
         currentHour: new Date().getHours(),
-        bpmPanico: false
+        bpmPanico: false,
+        isInSafeZone: insideSafeZone,
+        isActivityModeOn: activityMode
       });
 
       setCurrentScore(result.score);
@@ -72,7 +74,7 @@ export const useRiskDetection = () => {
       if (subscription) subscription.remove();
       if (stepSub) stepSub.remove();
     };
-  }, [stepCount, nearbyCrimes]); // Adicionado nearbyCrimes aqui para atualizar o score se os crimes mudarem
+  }, [stepCount, nearbyCrimes, insideSafeZone, activityMode]); // zona segura/atividade recalculam o score salvo no histórico
 
   // Efeito separado: rastreamento de localização com throttle (50m OU 5min).
   // Fica fora do efeito acima porque aquele reinicia a cada passo do pedômetro —
