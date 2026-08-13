@@ -14,7 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { LineChart } from 'react-native-chart-kit'
 import { Svg, Path } from 'react-native-svg'
-import MapView, { Circle } from 'react-native-maps'
+import MapView, { Circle, Marker } from 'react-native-maps'
 import {
   calculateWeeklyMetrics,
   aggregateDailyScores,
@@ -71,6 +71,31 @@ function computeMapRegion(points) {
     latitudeDelta: Math.max(maxLat - minLat, 0.01) * 1.4,
     longitudeDelta: Math.max(maxLon - minLon, 0.01) * 1.4,
   }
+}
+
+// Agrupa pontos próximos em blobs (grade geográfica derivada da extensão dos dados) pra
+// simular um heatmap com Circle — o Heatmap nativo do react-native-maps exige PROVIDER_GOOGLE
+// com chave de API, que o app não tem configurada.
+function clusterLocationPoints(points, region) {
+  if (!points.length || !region) return []
+
+  const cellSize = Math.max(region.latitudeDelta, region.longitudeDelta, 0.002) / 14
+  const buckets = {}
+
+  points.forEach((p) => {
+    const key = `${Math.floor(p.latitude / cellSize)}:${Math.floor(p.longitude / cellSize)}`
+    if (!buckets[key]) buckets[key] = []
+    buckets[key].push(p)
+  })
+
+  return Object.values(buckets).map((group) => {
+    const latitude = group.reduce((acc, p) => acc + p.latitude, 0) / group.length
+    const longitude = group.reduce((acc, p) => acc + p.longitude, 0) / group.length
+    const avgRisk = Math.round(group.reduce((acc, p) => acc + p.risk_score, 0) / group.length)
+    // metros por grau de latitude ~111km — serve de aproximação também pra longitude aqui
+    const haloRadius = Math.min(400, Math.max(70, cellSize * 111000 * 0.6))
+    return { key: `${latitude}:${longitude}`, latitude, longitude, count: group.length, avgRisk, haloRadius }
+  })
 }
 
 function GaugeChart({ score, rgbColor }) {
@@ -219,6 +244,7 @@ export default function Dashboard() {
     [locationHistory]
   )
   const mapRegion = useMemo(() => computeMapRegion(mapPoints), [mapPoints])
+  const mapClusters = useMemo(() => clusterLocationPoints(mapPoints, mapRegion), [mapPoints, mapRegion])
 
   const contactNameByPhone = useMemo(() => {
     const map = {}
@@ -368,7 +394,7 @@ export default function Dashboard() {
         {/* Mapa de risco */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Mapa de Risco por Localização</Text>
-          <Text style={styles.cardSubtitle}>Pontos monitorados coloridos pelo índice de segurança</Text>
+          <Text style={styles.cardSubtitle}>Toque e arraste pra explorar · áreas coloridas pelo índice de segurança médio</Text>
           {!mapRegion ? (
             <EmptyState text="Sem pontos de localização registrados ainda." />
           ) : (
@@ -377,20 +403,35 @@ export default function Dashboard() {
                 <MapView
                   style={styles.riskMap}
                   region={mapRegion}
-                  scrollEnabled={false}
-                  zoomEnabled={false}
-                  rotateEnabled={false}
                   pitchEnabled={false}
                 >
-                  {mapPoints.map((p, idx) => (
-                    <Circle
-                      key={idx}
-                      center={{ latitude: p.latitude, longitude: p.longitude }}
-                      radius={40}
-                      fillColor={`rgba(${getScoreRGB(p.risk_score)}, 0.35)`}
-                      strokeColor="transparent"
-                    />
-                  ))}
+                  {mapClusters.map((cluster) => {
+                    const rgb = getScoreRGB(cluster.avgRisk)
+                    const coordinate = { latitude: cluster.latitude, longitude: cluster.longitude }
+                    return (
+                      <React.Fragment key={cluster.key}>
+                        <Circle
+                          center={coordinate}
+                          radius={cluster.haloRadius}
+                          fillColor={`rgba(${rgb}, 0.12)`}
+                          strokeColor="transparent"
+                        />
+                        <Circle
+                          center={coordinate}
+                          radius={cluster.haloRadius * 0.5}
+                          fillColor={`rgba(${rgb}, 0.32)`}
+                          strokeColor="transparent"
+                        />
+                        <Marker
+                          coordinate={coordinate}
+                          opacity={0.01}
+                          tracksViewChanges={false}
+                          title={`${cluster.count} ponto${cluster.count > 1 ? 's' : ''} monitorado${cluster.count > 1 ? 's' : ''}`}
+                          description={`Score médio de segurança: ${cluster.avgRisk}`}
+                        />
+                      </React.Fragment>
+                    )
+                  })}
                 </MapView>
               </View>
               <View style={styles.mapLegendRow}>
@@ -574,7 +615,7 @@ const styles = StyleSheet.create({
   chartLabelsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginTop: -6 },
   chartLabelText: { fontSize: 11, color: '#5A8FAF', fontWeight: '600' },
 
-  riskMapContainer: { height: 180, borderRadius: 16, overflow: 'hidden' },
+  riskMapContainer: { height: 260, borderRadius: 16, overflow: 'hidden' },
   riskMap: { flex: 1 },
   mapLegendRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 12 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
