@@ -23,10 +23,10 @@ jobs:
 
       - name: Importar meses novos da SSP-SP
         env:
-          SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
-          SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
-          SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
-          SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+          SUPABASE_DB_HOST: aws-1-us-east-2.pooler.supabase.com
+          SUPABASE_DB_PORT: "5432"
+          SUPABASE_DB_NAME: postgres
+          SUPABASE_DB_USER: postgres.hhlxgtwvoxpvyvejvxwt
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_DB_SSLMODE: require
         run: python data-processing/importar_ssp_supabase.py --anos "$(date +%Y)"
