@@ -19,6 +19,7 @@ import {
 
 import MapView, { Marker, Circle } from 'react-native-maps'
 import { useFocusEffect } from '@react-navigation/native'
+import Constants from 'expo-constants'
 import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'react-native'
@@ -28,11 +29,14 @@ import { buscarCrimes, buscarOcorrencias } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
 import { saveLocationPoint } from "../services/locationService"
+import { useSmartwatch } from '../hooks/useSmartwatch'
 
 // 🛑 URL DO API ENDPOINT NO API GATEWAY DA AWS
 const URL_AWS_GATEWAY = "https://2egghrwmeg.execute-api.us-east-1.amazonaws.com/default/ampara-alert-trigger";
 
 const screenWidth = Dimensions.get('window').width
+const hasMapsConfiguration = Platform.OS !== 'android'
+  || Boolean(Constants.expoConfig?.android?.config?.googleMaps?.apiKey)
 
 const getRiskRGB = (level) => {
   if (level === 'Crítico') return '211, 47, 47'
@@ -52,6 +56,30 @@ const getTimeLabel = () => {
   if (h >= 22) return 'noite avançada (+2 risco)'
   if (h >= 18) return 'noite (+1 risco)'
   return 'período diurno'
+}
+
+const formatReadingAge = (time) => {
+  if (!time) return null
+  const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(time)) / 1000))
+  if (seconds < 5) return 'agora'
+  if (seconds < 60) return `há ${seconds} s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes === 1) return 'há 1 min'
+  if (minutes < 60) return `há ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  return hours === 1 ? 'há 1 h' : `há ${hours} h`
+}
+
+const getSmartwatchConnectionText = (status, measurement) => {
+  if (status === 'checking') return 'Verificando conexão'
+  if (status === 'permission_required') return 'Toque para conectar pelo Health Connect'
+  if (status === 'update_required') return 'Atualize o Health Connect'
+  if (status === 'development_build_required') return 'Requer a versão Android do Ampara'
+  if (status === 'unavailable') return 'Health Connect indisponível'
+  if (status === 'unsupported') return 'Smartwatch indisponível neste aparelho'
+  if (status === 'error') return 'Falha na conexão · toque para tentar novamente'
+  if (measurement?.source) return measurement.source
+  return 'Conectado · aguardando batimentos'
 }
 
 function HomeGaugeChart({ score, rgbColor }) {
@@ -100,6 +128,16 @@ export default function Home({ navigation }) {
   const [activityMode, setActivityMode] = useState(false)
 
   const { data, location, riskStatus, errorMsg, currentScore } = useRiskDetection({ insideSafeZone, activityMode })
+  const smartwatch = useSmartwatch()
+  const smartwatchConnected = smartwatch.status === 'connected'
+  const heartRateIsCurrent = smartwatchConnected && smartwatch.measurement?.isRecent
+  const heartRateValue = heartRateIsCurrent ? Math.round(smartwatch.measurement.bpm) : '--'
+  const heartRateDetail = heartRateIsCurrent
+    ? `${smartwatch.measurement.source} · ${formatReadingAge(smartwatch.measurement.time)}`
+    : smartwatch.measurement
+      ? `Última leitura: ${Math.round(smartwatch.measurement.bpm)} bpm · ${formatReadingAge(smartwatch.measurement.time)}`
+      : 'Aguardando leitura automática'
+  const smartwatchConnectionText = getSmartwatchConnectionText(smartwatch.status, smartwatch.measurement)
 
   // --- Estados de Interface e Mapa ---
   const [modalVisible, setModalVisible] = useState(false)
@@ -347,6 +385,11 @@ export default function Home({ navigation }) {
       setDemoEnvLabel(null)
       cancelCooldownRef.current = Date.now() + 30 * 1000
     }
+  }
+
+  function handleSmartwatchPress() {
+    if (smartwatch.status === 'connected') smartwatch.refresh()
+    else if (smartwatch.status === 'permission_required' || smartwatch.status === 'error') smartwatch.connect()
   }
 
   // --- Lógica de Cálculo de Risco Ambiental ---
@@ -770,48 +813,126 @@ export default function Home({ navigation }) {
           </View>
         )}
 
-        {/* ── MODO ATIVIDADE ── */}
-        <View style={[styles.activityRow, activityMode && styles.activityRowActive]}>
-          <View style={[styles.activityIconWrap, activityMode && styles.activityIconWrapActive]}>
-            <Ionicons name="fitness-outline" size={20} color={activityMode ? '#FFF' : '#5A8FAF'} />
+        {/* ── MODOS ── */}
+        <View style={styles.modeGroup}>
+          <View style={[styles.activityRow, activityMode && styles.activityRowActive]}>
+            <View style={[styles.activityIconWrap, activityMode && styles.activityIconWrapActive]}>
+              <Ionicons name="fitness-outline" size={18} color={activityMode ? '#FFF' : '#5A8FAF'} />
+            </View>
+            <View style={styles.activityTexts}>
+              <Text style={[styles.activityTitle, activityMode && { color: '#C4687A' }]}>Modo atividade</Text>
+              <Text style={styles.activitySubtitle} numberOfLines={1}>
+                {activityMode ? 'Ajuste para exercícios ativo' : 'Reduz alertas durante exercícios'}
+              </Text>
+            </View>
+            <Switch
+              value={activityMode}
+              onValueChange={toggleActivity}
+              trackColor={{ false: '#D0C8C0', true: '#C4687A' }}
+              thumbColor="#FFF"
+            />
           </View>
-          <View style={styles.activityTexts}>
-            <Text style={[styles.activityTitle, activityMode && { color: '#C4687A' }]}>Modo atividade</Text>
-            <Text style={styles.activitySubtitle}>
-              {activityMode ? 'Adaptado para exercícios' : 'Evita falsos alertas durante treinos'}
-            </Text>
+
+          <View style={styles.modeDivider} />
+
+          <View style={[styles.activityRow, !monitoramentoAtivo && styles.monitoringRowOff]}>
+            <View style={[styles.activityIconWrap, !monitoramentoAtivo && styles.monitoringIconWrapOff]}>
+              <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={18} color={monitoramentoAtivo ? '#5A8FAF' : '#9AA0A6'} />
+            </View>
+            <View style={styles.activityTexts}>
+              <Text style={[styles.activityTitle, !monitoramentoAtivo && { color: '#9AA0A6' }]}>Modo monitoramento</Text>
+              <Text style={styles.activitySubtitle} numberOfLines={1}>
+                {monitoramentoAtivo ? 'Sensores e riscos ativos' : 'Alertas automáticos pausados'}
+              </Text>
+            </View>
+            <Switch
+              value={monitoramentoAtivo}
+              onValueChange={toggleMonitoramento}
+              trackColor={{ false: '#D0C8C0', true: '#5A8FAF' }}
+              thumbColor="#FFF"
+            />
           </View>
-          <Switch
-            value={activityMode}
-            onValueChange={toggleActivity}
-            trackColor={{ false: '#D0C8C0', true: '#C4687A' }}
-            thumbColor="#FFF"
-          />
         </View>
 
-        {/* ── MODO MONITORAMENTO ── */}
-        <View style={[styles.activityRow, !monitoramentoAtivo && styles.monitoringRowOff]}>
-          <View style={[styles.activityIconWrap, !monitoramentoAtivo && styles.monitoringIconWrapOff]}>
-            <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={20} color={monitoramentoAtivo ? '#5A8FAF' : '#9AA0A6'} />
-          </View>
-          <View style={styles.activityTexts}>
-            <Text style={[styles.activityTitle, !monitoramentoAtivo && { color: '#9AA0A6' }]}>Modo monitoramento</Text>
-            <Text style={styles.activitySubtitle}>
-              {monitoramentoAtivo ? 'Detectando riscos e sensores automaticamente' : 'Alertas automáticos pausados'}
-            </Text>
-          </View>
-          <Switch
-            value={monitoramentoAtivo}
-            onValueChange={toggleMonitoramento}
-            trackColor={{ false: '#D0C8C0', true: '#5A8FAF' }}
-            thumbColor="#FFF"
+        {/* ── BATIMENTOS E SMARTWATCH ── */}
+        <View style={styles.heartRatePanel}>
+          <Ionicons
+            name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
+            size={42}
+            color={heartRateIsCurrent ? '#C4475D' : '#8C949C'}
           />
+          <Text style={styles.heartRateLabel}>FREQUÊNCIA CARDÍACA</Text>
+          <View style={styles.heartRateValueRow}>
+            <Text style={[styles.heartRateValue, !heartRateIsCurrent && styles.heartRateValueUnavailable]}>
+              {heartRateValue}
+            </Text>
+            <Text style={styles.heartRateUnit}>bpm</Text>
+          </View>
+          <Text style={[styles.heartRateDetail, !heartRateIsCurrent && styles.heartRateDetailStale]}>
+            {heartRateDetail}
+          </Text>
         </View>
+
+        <TouchableOpacity
+          style={[
+            styles.smartwatchConnectionButton,
+            { backgroundColor: smartwatchConnected ? '#218739' : '#C73E4D' },
+          ]}
+          onPress={handleSmartwatchPress}
+          disabled={smartwatch.isBusy || !['connected', 'permission_required', 'error'].includes(smartwatch.status)}
+          accessibilityRole="button"
+          accessibilityLabel="Conexão com smartwatch"
+        >
+          <Ionicons name="watch-outline" size={24} color="#FFF" />
+          <View style={styles.smartwatchConnectionTexts}>
+            <Text style={styles.smartwatchConnectionTitle}>
+              {smartwatchConnected ? 'Smartwatch conectado' : 'Smartwatch desconectado'}
+            </Text>
+            <Text style={styles.smartwatchConnectionSubtitle}>{smartwatchConnectionText}</Text>
+          </View>
+          {smartwatch.isBusy ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <Ionicons
+              name={smartwatchConnected ? 'checkmark-circle' : 'link-outline'}
+              size={23}
+              color="#FFF"
+            />
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.quickActions}>
+          <Pressable
+            style={[styles.fabHelp, sosHolding && styles.fabHelpHolding]}
+            onLongPress={executarEnvioDeSocorro}
+            onPressIn={() => setSosHolding(true)}
+            onPressOut={() => setSosHolding(false)}
+            delayLongPress={3000}
+          >
+            <View style={styles.quickActionContent}>
+              <Ionicons name="alert-circle" size={18} color="#FFF" />
+              <Text style={styles.fabText}>SOS</Text>
+            </View>
+            {sosHolding && <Text style={styles.fabHoldHint}>segure...</Text>}
+          </Pressable>
+          <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
+            <View style={styles.quickActionContent}>
+              <Ionicons name="clipboard-outline" size={18} color="#FFF" />
+              <Text style={styles.fabText}>REGISTRAR</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.separator} />
 
         {/* ── MAPA ── */}
         <View style={styles.mapContainer}>
-          {location && region ? (
+          {!hasMapsConfiguration ? (
+            <View style={styles.mapUnavailable}>
+              <Ionicons name="map-outline" size={26} color="#5A8FAF" />
+              <Text style={styles.mapUnavailableText}>Mapa temporariamente indisponível</Text>
+            </View>
+          ) : location && region ? (
             <>
               <MapView
                 ref={mapRef}
@@ -960,29 +1081,6 @@ export default function Home({ navigation }) {
         </View>
 
       </ScrollView>
-
-      {/* BOTÕES FLUTUANTES */}
-      <View style={styles.floatingContainer}>
-        <Pressable
-          style={[styles.fabHelp, sosHolding && styles.fabHelpHolding]}
-          onLongPress={executarEnvioDeSocorro}
-          onPressIn={() => setSosHolding(true)}
-          onPressOut={() => setSosHolding(false)}
-          delayLongPress={3000}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="alert-circle" size={18} color="#FFF" />
-            <Text style={styles.fabText}>SOS</Text>
-          </View>
-          {sosHolding && <Text style={styles.fabHoldHint}>segure...</Text>}
-        </Pressable>
-        <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="clipboard-outline" size={18} color="#FFF" />
-            <Text style={styles.fabText}>REGISTRAR</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
 
       {/* MODAL FEEDBACK SOS */}
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
@@ -1189,20 +1287,37 @@ const styles = StyleSheet.create({
   safeStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 10, backgroundColor: '#EAF5EC' },
   safeStripText: { fontSize: 13, color: '#2E8B57', fontWeight: '500' },
 
-  activityRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginHorizontal: 20, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF', borderRadius: 18, elevation: 2, shadowColor: '#1B3A6B', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6 },
-  activityRowActive: { backgroundColor: '#FDEAEC' },
-  activityIconWrap: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#EEF6FC', alignItems: 'center', justifyContent: 'center' },
+  modeGroup: { marginHorizontal: 20, marginBottom: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8E0D8', borderRadius: 8, overflow: 'hidden' },
+  modeDivider: { height: 1, marginLeft: 54, backgroundColor: '#EEE8E2' },
+  activityRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#FFF' },
+  activityRowActive: { backgroundColor: '#FFF7F8' },
+  activityIconWrap: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEF6FC', alignItems: 'center', justifyContent: 'center' },
   activityIconWrapActive: { backgroundColor: '#C4687A' },
   monitoringRowOff: { backgroundColor: '#F2F2F2' },
   monitoringIconWrapOff: { backgroundColor: '#E5E5E5' },
   activityTexts: { flex: 1 },
-  activityTitle: { fontSize: 15, fontWeight: '700', color: '#1B3A6B' },
-  activitySubtitle: { fontSize: 12, color: '#5A8FAF', marginTop: 2 },
+  activityTitle: { fontSize: 14, fontWeight: '700', color: '#1B3A6B' },
+  activitySubtitle: { fontSize: 11, color: '#5A8FAF', marginTop: 1 },
+
+  heartRatePanel: { minHeight: 190, marginHorizontal: 20, marginTop: 8, paddingVertical: 20, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FBECEF', borderRadius: 8 },
+  heartRateLabel: { marginTop: 7, color: '#6D4650', fontSize: 11, fontWeight: '700' },
+  heartRateValueRow: { minHeight: 58, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
+  heartRateValue: { color: '#C4475D', fontSize: 46, lineHeight: 56, fontWeight: '800' },
+  heartRateValueUnavailable: { color: '#737B83' },
+  heartRateUnit: { marginLeft: 6, color: '#526170', fontSize: 18, fontWeight: '600' },
+  heartRateDetail: { minHeight: 18, color: '#218739', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  heartRateDetailStale: { color: '#9A6710' },
+  smartwatchConnectionButton: { minHeight: 66, marginHorizontal: 20, marginTop: 10, marginBottom: 18, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 12, elevation: 2, shadowColor: '#1B3A6B', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 2 }, shadowRadius: 5 },
+  smartwatchConnectionTexts: { flex: 1 },
+  smartwatchConnectionTitle: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  smartwatchConnectionSubtitle: { color: 'rgba(255,255,255,0.88)', fontSize: 11, marginTop: 2 },
 
   separator: { height: 1, backgroundColor: '#E8E0D8', marginHorizontal: 22 },
 
   mapContainer: { height: 300, borderRadius: 20, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
   map: { flex: 1 },
+  mapUnavailable: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#EEF3F7' },
+  mapUnavailableText: { color: '#526170', fontSize: 14, fontWeight: '600' },
   recenterButton: { position: 'absolute', bottom: 14, alignSelf: 'center', backgroundColor: '#1B3A6B', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 20 },
   mapLegend: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -1219,12 +1334,13 @@ const styles = StyleSheet.create({
   forcePill: { backgroundColor: '#FDEAEC', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
   forcePillText: { color: '#C4687A', fontSize: 11, fontWeight: '700' },
 
-  floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end' },
-  fabHelp: { backgroundColor: '#E8622A', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8, alignItems: 'center' },
+  quickActions: { flexDirection: 'row', gap: 8, marginHorizontal: 20, marginBottom: 18 },
+  quickActionContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  fabHelp: { minHeight: 48, flex: 1, backgroundColor: '#E8622A', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, elevation: 2, alignItems: 'center', justifyContent: 'center' },
   fabHelpHolding: { backgroundColor: '#B84C14', transform: [{ scale: 1.08 }] },
   fabHoldHint: { color: '#FFD8B0', fontSize: 10, fontWeight: '600', marginTop: 2 },
-  fabRegister: { backgroundColor: '#C4687A', marginTop: 10, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
-  fabText: { color: '#FFF', fontWeight: '600', fontSize: 14, letterSpacing: 0.5 },
+  fabRegister: { minHeight: 48, flex: 1, backgroundColor: '#C4687A', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, elevation: 2, alignItems: 'center', justifyContent: 'center' },
+  fabText: { color: '#FFF', fontWeight: '600', fontSize: 13 },
 
   overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   cardModal: { backgroundColor: '#FFF', borderRadius: 28, overflow: 'hidden', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12 },
