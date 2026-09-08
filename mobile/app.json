@@ -18,13 +18,27 @@
         "foregroundImage": "./assets/images/maos-ampara-rosa.png"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.amparaapp"
+      "package": "com.anonymous.amparaapp",
+      "permissions": [
+        "android.permission.health.READ_HEART_RATE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/maos-ampara-rosa.png"
     },
     "plugins": [
       "expo-router",
+      "react-native-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "minSdkVersion": 26
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {
