@@ -7,7 +7,6 @@
     "icon": "./assets/images/maos-ampara-rosa.png",
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.amparaapp"
@@ -17,7 +16,6 @@
         "backgroundColor": "#F5EFE6",
         "foregroundImage": "./assets/images/maos-ampara-rosa.png"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.anonymous.amparaapp",
       "permissions": [
         "android.permission.health.READ_HEART_RATE"
@@ -27,7 +25,6 @@
       "favicon": "./assets/images/maos-ampara-rosa.png"
     },
     "plugins": [
-      "expo-router",
       "react-native-health-connect",
       [
         "expo-build-properties",
@@ -48,7 +45,10 @@
           "backgroundColor": "#F5EFE6"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-image",
+      "expo-web-browser",
+      "expo-status-bar"
     ]
   }
 }
