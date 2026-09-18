@@ -25,3 +25,6 @@ data/ssp_downloads.csv
 # Android/iOS build (caso use)
 android/build/
 ios/build/
+
+# Python
+__pycache__/
