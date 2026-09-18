@@ -14,7 +14,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
-  Switch
+  Switch,
+  Linking
 } from 'react-native'
 
 import MapView, { Marker, Circle } from 'react-native-maps'
@@ -31,12 +32,28 @@ import { getActivityStatus, updateActivityStatus } from "../services/activitySer
 import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
 
-// 🛑 URL DO API ENDPOINT NO API GATEWAY DA AWS
-const URL_AWS_GATEWAY = "https://2egghrwmeg.execute-api.us-east-1.amazonaws.com/default/ampara-alert-trigger";
+import { dispararAlerta } from '../services/alertService'
 
 const screenWidth = Dimensions.get('window').width
 const hasMapsConfiguration = Platform.OS !== 'android'
   || Boolean(Constants.expoConfig?.android?.config?.googleMaps?.apiKey)
+
+// A SSP usa dezenas de descrições ("FURTO - OUTROS", "LESÃO CORPORAL CULPOSA POR
+// ACIDENTE DE TRÂNSITO"...). Agrupar em poucas famílias deixa o filtro utilizável.
+const FILTROS_CRIME = [
+  { id: 'roubo', rotulo: 'Roubo', combina: (t) => t.includes('ROUBO') || t.includes('LATROC') },
+  { id: 'furto', rotulo: 'Furto', combina: (t) => t.includes('FURTO') },
+  // "culposo" é acidente, não agressão: homicídio culposo por acidente de trânsito
+  // pertence ao grupo Trânsito, senão apareceria nos dois.
+  { id: 'violencia', rotulo: 'Violência', combina: (t) => !t.includes('CULPOS') && (t.includes('HOMIC') || t.includes('ESTUPRO') || t.includes('LESAO')) },
+  { id: 'transito', rotulo: 'Trânsito', combina: (t) => t.includes('TRANSITO') || t.includes('CULPOSA') },
+]
+
+// null = todos os anos. A base da SSP cobre 2022 em diante.
+const ANOS_DISPONIVEIS = [null, 2026, 2025, 2024, 2023, 2022]
+
+
+const semAcento = (texto) => String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
 
 const getRiskRGB = (level) => {
   if (level === 'Crítico') return '211, 47, 47'
@@ -146,6 +163,10 @@ export default function Home({ navigation }) {
   const [region, setRegion] = useState(null)
   const [userRegion, setUserRegion] = useState(null)
   const [mapMoved, setMapMoved] = useState(false)
+  // Abre já filtrado no que é mais relevante para segurança pessoal e no ano corrente.
+  // Lista vazia = sem filtro de tipo (mostra tudo).
+  const [tiposSelecionados, setTiposSelecionados] = useState(['roubo'])
+  const [anoFiltro, setAnoFiltro] = useState(2026)
   const mapRef = useRef(null)
 
   // --- Estados do Registro de Ocorrência ---
@@ -185,7 +206,6 @@ export default function Home({ navigation }) {
 
   // --- Controle do Cronômetro de Alerta e Feedback SOS ---
   const [countdown, setCountdown] = useState(30)
-  const [listaContatos, setListaContatos] = useState([])
   const [alertaDisparado, setAlertaDisparado] = useState(false);
   const timerRef = useRef(null);
   const lastAlertSentRef = useRef(null);
@@ -193,7 +213,7 @@ export default function Home({ navigation }) {
   const [sustainedHighRisk, setSustainedHighRisk] = useState(false);
   const [sosHolding, setSosHolding] = useState(false);
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
-  const [sosFeedbackData, setSosFeedbackData] = useState({ mensagem: '', contatos: [], endereco: '' });
+  const [sosFeedbackData, setSosFeedbackData] = useState({ status: 'enviando', mensagem: '', enviados: [], falhas: [], endereco: '', detalhe: '' });
   const [simpleCheckVisible, setSimpleCheckVisible] = useState(false);
   const [alertType, setAlertType] = useState('moderado');
   const [demoScore, setDemoScore] = useState(null);
@@ -207,7 +227,6 @@ export default function Home({ navigation }) {
   useEffect(() => {
     loadActivity();
     loadSafeLocations();
-    loadEmergencyContacts();
     loadUserData();
 
     const safeLocationsChannel = supabase
@@ -352,18 +371,6 @@ export default function Home({ navigation }) {
     }
   }
 
-  async function loadEmergencyContacts() {
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-      const { data, error } = await supabase.from('emergency_contacts').select('telefone').eq('user_id', user.id);
-      if (error) throw error;
-      const telefones = data ? data.map(c => c.telefone) : [];
-      setListaContatos(telefones);
-    } catch (error) {
-      console.error('❌ ERRO AO CARREGAR CONTATOS DE EMERGÊNCIA:', error);
-    }
-  }
 
   async function toggleActivity(value) {
     setActivityMode(value)
@@ -457,58 +464,30 @@ export default function Home({ navigation }) {
     }
 
     const textoMensagem = `🚨 ALERTA AMPARA: ${userName} pode estar em perigo! Risco: ${riskLevel}. Local: ${enderecoFormatado}. Mapa: ${linkMapa}`;
-    const contatosAEnviar = listaContatos.length > 0 ? listaContatos : ["Nenhum contato cadastrado"];
 
-    console.log("🚀 [Ampara] Disparando protocolo de socorro automático...");
+    setSosFeedbackData({ status: 'enviando', mensagem: textoMensagem, enviados: [], falhas: [], endereco: enderecoFormatado, detalhe: '' });
+    setSosFeedbackVisible(true);
 
-    try {
-      await fetch(URL_AWS_GATEWAY, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nomeUsuario: userName,
-          endereco: enderecoFormatado,
-          latitude: userLat,
-          longitude: userLon,
-          nivelRisco: riskLevel,
-          contatos: listaContatos.length > 0
-            ? listaContatos.map(t => {
-                const cleaned = t.trim()
-                if (cleaned.startsWith('+')) return cleaned
-                const digits = cleaned.replace(/\D/g, '')
-                return digits.startsWith('55') ? `+${digits}` : `+55${digits}`
-              })
-            : []
-        })
-      });
-    } catch (error) {
-      console.error("❌ [AWS Nuvem] Falha de rede ao conectar com o API Gateway:", error);
-    }
+    const resultado = await dispararAlerta({
+      userId,
+      nomeUsuario: userName,
+      endereco: enderecoFormatado,
+      latitude: userLat,
+      longitude: userLon,
+      nivelRisco: riskLevel,
+      mensagem: textoMensagem,
+    });
 
-    try {
-      const { data: userData, error: authError } = await supabase.auth.getUser();
-      if (!authError && userData?.user) {
-        const { error: insertError } = await supabase.from('alert_logs').insert([{
-            user_id: userData.user.id,
-            message: textoMensagem,
-            recipient_names: contatosAEnviar.join(', ')
-        }]);
-        if (insertError) {
-          console.error("❌ [Alerta] Falha ao gravar log:", insertError.message);
-        } else {
-          console.log("✅ [Alerta] Notificação enviada e gravada com sucesso.");
-        }
-      }
-    } catch (supabaseError) {
-      console.error("❌ [Alerta] Erro inesperado ao gravar log:", supabaseError);
-    }
+    if (!resultado.enviado) console.error("❌ [Alerta] Envio não confirmado:", resultado.detalhe);
 
     setSosFeedbackData({
+      status: resultado.enviado ? 'enviado' : 'falhou',
       mensagem: textoMensagem,
-      contatos: contatosAEnviar,
-      endereco: enderecoFormatado
+      enviados: resultado.enviados,
+      falhas: resultado.falhas,
+      endereco: enderecoFormatado,
+      detalhe: resultado.enviado ? '' : resultado.detalhe,
     });
-    setSosFeedbackVisible(true);
   }
 
   const handleUserIsSafe = () => {
@@ -526,79 +505,53 @@ export default function Home({ navigation }) {
       const initialRegion = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.015,
+        // ~440 m de ponta a ponta: o quarteirão da usuária e os vizinhos imediatos.
+        latitudeDelta: 0.004,
+        longitudeDelta: 0.004,
       }
       setRegion(initialRegion)
       setUserRegion(initialRegion)
     }
   }, [location])
 
-  // ✅ CORRIGIDO: busca crimes filtrando por localização do usuário
+  // Crimes oficiais (SSP) já chegam do serviço ordenados do mais próximo ao mais distante.
   useEffect(() => {
     async function carregarCrimes() {
       if (!location) return
       try {
-        const userLat = location.coords.latitude
-        const userLon = location.coords.longitude
+        const crimes = await buscarCrimes(location.coords.latitude, location.coords.longitude, 3, anoFiltro)
 
-        const crimes = await buscarCrimes(userLat, userLon, 3)
-
-        const crimesFormatados = crimes.map((crime) => {
-          const lat = Number(String(crime.latitude).replace(',', '.'))
-          const lon = Number(String(crime.longitude).replace(',', '.'))
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
-          return {
-            id: crime.id || Math.random().toString(),
-            lat, lon,
-            tipo: crime.natureza_apurada || crime.conduta || 'Ocorrência',
-            distancia: Math.sqrt(
-              Math.pow((lat - userLat) * 111, 2) +
-              Math.pow((lon - userLon) * 111, 2)
-            )
-          }
-        }).filter(Boolean).sort((a, b) => a.distancia - b.distancia)
-
-        console.log(`[Home] ${crimes.length} crimes do banco → ${crimesFormatados.length} com coords válidas`)
-
-        setCrimeData(crimesFormatados)
+        setCrimeData(crimes.map((crime) => ({
+          id: crime.id || Math.random().toString(),
+          lat: crime.latitude,
+          lon: crime.longitude,
+          tipo: crime.natureza_apurada || crime.conduta || 'Ocorrência',
+          distancia: crime.distancia_km
+        })))
       } catch (error) {
         console.error('❌ ERRO AO FILTRAR CRIMES:', error)
       }
     }
     carregarCrimes()
-  }, [location])
+  }, [location, anoFiltro])
 
-  // ✅ CORRIGIDO: busca ocorrências filtrando por localização do usuário
+  // Relatos da comunidade — mesma ordenação por proximidade vinda do serviço.
   useEffect(() => {
     async function carregarOcorrencias() {
       if (!location) return
       try {
-        const userLat = location.coords.latitude
-        const userLon = location.coords.longitude
+        const dados = await buscarOcorrencias(location.coords.latitude, location.coords.longitude, 3)
 
-        const dados = await buscarOcorrencias(userLat, userLon, 3)
-
-        const formatadas = dados.map((occ) => {
-          const lat = Number(occ.latitude)
-          const lon = Number(occ.longitude)
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
-          return {
-            id: 'occ_' + occ.id,
-            lat,
-            lon,
-            tipo: occ.tipo_crime || 'Ocorrência relatada',
-            descricao: occ.descricao || '',
-            horario: occ.horario || '',
-            address: occ.address || '',
-            distancia: Math.sqrt(
-              Math.pow((lat - userLat) * 111, 2) +
-              Math.pow((lon - userLon) * 111, 2)
-            )
-          }
-        }).filter(Boolean).sort((a, b) => a.distancia - b.distancia)
-
-        setOccurrenceData(formatadas)
+        setOccurrenceData(dados.map((occ) => ({
+          id: 'occ_' + occ.id,
+          lat: occ.latitude,
+          lon: occ.longitude,
+          tipo: occ.tipo_crime || 'Ocorrência relatada',
+          descricao: occ.descricao || '',
+          horario: occ.horario || '',
+          address: occ.address || '',
+          distancia: occ.distancia_km
+        })))
       } catch (error) {
         console.error('❌ ERRO AO CARREGAR OCORRÊNCIAS:', error)
       }
@@ -717,6 +670,25 @@ export default function Home({ navigation }) {
         ? Math.min(10, riskScore + demoBonus)
         : riskScore
   const displayLevel = displayScore > 8 ? 'Crítico' : displayScore >= 5 ? 'Moderado' : 'Baixo'
+  // O filtro vale só para o mapa e para a faixa de status. O score continua olhando a
+  // vizinhança inteira (crimeData): esconder um tipo de crime não torna a região segura.
+  const contagemPorTipo = FILTROS_CRIME.reduce((acc, filtro) => {
+    acc[filtro.id] = crimeData.filter((crime) => filtro.combina(semAcento(crime.tipo))).length
+    return acc
+  }, {})
+  const crimesVisiveis = tiposSelecionados.length === 0
+    ? crimeData
+    : crimeData.filter((crime) =>
+        tiposSelecionados.some((id) => FILTROS_CRIME.find((f) => f.id === id).combina(semAcento(crime.tipo)))
+      )
+  const rotuloFiltro = tiposSelecionados.length === 0
+    ? 'registros'
+    : tiposSelecionados.map((id) => FILTROS_CRIME.find((f) => f.id === id).rotulo.toLowerCase()).join(' + ')
+  const alternarTipo = (id) =>
+    setTiposSelecionados((atual) => atual.includes(id) ? atual.filter((t) => t !== id) : [...atual, id])
+  // A lista vem ordenada por distância e cortada nos mais próximos, então o último item
+  // marca o raio realmente coberto — anunciar "3 km" fixo mentiria em área densa.
+  const raioCoberto = crimesVisiveis.length > 0 ? crimesVisiveis[crimesVisiveis.length - 1].distancia : null
   const riskBg = !monitoramentoAtivo ? '#EDEDED' : displayLevel === 'Crítico' ? '#FDEAEA' : displayLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
   const riskAccent = !monitoramentoAtivo ? '#9AA0A6' : displayLevel === 'Crítico' ? '#D32F2F' : displayLevel === 'Moderado' ? '#E6A200' : '#27AE60'
   const riskRgb = !monitoramentoAtivo ? '154, 160, 166' : getRiskRGB(displayLevel)
@@ -835,12 +807,12 @@ export default function Home({ navigation }) {
 
           <View style={styles.modeDivider} />
 
-          <View style={[styles.activityRow, !monitoramentoAtivo && styles.monitoringRowOff]}>
-            <View style={[styles.activityIconWrap, !monitoramentoAtivo && styles.monitoringIconWrapOff]}>
-              <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={18} color={monitoramentoAtivo ? '#5A8FAF' : '#9AA0A6'} />
+          <View style={[styles.activityRow, monitoramentoAtivo ? styles.monitoringRowActive : styles.monitoringRowOff]}>
+            <View style={[styles.activityIconWrap, monitoramentoAtivo ? styles.monitoringIconWrapActive : styles.monitoringIconWrapOff]}>
+              <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={18} color={monitoramentoAtivo ? '#FFF' : '#9AA0A6'} />
             </View>
             <View style={styles.activityTexts}>
-              <Text style={[styles.activityTitle, !monitoramentoAtivo && { color: '#9AA0A6' }]}>Modo monitoramento</Text>
+              <Text style={[styles.activityTitle, { color: monitoramentoAtivo ? '#5A8FAF' : '#9AA0A6' }]}>Modo monitoramento</Text>
               <Text style={styles.activitySubtitle} numberOfLines={1}>
                 {monitoramentoAtivo ? 'Sensores e riscos ativos' : 'Alertas automáticos pausados'}
               </Text>
@@ -925,6 +897,54 @@ export default function Home({ navigation }) {
 
         <View style={styles.separator} />
 
+        {/* ── FILTROS DO MAPA ── */}
+        <View style={styles.filtroBloco}>
+          <View style={styles.filtroCabecalho}>
+            <Text style={styles.filtroTitulo}>Tipo de ocorrência</Text>
+            {tiposSelecionados.length > 0 && (
+              <TouchableOpacity onPress={() => setTiposSelecionados([])}>
+                <Text style={styles.filtroLimpar}>Limpar</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtroRow}>
+            {FILTROS_CRIME.map((filtro) => {
+              const ativo = tiposSelecionados.includes(filtro.id)
+              const total = contagemPorTipo[filtro.id] ?? 0
+              return (
+                <TouchableOpacity
+                  key={filtro.id}
+                  style={[styles.filtroChip, ativo && styles.filtroChipAtivo, total === 0 && styles.filtroChipVazio]}
+                  onPress={() => alternarTipo(filtro.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: ativo }}
+                >
+                  <Text style={[styles.filtroTexto, ativo && styles.filtroTextoAtivo]}>{filtro.rotulo}</Text>
+                  <Text style={[styles.filtroContagem, ativo && styles.filtroTextoAtivo]}>{total}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+
+          <Text style={[styles.filtroTitulo, { marginTop: 14 }]}>Ano</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtroRow}>
+            {ANOS_DISPONIVEIS.map((ano) => {
+              const ativo = anoFiltro === ano
+              return (
+                <TouchableOpacity
+                  key={ano ?? 'todos'}
+                  style={[styles.filtroChip, ativo && styles.filtroChipAtivo]}
+                  onPress={() => setAnoFiltro(ano)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: ativo }}
+                >
+                  <Text style={[styles.filtroTexto, ativo && styles.filtroTextoAtivo]}>{ano ?? 'Todos'}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        </View>
+
         {/* ── MAPA ── */}
         <View style={styles.mapContainer}>
           {!hasMapsConfiguration ? (
@@ -947,7 +967,7 @@ export default function Home({ navigation }) {
                   fillColor="rgba(196,104,122,0.10)"
                   strokeColor="#C4687A"
                 />
-                {crimeData.map(crime => (
+                {crimesVisiveis.map(crime => (
                   <Marker key={crime.id}
                     coordinate={{ latitude: crime.lat, longitude: crime.lon }}
                     title={crime.tipo}
@@ -984,14 +1004,16 @@ export default function Home({ navigation }) {
         </View>
 
         {/* ── CRIME STRIP ── */}
-        <View style={[styles.crimeStrip, { borderLeftColor: crimeData.length > 0 ? '#C4687A' : '#2E8B57' }]}>
+        <View style={[styles.crimeStrip, { borderLeftColor: crimesVisiveis.length > 0 ? '#C4687A' : '#2E8B57' }]}>
           <Ionicons
-            name={crimeData.length > 0 ? 'warning-outline' : 'checkmark-circle-outline'}
+            name={crimesVisiveis.length > 0 ? 'warning-outline' : 'checkmark-circle-outline'}
             size={16}
             color={crimeData.length > 0 ? '#C4687A' : '#2E8B57'}
           />
-          <Text style={[styles.crimeStripText, { color: crimeData.length > 0 ? '#C4687A' : '#2E8B57' }]}>
-            {crimeData.length > 0 ? `${crimeData.length} registros em 3 km ao redor` : 'Nenhum registro nos 3 km ao redor'}
+          <Text style={[styles.crimeStripText, { color: crimesVisiveis.length > 0 ? '#C4687A' : '#2E8B57' }]}>
+            {crimesVisiveis.length > 0
+              ? `${crimesVisiveis.length} ${rotuloFiltro} num raio de ${raioCoberto.toFixed(1)} km${anoFiltro ? ` em ${anoFiltro}` : ''}`
+              : `Nenhum registro${tiposSelecionados.length > 0 ? ` de ${rotuloFiltro}` : ''} por perto${anoFiltro ? ` em ${anoFiltro}` : ''}`}
           </Text>
         </View>
 
@@ -1086,28 +1108,78 @@ export default function Home({ navigation }) {
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: '#4CAF50' }]} />
+            <View style={[styles.modalStrip, { backgroundColor: sosFeedbackData.status === 'enviado' ? '#4CAF50' : sosFeedbackData.status === 'falhou' ? '#D32F2F' : '#5A8FAF' }]} />
             <View style={styles.modalInner}>
-              <Text style={styles.cardTitleCritical}>Alerta Enviado</Text>
-              <Text style={styles.cardSubtitle}>Sua rede de apoio recebeu um SMS com sua localização.</Text>
+              {sosFeedbackData.status === 'enviando' && (
+                <>
+                  <ActivityIndicator size="large" color="#5A8FAF" style={{ marginBottom: 12 }} />
+                  <Text style={styles.cardTitle}>Enviando alerta...</Text>
+                  <Text style={styles.cardSubtitle}>Avisando sua rede de apoio com sua localização.</Text>
+                </>
+              )}
+              {sosFeedbackData.status === 'enviado' && (
+                <>
+                  <Text style={[styles.cardTitleCritical, { color: '#2E8B57' }]}>Alerta Enviado</Text>
+                  <Text style={styles.cardSubtitle}>
+                    SMS com sua localização enviado para {sosFeedbackData.enviados.length} {sosFeedbackData.enviados.length === 1 ? 'contato' : 'contatos'}.
+                  </Text>
+                </>
+              )}
+              {sosFeedbackData.status === 'falhou' && (
+                <>
+                  <Text style={[styles.cardTitleCritical, { color: '#D32F2F' }]}>Alerta NÃO confirmado</Text>
+                  <Text style={styles.cardSubtitle}>
+                    Não conseguimos confirmar o envio aos seus contatos. Se estiver em perigo, ligue para a polícia agora.
+                  </Text>
+                  <Text style={styles.sosFailDetail}>Motivo: {sosFeedbackData.detalhe}</Text>
+                  <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: '#D32F2F', marginBottom: 12 }]} onPress={() => Linking.openURL('tel:190')}>
+                    <Text style={styles.btnPrimaryText}>Ligar 190</Text>
+                  </TouchableOpacity>
+                </>
+              )}
 
-              <View style={styles.feedbackBox}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Ionicons name="location" size={14} color="#5A8FAF" />
-                  <Text style={styles.feedbackLabel}>Localização enviada</Text>
+              {sosFeedbackData.status !== 'enviando' && (
+                <View style={styles.feedbackBox}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Ionicons name="location" size={14} color="#5A8FAF" />
+                    <Text style={styles.feedbackLabel}>Sua localização</Text>
+                  </View>
+                  <Text style={styles.feedbackAddressText}>{sosFeedbackData.endereco}</Text>
+
+                  {sosFeedbackData.enviados.length > 0 && (
+                    <>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 4 }}>
+                        <Ionicons name="checkmark-circle" size={14} color="#2E8B57" />
+                        <Text style={styles.feedbackLabel}>SMS enviado para</Text>
+                      </View>
+                      {sosFeedbackData.enviados.map((c) => (
+                        <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)}>
+                          <Text style={styles.feedbackContact}>{c}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )}
+                  {sosFeedbackData.falhas.length > 0 && (
+                    <>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 4 }}>
+                        <Ionicons name="close-circle" size={14} color="#D32F2F" />
+                        <Text style={styles.feedbackLabel}>Não foi possível enviar para · toque para ligar</Text>
+                      </View>
+                      {sosFeedbackData.falhas.map((c) => (
+                        <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)}>
+                          <Text style={[styles.feedbackContact, { color: '#D32F2F' }]}>{c}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )}
                 </View>
-                <Text style={styles.feedbackAddressText}>{sosFeedbackData.endereco}</Text>
+              )}
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 4 }}>
-                  <Ionicons name="call" size={14} color="#5A8FAF" />
-                  <Text style={styles.feedbackLabel}>Contatos acionados</Text>
-                </View>
-                {sosFeedbackData.contatos.map((c, i) => (
-                  <Text key={i} style={styles.feedbackContact}>{c}</Text>
-                ))}
-              </View>
-
-              <TouchableOpacity style={styles.btnPrimary} onPress={() => { setSosFeedbackVisible(false); setAlertaDisparado(false); setSustainedHighRisk(false); }}>
+              <TouchableOpacity
+                style={[styles.btnPrimary, sosFeedbackData.status === 'enviando' && { opacity: 0.5 }]}
+                disabled={sosFeedbackData.status === 'enviando'}
+                onPress={() => { setSosFeedbackVisible(false); setAlertaDisparado(false); setSustainedHighRisk(false); }}
+              >
                 <Text style={styles.btnPrimaryText}>Entendido</Text>
               </TouchableOpacity>
 
@@ -1293,6 +1365,8 @@ const styles = StyleSheet.create({
   activityRowActive: { backgroundColor: '#FFF7F8' },
   activityIconWrap: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEF6FC', alignItems: 'center', justifyContent: 'center' },
   activityIconWrapActive: { backgroundColor: '#C4687A' },
+  monitoringRowActive: { backgroundColor: '#F2F8FC' },
+  monitoringIconWrapActive: { backgroundColor: '#5A8FAF' },
   monitoringRowOff: { backgroundColor: '#F2F2F2' },
   monitoringIconWrapOff: { backgroundColor: '#E5E5E5' },
   activityTexts: { flex: 1 },
@@ -1313,6 +1387,18 @@ const styles = StyleSheet.create({
   smartwatchConnectionSubtitle: { color: 'rgba(255,255,255,0.88)', fontSize: 11, marginTop: 2 },
 
   separator: { height: 1, backgroundColor: '#E8E0D8', marginHorizontal: 22 },
+
+  filtroBloco: { marginHorizontal: 20, marginBottom: 14 },
+  filtroCabecalho: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  filtroTitulo: { fontSize: 11, color: '#5A8FAF', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 },
+  filtroLimpar: { fontSize: 12, color: '#C4687A', fontWeight: '700', marginBottom: 8 },
+  filtroRow: { gap: 8, paddingRight: 20 },
+  filtroChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: '#E8E0D8', backgroundColor: '#FFF' },
+  filtroChipAtivo: { backgroundColor: '#1B3A6B', borderColor: '#1B3A6B' },
+  filtroChipVazio: { opacity: 0.45 },
+  filtroTexto: { fontSize: 13, color: '#5A8FAF', fontWeight: '600' },
+  filtroContagem: { fontSize: 11, color: '#9AA0A6', fontWeight: '700' },
+  filtroTextoAtivo: { color: '#FFF' },
 
   mapContainer: { height: 300, borderRadius: 20, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
   map: { flex: 1 },
@@ -1362,6 +1448,7 @@ const styles = StyleSheet.create({
   feedbackLabel: { fontSize: 12, fontWeight: 'bold', color: '#5A8FAF', marginBottom: 5 },
   feedbackAddressText: { fontSize: 16, color: '#C4687A', fontWeight: 'bold', marginBottom: 5 },
   feedbackText: { fontSize: 14, color: '#333', fontStyle: 'italic' },
+  sosFailDetail: { fontSize: 11, color: '#999', textAlign: 'center', marginTop: -12, marginBottom: 16 },
   feedbackContact: { fontSize: 15, color: '#1B3A6B', fontWeight: '600', marginTop: 3 },
 
   overlayBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },

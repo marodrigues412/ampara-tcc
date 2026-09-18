@@ -39,11 +39,14 @@ IMPORT_SQL_PATH = PROJECT_ROOT / "data" / "ssp_importacao.sql"
 TARGET_TABLE = "public.crime_occurrences"
 IMPORT_TABLE = "public.ssp_imported_months"
 
+# A SSP abrevia todo "Santo"/"Santa"/"Sao" como "S." em NOME_MUNICIPIO — Santo Andre
+# aparece como "S.ANDRE", nunca por extenso. Escrever o nome completo aqui faz o filtro
+# descartar a cidade inteira em silencio, sem erro nenhum.
 CIDADES_RMSP = [
     "S.PAULO",
     "S.CAETANO DO SUL",
     "S.BERNARDO DO CAMPO",
-    "SANTO ANDRE",
+    "S.ANDRE",
     "DIADEMA",
     "MAUA",
     "OSASCO",
