@@ -19,7 +19,6 @@ import {
   Image
 } from 'react-native'
 
-import { Map as MapLibreMap, Camera, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
@@ -33,6 +32,15 @@ import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 
 import { dispararAlerta } from '../services/alertService'
+
+const mapLibre = Platform.OS === 'ios' ? null : require('@maplibre/maplibre-react-native')
+const nativeMaps = Platform.OS === 'ios' ? require('react-native-maps') : null
+const MapLibreMap = mapLibre?.Map
+const MapLibreCamera = mapLibre?.Camera
+const MapLibreGeoJSONSource = mapLibre?.GeoJSONSource
+const MapLibreLayer = mapLibre?.Layer
+const MapView = nativeMaps?.default
+const { Circle, Marker } = nativeMaps || {}
 
 const screenWidth = Dimensions.get('window').width
 const SHOW_PRESENTATION_MODE = false
@@ -767,7 +775,11 @@ export default function Home({ navigation }) {
 
   const recenterMap = () => {
     if (cameraRef.current && userRegion) {
-      cameraRef.current.easeTo({ center: [userRegion.longitude, userRegion.latitude], duration: 500 })
+      if (Platform.OS !== 'ios') {
+        cameraRef.current.easeTo({ center: [userRegion.longitude, userRegion.latitude], duration: 500 })
+      } else {
+        cameraRef.current.animateToRegion(userRegion, 500)
+      }
       setMapMoved(false)
     }
   }
@@ -929,16 +941,7 @@ export default function Home({ navigation }) {
         </View>
 
         {/* ── BATIMENTOS E SMARTWATCH ── */}
-        {Platform.OS === 'ios' ? (
-          <View style={[styles.heartRatePanel, styles.iosHeartRatePanel]}>
-            <Ionicons name="phone-portrait-outline" size={30} color="#1B3A6B" />
-            <Text style={styles.heartRateLabel}>USO SEM SMARTWATCH</Text>
-            <Text style={styles.iosHeartRateTitle}>Ampara ativo no iPhone</Text>
-            <Text style={styles.iosHeartRateBody}>
-              Localização, movimento e alertas do celular continuam disponíveis. Batimentos pelo relógio não estão disponíveis no iPhone.
-            </Text>
-          </View>
-        ) : (
+        {Platform.OS !== 'ios' && (
           <>
             <View style={styles.heartRatePanel}>
               <Ionicons
@@ -1056,6 +1059,7 @@ export default function Home({ navigation }) {
         <View style={styles.mapContainer}>
           {location && region ? (
             <>
+              {Platform.OS !== 'ios' ? (
               <MapLibreMap
                 style={styles.map}
                 mapStyle="https://tiles.openfreemap.org/styles/liberty"
@@ -1066,7 +1070,7 @@ export default function Home({ navigation }) {
                 onRegionWillChange={handleMapLibreRegionWillChange}
                 onRegionDidChange={handleMapLibreRegionChange}
               >
-                <Camera
+                <MapLibreCamera
                   ref={cameraRef}
                   initialViewState={{
                     center: [region.longitude, region.latitude],
@@ -1075,20 +1079,20 @@ export default function Home({ navigation }) {
                   minZoom={3}
                   maxZoom={20}
                 />
-                <GeoJSONSource id="ampara-safety-radius" data={safetyRadius}>
-                  <Layer
+                <MapLibreGeoJSONSource id="ampara-safety-radius" data={safetyRadius}>
+                  <MapLibreLayer
                     id="ampara-safety-radius-fill"
                     type="fill"
                     paint={{ 'fill-color': '#C4687A', 'fill-opacity': 0.10 }}
                   />
-                  <Layer
+                  <MapLibreLayer
                     id="ampara-safety-radius-outline"
                     type="line"
                     paint={{ 'line-color': '#C4687A', 'line-width': 1.5 }}
                   />
-                </GeoJSONSource>
-                <GeoJSONSource id="ampara-map-points" data={mapFeatures}>
-                  <Layer
+                </MapLibreGeoJSONSource>
+                <MapLibreGeoJSONSource id="ampara-map-points" data={mapFeatures}>
+                  <MapLibreLayer
                     id="ampara-map-points-layer"
                     type="circle"
                     paint={{
@@ -1098,9 +1102,9 @@ export default function Home({ navigation }) {
                       'circle-stroke-width': 2,
                     }}
                   />
-                </GeoJSONSource>
-                <GeoJSONSource id="ampara-user-location" data={userLocationFeature}>
-                  <Layer
+                </MapLibreGeoJSONSource>
+                <MapLibreGeoJSONSource id="ampara-user-location" data={userLocationFeature}>
+                  <MapLibreLayer
                     id="ampara-user-location-layer"
                     type="circle"
                     paint={{
@@ -1110,8 +1114,51 @@ export default function Home({ navigation }) {
                       'circle-stroke-width': 3,
                     }}
                   />
-                </GeoJSONSource>
+                </MapLibreGeoJSONSource>
               </MapLibreMap>
+              ) : (
+                <MapView
+                  ref={cameraRef}
+                  style={styles.map}
+                  initialRegion={region}
+                  showsUserLocation
+                  showsMyLocationButton={false}
+                  onPanDrag={() => setMapMoved(true)}
+                  onRegionChangeComplete={(nextRegion) => {
+                    if (!userRegion) return
+                    const distance = Math.abs(nextRegion.latitude - userRegion.latitude)
+                      + Math.abs(nextRegion.longitude - userRegion.longitude)
+                    setMapMoved(distance > 0.0007)
+                  }}
+                >
+                  {location && (
+                    <Circle
+                      center={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
+                      radius={3000}
+                      fillColor="rgba(196, 104, 122, 0.10)"
+                      strokeColor="#C4687A"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  {crimesVisiveis.map((crime) => (
+                    <Marker
+                      key={`crime-${crime.id}`}
+                      coordinate={{ latitude: Number(crime.lat), longitude: Number(crime.lon) }}
+                      pinColor="#6B1A2E"
+                      title={crime.tipo}
+                    />
+                  ))}
+                  {occurrenceData.map((occurrence) => (
+                    <Marker
+                      key={`occurrence-${occurrence.id}`}
+                      coordinate={{ latitude: Number(occurrence.lat), longitude: Number(occurrence.lon) }}
+                      pinColor="#C4687A"
+                      title={occurrence.tipo}
+                      description={occurrence.descricao}
+                    />
+                  ))}
+                </MapView>
+              )}
 
               <View style={styles.mapLegend}>
                 <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#5A8FAF' }]} /><Text style={styles.legendText}>Você</Text></View>
@@ -1600,9 +1647,6 @@ const styles = StyleSheet.create({
   heartRateUnit: { marginLeft: 6, color: '#526170', fontSize: 18, fontWeight: '600' },
   heartRateDetail: { minHeight: 18, color: '#218739', fontSize: 12, fontWeight: '600', textAlign: 'center' },
   heartRateDetailStale: { color: '#9A6710' },
-  iosHeartRatePanel: { minHeight: 176, gap: 8, paddingHorizontal: 24, backgroundColor: '#EEF6FC' },
-  iosHeartRateTitle: { color: '#1B3A6B', fontSize: 17, fontWeight: '700', textAlign: 'center' },
-  iosHeartRateBody: { maxWidth: 320, color: '#526170', fontSize: 12, lineHeight: 18, textAlign: 'center' },
   smartwatchConnectionButton: { minHeight: 66, marginHorizontal: 20, marginTop: 10, marginBottom: 18, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 12, elevation: 2, shadowColor: '#1B3A6B', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 2 }, shadowRadius: 5 },
   smartwatchConnectionTexts: { flex: 1 },
   smartwatchConnectionTitle: { color: '#FFF', fontSize: 15, fontWeight: '800' },
