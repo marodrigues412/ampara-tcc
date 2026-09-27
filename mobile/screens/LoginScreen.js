@@ -4,18 +4,34 @@ import {
   StyleSheet, Alert, KeyboardAvoidingView,
   Platform, ScrollView, Image
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { ActivityIndicator } from 'react-native'
 import { supabase } from '../services/supabase'
+import { entrarComProvedor } from '../services/authService'
 import RegisterScreen from './RegisterScreen'
 
 export default function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isRegistering, setIsRegistering] = useState(false)
+  const [provedorCarregando, setProvedorCarregando] = useState(null)
 
   const handleLogin = async () => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) Alert.alert('Erro', error.message)
     else onLogin(data.session)
+  }
+
+  const handleProvedor = async (provider) => {
+    setProvedorCarregando(provider)
+    try {
+      const sessao = await entrarComProvedor(provider)
+      if (sessao) onLogin(sessao)
+    } catch (error) {
+      Alert.alert('Não foi possível entrar', error.message)
+    } finally {
+      setProvedorCarregando(null)
+    }
   }
 
   if (isRegistering) {
@@ -70,6 +86,29 @@ export default function LoginScreen({ onLogin }) {
 
             <TouchableOpacity style={styles.button} onPress={handleLogin}>
               <Text style={styles.buttonText}>Entrar</Text>
+            </TouchableOpacity>
+
+            {/* O botão da Apple foi removido: o provedor exige o Apple Developer Program
+                (US$ 99/ano), e um botão que só devolve erro é pior do que não existir. Para
+                voltar, é só reativar o provedor no Supabase e chamar handleProvedor('apple') —
+                o authService já é genérico. */}
+            <View style={styles.divisorRow}>
+              <View style={styles.divisorLinha} />
+              <Text style={styles.divisorTexto}>ou entre com</Text>
+              <View style={styles.divisorLinha} />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.provedorBtn, styles.provedorGoogle]}
+              onPress={() => handleProvedor('google')}
+              disabled={provedorCarregando !== null}
+            >
+              {provedorCarregando === 'google'
+                ? <ActivityIndicator size="small" color="#1B3A6B" />
+                : <>
+                    <Ionicons name="logo-google" size={18} color="#1B3A6B" />
+                    <Text style={styles.provedorTextoGoogle}>Google</Text>
+                  </>}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setIsRegistering(true)} style={styles.registerRow}>
@@ -167,7 +206,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 0.8,
   },
-  registerRow: { alignItems: 'center' },
+  divisorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  divisorLinha: { flex: 1, height: 1, backgroundColor: '#E8E0D8' },
+  divisorTexto: { color: '#999', fontSize: 12 },
+  provedorBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 48, borderRadius: 30, marginBottom: 10 },
+  provedorGoogle: { backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#DDE8F0' },
+  provedorTextoGoogle: { color: '#1B3A6B', fontWeight: '600', fontSize: 15 },
+
+  registerRow: { alignItems: 'center', marginTop: 10 },
   registerText: { color: '#999', fontSize: 13, textAlign: 'center' },
   registerLink: { color: '#C4687A', fontWeight: '600' },
 
