@@ -17,6 +17,11 @@
         "foregroundImage": "./assets/images/maos-ampara-rosa.png"
       },
       "package": "com.anonymous.amparaapp",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBB9hq4T-GW5y-IiokUva0afwWXtYDWrlI"
+        }
+      },
       "permissions": [
         "android.permission.health.READ_HEART_RATE"
       ]
@@ -51,6 +56,12 @@
       "expo-web-browser",
       "expo-status-bar",
       "@maplibre/maplibre-react-native"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ac3e0f36-a2a6-45b7-8afa-1636f4c08d83"
+      }
+    },
+    "owner": "amanda.herculano"
   }
 }

@@ -34,3 +34,7 @@ watch/app/build/
 
 # Python
 __pycache__/
+
+# Credenciais e anotacoes locais
+mobile/data/ids.txt
+*.secret.txt
