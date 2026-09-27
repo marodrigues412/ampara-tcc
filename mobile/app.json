@@ -25,6 +25,7 @@
       "favicon": "./assets/images/maos-ampara-rosa.png"
     },
     "plugins": [
+      "./modules/ampara-watch/plugin",
       "react-native-health-connect",
       [
         "expo-build-properties",
@@ -48,7 +49,8 @@
       "expo-font",
       "expo-image",
       "expo-web-browser",
-      "expo-status-bar"
+      "expo-status-bar",
+      "@maplibre/maplibre-react-native"
     ]
   }
 }

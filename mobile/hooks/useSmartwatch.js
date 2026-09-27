@@ -2,18 +2,44 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import {
   connectHealthConnect,
-  getHealthConnectStatus,
   readLatestHeartRate,
 } from '../services/healthConnectService'
+import {
+  getDirectWatchStatus,
+  getDirectWatchMonitoringStatus,
+  readDirectWatchHeartRate,
+  readDirectWatchMotion,
+  subscribeToDirectWatchHeartRate,
+  subscribeToDirectWatchMotion,
+  subscribeToDirectWatchMonitoringStatus,
+} from '../services/watchHeartRateService'
 
-const REFRESH_INTERVAL_MS = 5 * 1000
+const REFRESH_INTERVAL_MS = 15 * 1000
+const LIVE_READING_MS = 10 * 1000
+
+function isLive(measurement) {
+  return !!measurement && Date.now() - Date.parse(measurement.time) <= LIVE_READING_MS
+}
+
+function getNewestMeasurement(...measurements) {
+  return measurements.reduce((newest, candidate) => {
+    const candidateTime = Date.parse(candidate?.time)
+    if (!Number.isFinite(candidateTime)) return newest
+    if (!newest || candidateTime > Date.parse(newest.time)) return candidate
+    return newest
+  }, null)
+}
 
 export function useSmartwatch() {
   const [status, setStatus] = useState('checking')
+  const [directWatchStatus, setDirectWatchStatus] = useState('checking')
+  const [monitoringStatus, setMonitoringStatus] = useState('checking')
   const [measurement, setMeasurement] = useState(null)
+  const [watchMotion, setWatchMotion] = useState(null)
   const [isBusy, setIsBusy] = useState(false)
   const mountedRef = useRef(true)
   const refreshInFlightRef = useRef(false)
+  const lastDirectReadingRef = useRef(null)
 
   const applyResult = useCallback((result) => {
     if (!mountedRef.current) return
@@ -27,7 +53,43 @@ export function useSmartwatch() {
     refreshInFlightRef.current = true
     setIsBusy(true)
     try {
-      const result = await readLatestHeartRate()
+      const [directReading, directMotion, directStatus, watchMonitoringStatus] = await Promise.all([
+        readDirectWatchHeartRate(),
+        readDirectWatchMotion(),
+        getDirectWatchStatus(),
+        getDirectWatchMonitoringStatus(),
+      ])
+      if (mountedRef.current) {
+        setDirectWatchStatus(directStatus.status)
+        setMonitoringStatus(watchMonitoringStatus)
+        setWatchMotion(directMotion)
+      }
+      if (directStatus.status === 'connected' && directReading && isLive(directReading)) {
+        lastDirectReadingRef.current = directReading
+        if (mountedRef.current) setMonitoringStatus('active')
+        const result = {
+          status: 'connected',
+          measurement: { ...directReading, isDirect: true, isRecent: true },
+        }
+        applyResult(result)
+        return result
+      }
+
+      const fallback = await readLatestHeartRate()
+      const currentDirectReading = lastDirectReadingRef.current
+      const preferred = getNewestMeasurement(currentDirectReading, fallback.measurement)
+      const status = directStatus.status === 'connected' || fallback.status === 'connected'
+        ? 'connected'
+        : directStatus.status === 'development_build_required'
+          ? 'development_build_required'
+          : fallback.status
+      const result = {
+        ...fallback,
+        status,
+        measurement: preferred
+          ? { ...preferred, isRecent: isLive(preferred) }
+          : null,
+      }
       applyResult(result)
       return result
     } finally {
@@ -37,13 +99,8 @@ export function useSmartwatch() {
   }, [applyResult])
 
   const checkConnection = useCallback(async () => {
-    const result = await getHealthConnectStatus()
-    applyResult(result)
-    if (result.status === 'connected') {
-      return refresh()
-    }
-    return result
-  }, [applyResult, refresh])
+    return refresh()
+  }, [refresh])
 
   const connect = useCallback(async () => {
     setIsBusy(true)
@@ -51,17 +108,27 @@ export function useSmartwatch() {
     applyResult(result)
 
     if (result.status === 'connected') {
-      const reading = await readLatestHeartRate()
-      applyResult(reading)
+      await refresh()
     }
 
     if (mountedRef.current) setIsBusy(false)
     return result
-  }, [applyResult])
+  }, [applyResult, refresh])
 
   useEffect(() => {
     mountedRef.current = true
     checkConnection()
+    const unsubscribe = subscribeToDirectWatchHeartRate((reading) => {
+      lastDirectReadingRef.current = reading
+      setDirectWatchStatus('connected')
+      setMonitoringStatus('active')
+      applyResult({
+        status: 'connected',
+        measurement: { ...reading, isDirect: true, isRecent: true },
+      })
+    })
+    const unsubscribeMotion = subscribeToDirectWatchMotion(setWatchMotion)
+    const unsubscribeMonitorStatus = subscribeToDirectWatchMonitoringStatus(setMonitoringStatus)
 
     const appStateSubscription = AppState.addEventListener('change', nextState => {
       if (nextState === 'active') checkConnection()
@@ -69,15 +136,28 @@ export function useSmartwatch() {
 
     return () => {
       mountedRef.current = false
+      unsubscribe()
+      unsubscribeMotion()
+      unsubscribeMonitorStatus()
       appStateSubscription.remove()
     }
-  }, [checkConnection])
+  }, [applyResult, checkConnection])
 
   useEffect(() => {
-    if (status !== 'connected') return undefined
+    const freshnessTimer = setInterval(() => {
+      setWatchMotion(current => {
+        if (!current?.isRecent || Date.now() - Date.parse(current.time) <= 5_000) return current
+        return { ...current, isRecent: false }
+      })
+    }, 1_000)
+    return () => clearInterval(freshnessTimer)
+  }, [])
+
+  useEffect(() => {
+    if (['unsupported', 'development_build_required'].includes(directWatchStatus)) return undefined
     const interval = setInterval(refresh, REFRESH_INTERVAL_MS)
     return () => clearInterval(interval)
-  }, [refresh, status])
+  }, [directWatchStatus, refresh])
 
-  return { status, measurement, isBusy, connect, refresh }
+  return { status, directWatchStatus, monitoringStatus, measurement, watchMotion, isBusy, connect, refresh }
 }

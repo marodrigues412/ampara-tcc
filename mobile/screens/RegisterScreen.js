@@ -10,22 +10,65 @@ export default function RegisterScreen({ onBack }) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleRegister = async () => {
+  const createAccount = async (wantsSmartwatch) => {
     if (!nome || !email || !password) {
       Alert.alert('Erro', 'Preencha todos os campos')
       return
     }
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    if (error) { Alert.alert('Erro', error.message); return }
-    const userId = data.user?.id
-    if (userId) {
-      const { error: insertError } = await supabase.from('user_profiles').insert([{ id: userId, nome }])
-      console.log('INSERT ERROR:', insertError)
+    setIsSubmitting(true)
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { nome: nome.trim(), smartwatch_monitoring_opt_in: wantsSmartwatch },
+        },
+      })
+      if (error) { Alert.alert('Erro', error.message); return }
+      const userId = data.user?.id
+      if (userId) {
+        const { error: insertError } = await supabase.from('user_profiles').insert([{ id: userId, nome: nome.trim() }])
+        console.log('INSERT ERROR:', insertError)
+      }
+      await supabase.auth.signOut()
+      const message = Platform.OS === 'ios' && wantsSmartwatch
+        ? 'Sua conta foi criada. A conexão direta com o Galaxy Watch está disponível no Android; no iPhone, você pode continuar usando o Ampara sem essa leitura.'
+        : 'Agora faça login'
+      Alert.alert('Conta criada!', message)
+      onBack()
+    } finally {
+      setIsSubmitting(false)
     }
-    await supabase.auth.signOut()
-    Alert.alert('Conta criada!', 'Agora faça login')
-    onBack()
+  }
+
+  const handleRegister = () => {
+    if (!nome || !email || !password) {
+      Alert.alert('Erro', 'Preencha todos os campos')
+      return
+    }
+    if (Platform.OS === 'ios') {
+      Alert.alert(
+        'Ampara no iPhone',
+        'A conexão com smartwatch não está disponível no iPhone. Você ainda pode usar o Ampara normalmente, com localização, movimento e alertas do celular.',
+        [
+          { text: 'Voltar', style: 'cancel' },
+          { text: 'Criar conta', onPress: () => createAccount(false) },
+        ],
+        { cancelable: false },
+      )
+      return
+    }
+    Alert.alert(
+      'Você quer usar um smartwatch?',
+      'No Android, o Ampara pode receber os batimentos do Galaxy Watch. Se escolher sim, avisaremos com destaque quando o app não estiver recebendo batimentos.',
+      [
+        { text: 'Agora não', style: 'cancel', onPress: () => createAccount(false) },
+        { text: 'Sim, quero', onPress: () => createAccount(true) },
+      ],
+      { cancelable: false },
+    )
   }
 
   return (
@@ -80,8 +123,8 @@ export default function RegisterScreen({ onBack }) {
               style={styles.input}
             />
 
-            <TouchableOpacity style={styles.button} onPress={handleRegister}>
-              <Text style={styles.buttonText}>Cadastrar</Text>
+            <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={isSubmitting}>
+              <Text style={styles.buttonText}>{isSubmitting ? 'Criando conta...' : 'Cadastrar'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={onBack} style={styles.backRow}>

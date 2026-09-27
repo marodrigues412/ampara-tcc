@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   StyleSheet,
   Text,
@@ -15,15 +15,14 @@ import {
   Platform,
   Dimensions,
   Switch,
-  Linking
+  Linking,
+  Image
 } from 'react-native'
 
-import MapView, { Marker, Circle } from 'react-native-maps'
+import { Map as MapLibreMap, Camera, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native'
 import { useFocusEffect } from '@react-navigation/native'
-import Constants from 'expo-constants'
 import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
-import { Image } from 'react-native'
 import { Svg, Path } from 'react-native-svg'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import { buscarCrimes, buscarOcorrencias } from '../services/crimesService'
@@ -31,12 +30,56 @@ import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
 import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
+import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 
 import { dispararAlerta } from '../services/alertService'
 
 const screenWidth = Dimensions.get('window').width
-const hasMapsConfiguration = Platform.OS !== 'android'
-  || Boolean(Constants.expoConfig?.android?.config?.googleMaps?.apiKey)
+const SHOW_PRESENTATION_MODE = false
+const LIVE_HEART_RATE_MS = 10_000
+
+const criarGeoJSONMapa = (crimes, ocorrencias) => ({
+  type: 'FeatureCollection',
+  features: [
+    ...crimes.map(crime => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [Number(crime.lon), Number(crime.lat)] },
+      properties: { kind: 'crime' },
+    })).filter(feature => feature.geometry.coordinates.every(Number.isFinite)),
+    ...ocorrencias.map(occ => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [Number(occ.lon), Number(occ.lat)] },
+      properties: { kind: 'occurrence' },
+    })).filter(feature => feature.geometry.coordinates.every(Number.isFinite)),
+  ],
+})
+
+const criarGeoJSONRaio = (latitude, longitude, radiusMeters) => {
+  const latitudeRadians = latitude * Math.PI / 180
+  const angularRadius = radiusMeters / 6371008.8
+  const coordinates = Array.from({ length: 64 }, (_, index) => {
+    const bearing = (index / 64) * 2 * Math.PI
+    const targetLatitude = Math.asin(
+      Math.sin(latitudeRadians) * Math.cos(angularRadius)
+      + Math.cos(latitudeRadians) * Math.sin(angularRadius) * Math.cos(bearing),
+    )
+    const targetLongitude = longitude * Math.PI / 180 + Math.atan2(
+      Math.sin(bearing) * Math.sin(angularRadius) * Math.cos(latitudeRadians),
+      Math.cos(angularRadius) - Math.sin(latitudeRadians) * Math.sin(targetLatitude),
+    )
+    return [targetLongitude * 180 / Math.PI, targetLatitude * 180 / Math.PI]
+  })
+  coordinates.push(coordinates[0])
+
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [coordinates] },
+      properties: {},
+    }],
+  }
+}
 
 // A SSP usa dezenas de descrições ("FURTO - OUTROS", "LESÃO CORPORAL CULPOSA POR
 // ACIDENTE DE TRÂNSITO"...). Agrupar em poucas famílias deixa o filtro utilizável.
@@ -87,12 +130,18 @@ const formatReadingAge = (time) => {
   return hours === 1 ? 'há 1 h' : `há ${hours} h`
 }
 
-const getSmartwatchConnectionText = (status, measurement) => {
-  if (status === 'checking') return 'Verificando conexão'
-  if (status === 'permission_required') return 'Toque para conectar pelo Health Connect'
+const getSmartwatchConnectionText = (status, directWatchStatus, measurement, liveReading) => {
+  if (status === 'checking' || directWatchStatus === 'checking') return 'Verificando conexão'
+  if (directWatchStatus === 'connected') {
+    return liveReading
+      ? `${measurement.source} · ${formatReadingAge(measurement.time)}`
+      : 'Relógio conectado · aguardando batimentos'
+  }
+  if (status === 'connected') return 'Health Connect disponível · Galaxy Watch desconectado'
+  if (status === 'permission_required') return 'Conecte pelo Health Connect ou ative o relógio'
   if (status === 'update_required') return 'Atualize o Health Connect'
   if (status === 'development_build_required') return 'Requer a versão Android do Ampara'
-  if (status === 'unavailable') return 'Health Connect indisponível'
+  if (status === 'unavailable') return 'Ative o monitoramento no Galaxy Watch'
   if (status === 'unsupported') return 'Smartwatch indisponível neste aparelho'
   if (status === 'error') return 'Falha na conexão · toque para tentar novamente'
   if (measurement?.source) return measurement.source
@@ -143,18 +192,79 @@ export default function Home({ navigation }) {
   const [safeLocations, setSafeLocations] = useState([]);
   const [insideSafeZone, setInsideSafeZone] = useState(false);
   const [activityMode, setActivityMode] = useState(false)
+  const [watchMonitoringWanted, setWatchMonitoringWanted] = useState(false)
+  const [watchAlertDismissed, setWatchAlertDismissed] = useState(false)
+  const [heartRateFreshnessExpired, setHeartRateFreshnessExpired] = useState(true)
 
   const { data, location, riskStatus, errorMsg, currentScore } = useRiskDetection({ insideSafeZone, activityMode })
   const smartwatch = useSmartwatch()
-  const smartwatchConnected = smartwatch.status === 'connected'
-  const heartRateIsCurrent = smartwatchConnected && smartwatch.measurement?.isRecent
+  const motionRisk = useMemo(() => calculateMotionRiskScore({
+    phoneMagnitudeG: riskStatus.magnitude,
+    watchMotion: smartwatch.watchMotion,
+    activityMode,
+  }), [riskStatus.magnitude, smartwatch.watchMotion, activityMode])
+  const watchMotionDetail = motionRisk.watchIsRecent
+    ? `RMS ${smartwatch.watchMotion.rms.toFixed(1)} m/s²${motionRisk.watchPoints ? ` · relógio +${motionRisk.watchPoints}` : ' · sem elevação'}${motionRisk.corroborationPoints ? ' · conjunto +1' : ''}`
+    : smartwatchConnected ? 'Sem leitura recente' : 'Desconectado'
+  const smartwatchConnected = smartwatch.directWatchStatus === 'connected'
+  const smartwatchWarning = ['disconnected', 'error', 'development_build_required'].includes(smartwatch.directWatchStatus)
+    ? {
+        title: smartwatch.directWatchStatus === 'development_build_required'
+          ? 'Versão Android necessária'
+          : 'Smartwatch desconectado',
+        message: smartwatch.directWatchStatus === 'development_build_required'
+          ? 'Abra o Ampara instalado no celular para conectar o Galaxy Watch.'
+          : 'Conecte o Galaxy Watch para retomar o envio dos batimentos.',
+      }
+    : smartwatchConnected && smartwatch.monitoringStatus === 'inactive'
+      ? {
+          title: 'Monitoramento cardíaco desligado',
+          message: 'No relógio, toque em “Ativar monitoramento” para voltar a enviar os batimentos.',
+        }
+      : null
+  const heartRateIsCurrent = smartwatchConnected
+    && smartwatch.measurement?.isDirect
+    && smartwatch.measurement?.isRecent
+    && !heartRateFreshnessExpired
+  const isReceivingHeartRate = smartwatch.measurement?.isDirect
+    && smartwatch.measurement?.isRecent
+    && !heartRateFreshnessExpired
+  const showWatchMonitoringAlert = Platform.OS === 'android'
+    && watchMonitoringWanted
+    && !isReceivingHeartRate
+    && !watchAlertDismissed
   const heartRateValue = heartRateIsCurrent ? Math.round(smartwatch.measurement.bpm) : '--'
   const heartRateDetail = heartRateIsCurrent
     ? `${smartwatch.measurement.source} · ${formatReadingAge(smartwatch.measurement.time)}`
     : smartwatch.measurement
       ? `Última leitura: ${Math.round(smartwatch.measurement.bpm)} bpm · ${formatReadingAge(smartwatch.measurement.time)}`
       : 'Aguardando leitura automática'
-  const smartwatchConnectionText = getSmartwatchConnectionText(smartwatch.status, smartwatch.measurement)
+  const smartwatchConnectionText = getSmartwatchConnectionText(
+    smartwatch.status,
+    smartwatch.directWatchStatus,
+    smartwatch.measurement,
+    heartRateIsCurrent,
+  )
+
+  useEffect(() => {
+    if (isReceivingHeartRate) setWatchAlertDismissed(false)
+  }, [isReceivingHeartRate])
+
+  useEffect(() => {
+    const time = Date.parse(smartwatch.measurement?.time)
+    if (!smartwatch.measurement?.isDirect || !Number.isFinite(time)) {
+      setHeartRateFreshnessExpired(true)
+      return undefined
+    }
+    const remaining = LIVE_HEART_RATE_MS - (Date.now() - time)
+    if (remaining <= 0) {
+      setHeartRateFreshnessExpired(true)
+      return undefined
+    }
+    setHeartRateFreshnessExpired(false)
+    const expiryTimer = setTimeout(() => setHeartRateFreshnessExpired(true), remaining + 25)
+    return () => clearTimeout(expiryTimer)
+  }, [smartwatch.measurement?.isDirect, smartwatch.measurement?.time])
 
   // --- Estados de Interface e Mapa ---
   const [modalVisible, setModalVisible] = useState(false)
@@ -167,7 +277,7 @@ export default function Home({ navigation }) {
   // Lista vazia = sem filtro de tipo (mostra tudo).
   const [tiposSelecionados, setTiposSelecionados] = useState(['roubo'])
   const [anoFiltro, setAnoFiltro] = useState(2026)
-  const mapRef = useRef(null)
+  const cameraRef = useRef(null)
 
   // --- Estados do Registro de Ocorrência ---
   const [reportModalVisible, setReportModalVisible] = useState(false)
@@ -298,16 +408,11 @@ export default function Home({ navigation }) {
     const emCooldownCancelamento = cancelCooldownRef.current && agora < cancelCooldownRef.current;
     if (emCooldownEnvio || emCooldownCancelamento) return;
 
-    const scoreAtual = demoScore !== null
-      ? demoScore
-      : demoEnvLabel !== null
-        ? Math.min(10, riskScore + demoBonus)
-        : riskScore
-    if (scoreAtual > 8) {
+    if (riskScore > 8) {
       setAlertType('critico');
       setCountdown(10);
       setModalVisible(true);
-    } else if (scoreAtual >= 5) {
+    } else if (riskScore >= 5) {
       setAlertType('moderado');
       setCountdown(30);
       setModalVisible(true);
@@ -315,7 +420,7 @@ export default function Home({ navigation }) {
       setAlertType('simples');
       setSimpleCheckVisible(true);
     }
-  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, simpleCheckVisible, alertaDisparado, riskScore, demoScore, demoBonus, demoEnvLabel, activityMode, insideSafeZone]);
+  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, simpleCheckVisible, alertaDisparado, riskScore, activityMode, insideSafeZone]);
 
   // 2️⃣ O MOTOR SEGURO
   useEffect(() => {
@@ -348,6 +453,7 @@ export default function Home({ navigation }) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUserId(user.id);
+    setWatchMonitoringWanted(user.user_metadata?.smartwatch_monitoring_opt_in === true)
     const { data } = await supabase.from('user_profiles').select('nome').eq('id', user.id).single();
     if (data?.nome) setUserName(data.nome);
   }
@@ -399,9 +505,7 @@ export default function Home({ navigation }) {
     else if (smartwatch.status === 'permission_required' || smartwatch.status === 'error') smartwatch.connect()
   }
 
-  // --- Lógica de Cálculo de Risco Ambiental ---
-  // Magnitude não entra no score — só dispara o alerta (via isHighRisk)
-  // O score reflete o risco do AMBIENTE: crimes, horário, localização
+  // --- Score ambiental combinado com movimento dos dois dispositivos ---
   useEffect(() => {
     let score = 0
 
@@ -431,13 +535,15 @@ export default function Home({ navigation }) {
     }
 
     setInsideSafeZone(emZonaSegura)
+    score += motionRisk.total
     score = Math.max(score, 0)
+    score = Math.min(score, 10)
     setRiskScore(score)
 
     if (score > 8) { setRiskLevel("Crítico") }
     else if (score >= 5) { setRiskLevel("Moderado") }
     else { setRiskLevel("Baixo") }
-  }, [crimeData, activityMode, location, safeLocations])
+  }, [crimeData, activityMode, location, safeLocations, motionRisk.total])
 
   // --- Função do Disparo de Socorro ---
   const executarEnvioDeSocorro = async () => {
@@ -648,27 +754,25 @@ export default function Home({ navigation }) {
     setOccData(new Date().toLocaleDateString('pt-BR'))
   }
 
-  const handleRegionChange = (newRegion) => {
-    setRegion(newRegion)
+  const handleMapLibreRegionWillChange = (event) => {
+    if (event.nativeEvent.userInteraction) setMapMoved(true)
+  }
+
+  const handleMapLibreRegionChange = (event) => {
     if (!userRegion) return
-    const distance = Math.abs(newRegion.latitude - userRegion.latitude) + Math.abs(newRegion.longitude - userRegion.longitude)
-    setMapMoved(distance > 0.002)
+    const [longitude, latitude] = event.nativeEvent.center
+    const distance = Math.abs(latitude - userRegion.latitude) + Math.abs(longitude - userRegion.longitude)
+    setMapMoved(distance > 0.0007)
   }
 
   const recenterMap = () => {
-    if (mapRef.current && userRegion) {
-      mapRef.current.animateToRegion(userRegion, 500)
+    if (cameraRef.current && userRegion) {
+      cameraRef.current.easeTo({ center: [userRegion.longitude, userRegion.latitude], duration: 500 })
       setMapMoved(false)
     }
   }
 
-  const displayScore = !monitoramentoAtivo
-    ? 0
-    : demoScore !== null
-      ? demoScore
-      : demoEnvLabel !== null
-        ? Math.min(10, riskScore + demoBonus)
-        : riskScore
+  const displayScore = monitoramentoAtivo ? riskScore : 0
   const displayLevel = displayScore > 8 ? 'Crítico' : displayScore >= 5 ? 'Moderado' : 'Baixo'
   // O filtro vale só para o mapa e para a faixa de status. O score continua olhando a
   // vizinhança inteira (crimeData): esconder um tipo de crime não torna a região segura.
@@ -676,11 +780,29 @@ export default function Home({ navigation }) {
     acc[filtro.id] = crimeData.filter((crime) => filtro.combina(semAcento(crime.tipo))).length
     return acc
   }, {})
-  const crimesVisiveis = tiposSelecionados.length === 0
-    ? crimeData
-    : crimeData.filter((crime) =>
-        tiposSelecionados.some((id) => FILTROS_CRIME.find((f) => f.id === id).combina(semAcento(crime.tipo)))
-      )
+  const crimesVisiveis = useMemo(() => (
+    tiposSelecionados.length === 0
+      ? crimeData
+      : crimeData.filter((crime) =>
+          tiposSelecionados.some((id) => FILTROS_CRIME.find((f) => f.id === id).combina(semAcento(crime.tipo)))
+        )
+  ), [crimeData, tiposSelecionados])
+  const mapFeatures = useMemo(
+    () => criarGeoJSONMapa(crimesVisiveis, occurrenceData),
+    [crimesVisiveis, occurrenceData],
+  )
+  const userLocationFeature = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: location ? [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [location.coords.longitude, location.coords.latitude] },
+      properties: {},
+    }] : [],
+  }), [location])
+  const safetyRadius = useMemo(
+    () => location ? criarGeoJSONRaio(location.coords.latitude, location.coords.longitude, 3000) : null,
+    [location],
+  )
   const rotuloFiltro = tiposSelecionados.length === 0
     ? 'registros'
     : tiposSelecionados.map((id) => FILTROS_CRIME.find((f) => f.id === id).rotulo.toLowerCase()).join(' + ')
@@ -693,24 +815,13 @@ export default function Home({ navigation }) {
   const riskAccent = !monitoramentoAtivo ? '#9AA0A6' : displayLevel === 'Crítico' ? '#D32F2F' : displayLevel === 'Moderado' ? '#E6A200' : '#27AE60'
   const riskRgb = !monitoramentoAtivo ? '154, 160, 166' : getRiskRGB(displayLevel)
 
-  const limparEstadoDemo = () => {
-    setModalVisible(false)
-    setSimpleCheckVisible(false)
-    setAlertaDisparado(false)
-    cancelCooldownRef.current = null
-    lastAlertSentRef.current = null
-  }
-
   const simularNivel = (score) => {
-    limparEstadoDemo()
     setDemoEnvLabel(null)
     setDemoBonus(0)
     setDemoScore(score)
-    setSustainedHighRisk(true)
   }
 
   const setDemoEnvironment = (bonus, label) => {
-    limparEstadoDemo()
     setDemoScore(null)
     setDemoBonus(bonus)
     setDemoEnvLabel(label)
@@ -720,10 +831,6 @@ export default function Home({ navigation }) {
     setDemoScore(null)
     setDemoBonus(0)
     setDemoEnvLabel(null)
-    setSustainedHighRisk(false)
-    setModalVisible(false)
-    setSimpleCheckVisible(false)
-    setAlertaDisparado(false)
   }
 
   return (
@@ -732,11 +839,29 @@ export default function Home({ navigation }) {
 
         {/* ── HEADER ── */}
         <View style={styles.headerContainer}>
-          <View>
-            <Text style={styles.header}>Ampara</Text>
-            <Text style={styles.subHeader}>{monitoramentoAtivo ? 'Monitoramento ativo' : 'Monitoramento desativado'}</Text>
-          </View>
+          <Text style={styles.header}>Ampara</Text>
           <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 38, height: 38 }} resizeMode="contain" />
+        </View>
+
+        <View style={styles.monitoringStatusRow}>
+          <Ionicons
+            name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'}
+            size={22}
+            color={monitoramentoAtivo ? '#218739' : '#737B83'}
+          />
+          <View style={styles.monitoringStatusTexts}>
+            <Text style={styles.monitoringStatusTitle}>Modo monitoramento</Text>
+            <Text style={[styles.monitoringStatusSubtitle, !monitoramentoAtivo && styles.monitoringStatusOff]}>
+              {monitoramentoAtivo ? 'Ativo · sensores e alertas ligados' : 'Desativado · alertas pausados'}
+            </Text>
+          </View>
+          <Switch
+            value={monitoramentoAtivo}
+            onValueChange={toggleMonitoramento}
+            trackColor={{ false: '#D0C8C0', true: '#5A8FAF' }}
+            thumbColor="#FFF"
+            accessibilityLabel="Modo monitoramento"
+          />
         </View>
 
         {/* ── RISCO ── */}
@@ -745,7 +870,7 @@ export default function Home({ navigation }) {
             <Text style={styles.riskLabel}>Risco atual</Text>
             <View style={[styles.riskBadge, { backgroundColor: riskAccent }]}>
               <Text style={styles.riskBadgeText}>
-                {!monitoramentoAtivo ? 'Monitoramento desativado' : `${displayLevel}${demoScore !== null ? ' · DEMO' : ''}`}
+                {!monitoramentoAtivo ? 'Monitoramento desativado' : displayLevel}
               </Text>
             </View>
           </View>
@@ -767,11 +892,7 @@ export default function Home({ navigation }) {
               <View style={styles.timeFactorRow}>
                 <Ionicons name="time-outline" size={13} color="#5A8FAF" />
                 <Text style={styles.timeFactorText}>
-                  {demoEnvLabel === 'risco-noite'
-                    ? 'noite avançada (+2 risco) · DEMO'
-                    : demoEnvLabel === 'risco-dia'
-                      ? 'período diurno · DEMO'
-                      : getTimeLabel()}
+                {getTimeLabel()}
                 </Text>
               </View>
             )}
@@ -805,95 +926,81 @@ export default function Home({ navigation }) {
             />
           </View>
 
-          <View style={styles.modeDivider} />
-
-          <View style={[styles.activityRow, monitoramentoAtivo ? styles.monitoringRowActive : styles.monitoringRowOff]}>
-            <View style={[styles.activityIconWrap, monitoramentoAtivo ? styles.monitoringIconWrapActive : styles.monitoringIconWrapOff]}>
-              <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={18} color={monitoramentoAtivo ? '#FFF' : '#9AA0A6'} />
-            </View>
-            <View style={styles.activityTexts}>
-              <Text style={[styles.activityTitle, { color: monitoramentoAtivo ? '#5A8FAF' : '#9AA0A6' }]}>Modo monitoramento</Text>
-              <Text style={styles.activitySubtitle} numberOfLines={1}>
-                {monitoramentoAtivo ? 'Sensores e riscos ativos' : 'Alertas automáticos pausados'}
-              </Text>
-            </View>
-            <Switch
-              value={monitoramentoAtivo}
-              onValueChange={toggleMonitoramento}
-              trackColor={{ false: '#D0C8C0', true: '#5A8FAF' }}
-              thumbColor="#FFF"
-            />
-          </View>
         </View>
 
         {/* ── BATIMENTOS E SMARTWATCH ── */}
-        <View style={styles.heartRatePanel}>
-          <Ionicons
-            name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
-            size={42}
-            color={heartRateIsCurrent ? '#C4475D' : '#8C949C'}
-          />
-          <Text style={styles.heartRateLabel}>FREQUÊNCIA CARDÍACA</Text>
-          <View style={styles.heartRateValueRow}>
-            <Text style={[styles.heartRateValue, !heartRateIsCurrent && styles.heartRateValueUnavailable]}>
-              {heartRateValue}
+        {Platform.OS === 'ios' ? (
+          <View style={[styles.heartRatePanel, styles.iosHeartRatePanel]}>
+            <Ionicons name="phone-portrait-outline" size={30} color="#1B3A6B" />
+            <Text style={styles.heartRateLabel}>USO SEM SMARTWATCH</Text>
+            <Text style={styles.iosHeartRateTitle}>Ampara ativo no iPhone</Text>
+            <Text style={styles.iosHeartRateBody}>
+              Localização, movimento e alertas do celular continuam disponíveis. Batimentos pelo relógio não estão disponíveis no iPhone.
             </Text>
-            <Text style={styles.heartRateUnit}>bpm</Text>
           </View>
-          <Text style={[styles.heartRateDetail, !heartRateIsCurrent && styles.heartRateDetailStale]}>
-            {heartRateDetail}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={[
-            styles.smartwatchConnectionButton,
-            { backgroundColor: smartwatchConnected ? '#218739' : '#C73E4D' },
-          ]}
-          onPress={handleSmartwatchPress}
-          disabled={smartwatch.isBusy || !['connected', 'permission_required', 'error'].includes(smartwatch.status)}
-          accessibilityRole="button"
-          accessibilityLabel="Conexão com smartwatch"
-        >
-          <Ionicons name="watch-outline" size={24} color="#FFF" />
-          <View style={styles.smartwatchConnectionTexts}>
-            <Text style={styles.smartwatchConnectionTitle}>
-              {smartwatchConnected ? 'Smartwatch conectado' : 'Smartwatch desconectado'}
-            </Text>
-            <Text style={styles.smartwatchConnectionSubtitle}>{smartwatchConnectionText}</Text>
-          </View>
-          {smartwatch.isBusy ? (
-            <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-            <Ionicons
-              name={smartwatchConnected ? 'checkmark-circle' : 'link-outline'}
-              size={23}
-              color="#FFF"
-            />
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.quickActions}>
-          <Pressable
-            style={[styles.fabHelp, sosHolding && styles.fabHelpHolding]}
-            onLongPress={executarEnvioDeSocorro}
-            onPressIn={() => setSosHolding(true)}
-            onPressOut={() => setSosHolding(false)}
-            delayLongPress={3000}
-          >
-            <View style={styles.quickActionContent}>
-              <Ionicons name="alert-circle" size={18} color="#FFF" />
-              <Text style={styles.fabText}>SOS</Text>
+        ) : (
+          <>
+            <View style={styles.heartRatePanel}>
+              <Ionicons
+                name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
+                size={42}
+                color={heartRateIsCurrent ? '#C4475D' : '#8C949C'}
+              />
+              <Text style={styles.heartRateLabel}>FREQUÊNCIA CARDÍACA</Text>
+              <View style={styles.heartRateValueRow}>
+                <Text style={[styles.heartRateValue, !heartRateIsCurrent && styles.heartRateValueUnavailable]}>
+                  {heartRateValue}
+                </Text>
+                <Text style={styles.heartRateUnit}>bpm</Text>
+              </View>
+              <Text style={[styles.heartRateDetail, !heartRateIsCurrent && styles.heartRateDetailStale]}>
+                {heartRateDetail}
+              </Text>
             </View>
-            {sosHolding && <Text style={styles.fabHoldHint}>segure...</Text>}
-          </Pressable>
-          <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
-            <View style={styles.quickActionContent}>
-              <Ionicons name="clipboard-outline" size={18} color="#FFF" />
-              <Text style={styles.fabText}>REGISTRAR</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+
+            <TouchableOpacity
+              style={[
+                styles.smartwatchConnectionButton,
+                { backgroundColor: smartwatchConnected ? '#218739' : '#C73E4D' },
+              ]}
+              onPress={handleSmartwatchPress}
+              disabled={smartwatch.isBusy || !['connected', 'permission_required', 'error'].includes(smartwatch.status)}
+              accessibilityRole="button"
+              accessibilityLabel="Conexão com smartwatch"
+            >
+              <Ionicons name="watch-outline" size={24} color="#FFF" />
+              <View style={styles.smartwatchConnectionTexts}>
+                <Text style={styles.smartwatchConnectionTitle}>
+                  {smartwatchConnected ? 'Smartwatch conectado' : 'Smartwatch desconectado'}
+                </Text>
+                <Text style={styles.smartwatchConnectionSubtitle}>{smartwatchConnectionText}</Text>
+              </View>
+              {smartwatch.isBusy ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Ionicons
+                  name={smartwatchConnected ? 'checkmark-circle' : 'link-outline'}
+                  size={23}
+                  color="#FFF"
+                />
+              )}
+            </TouchableOpacity>
+
+            {smartwatchWarning && (
+              <View
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                style={styles.smartwatchWarning}
+              >
+                <Ionicons name="warning" size={20} color="#A65D00" />
+                <View style={styles.smartwatchWarningTexts}>
+                  <Text style={styles.smartwatchWarningTitle}>{smartwatchWarning.title}</Text>
+                  <Text style={styles.smartwatchWarningMessage}>{smartwatchWarning.message}</Text>
+                </View>
+              </View>
+            )}
+          </>
+        )}
 
         <View style={styles.separator} />
 
@@ -947,43 +1054,64 @@ export default function Home({ navigation }) {
 
         {/* ── MAPA ── */}
         <View style={styles.mapContainer}>
-          {!hasMapsConfiguration ? (
-            <View style={styles.mapUnavailable}>
-              <Ionicons name="map-outline" size={26} color="#5A8FAF" />
-              <Text style={styles.mapUnavailableText}>Mapa temporariamente indisponível</Text>
-            </View>
-          ) : location && region ? (
+          {location && region ? (
             <>
-              <MapView
-                ref={mapRef}
+              <MapLibreMap
                 style={styles.map}
-                region={region}
-                onRegionChangeComplete={handleRegionChange}
+                mapStyle="https://tiles.openfreemap.org/styles/liberty"
+                attribution
+                attributionPosition={{ bottom: 8, right: 8 }}
+                logo
+                logoPosition={{ bottom: 8, left: 8 }}
+                onRegionWillChange={handleMapLibreRegionWillChange}
+                onRegionDidChange={handleMapLibreRegionChange}
               >
-                <Marker coordinate={location.coords} title="Você" pinColor="#5A8FAF" />
-                <Circle
-                  center={location.coords}
-                  radius={3000}
-                  fillColor="rgba(196,104,122,0.10)"
-                  strokeColor="#C4687A"
+                <Camera
+                  ref={cameraRef}
+                  initialViewState={{
+                    center: [region.longitude, region.latitude],
+                    zoom: 15.5,
+                  }}
+                  minZoom={3}
+                  maxZoom={20}
                 />
-                {crimesVisiveis.map(crime => (
-                  <Marker key={crime.id}
-                    coordinate={{ latitude: crime.lat, longitude: crime.lon }}
-                    title={crime.tipo}
-                    description={`${crime.distancia.toFixed(2)} km`}
-                    pinColor="#6B1A2E"
+                <GeoJSONSource id="ampara-safety-radius" data={safetyRadius}>
+                  <Layer
+                    id="ampara-safety-radius-fill"
+                    type="fill"
+                    paint={{ 'fill-color': '#C4687A', 'fill-opacity': 0.10 }}
                   />
-                ))}
-                {occurrenceData.map(occ => (
-                  <Marker key={occ.id}
-                    coordinate={{ latitude: occ.lat, longitude: occ.lon }}
-                    title={occ.tipo}
-                    description={occ.descricao || occ.address || `${occ.distancia.toFixed(2)} km`}
-                    pinColor="#C4687A"
+                  <Layer
+                    id="ampara-safety-radius-outline"
+                    type="line"
+                    paint={{ 'line-color': '#C4687A', 'line-width': 1.5 }}
                   />
-                ))}
-              </MapView>
+                </GeoJSONSource>
+                <GeoJSONSource id="ampara-map-points" data={mapFeatures}>
+                  <Layer
+                    id="ampara-map-points-layer"
+                    type="circle"
+                    paint={{
+                      'circle-radius': ['match', ['get', 'kind'], 'user', 9, 6],
+                      'circle-color': ['match', ['get', 'kind'], 'user', '#5A8FAF', 'crime', '#6B1A2E', '#C4687A'],
+                      'circle-stroke-color': '#FFFFFF',
+                      'circle-stroke-width': 2,
+                    }}
+                  />
+                </GeoJSONSource>
+                <GeoJSONSource id="ampara-user-location" data={userLocationFeature}>
+                  <Layer
+                    id="ampara-user-location-layer"
+                    type="circle"
+                    paint={{
+                      'circle-radius': 9,
+                      'circle-color': '#5A8FAF',
+                      'circle-stroke-color': '#FFFFFF',
+                      'circle-stroke-width': 3,
+                    }}
+                  />
+                </GeoJSONSource>
+              </MapLibreMap>
 
               <View style={styles.mapLegend}>
                 <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#5A8FAF' }]} /><Text style={styles.legendText}>Você</Text></View>
@@ -1021,12 +1149,31 @@ export default function Home({ navigation }) {
         <View style={styles.forceRow}>
           <Ionicons name="pulse-outline" size={20} color={isHighRisk ? '#C4687A' : '#5A8FAF'} />
           <Text style={[styles.forceValue, { color: isHighRisk ? '#C4687A' : '#1B3A6B' }]}>{magnitude}G</Text>
-          <Text style={styles.forceLabel}>Força de aceleração</Text>
+          <Text style={styles.forceLabel}>Celular{motionRisk.phonePoints > 0 ? ` · +${motionRisk.phonePoints}` : ''}</Text>
           {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
         </View>
+        {Platform.OS === 'android' && (
+          <View style={styles.watchMotionRow}>
+            <Ionicons
+              name="watch-outline"
+              size={19}
+              color={motionRisk.watchIsRecent ? '#5A8FAF' : '#8C949C'}
+            />
+            <Text style={styles.watchMotionValue}>
+              {motionRisk.watchIsRecent ? `${smartwatch.watchMotion.peak.toFixed(1)} m/s²` : '—'}
+            </Text>
+            <View style={styles.watchMotionTexts}>
+              <Text style={styles.watchMotionTitle}>Relógio · pico</Text>
+              <Text style={styles.watchMotionDetail}>
+                {watchMotionDetail}
+              </Text>
+            </View>
+          </View>
+        )}
         <View style={styles.separator} />
 
-        {/* ── MODO APRESENTAÇÃO ── */}
+        {/* Mantido oculto para possível reutilização futura; não participa do score real. */}
+        {SHOW_PRESENTATION_MODE && (
         <View style={styles.demoPanel}>
           <View style={styles.demoPanelHeader}>
             <Ionicons name="flask-outline" size={16} color="#5A8FAF" />
@@ -1101,8 +1248,31 @@ export default function Home({ navigation }) {
             </TouchableOpacity>
           )}
         </View>
+        )}
 
       </ScrollView>
+
+      <View style={styles.floatingContainer} pointerEvents="box-none">
+        <Pressable
+          style={[styles.fabHelp, sosHolding && styles.fabHelpHolding]}
+          onLongPress={executarEnvioDeSocorro}
+          onPressIn={() => setSosHolding(true)}
+          onPressOut={() => setSosHolding(false)}
+          delayLongPress={3000}
+        >
+          <View style={styles.quickActionContent}>
+            <Ionicons name="alert-circle" size={18} color="#FFF" />
+            <Text style={styles.fabText}>SOS</Text>
+          </View>
+          {sosHolding && <Text style={styles.fabHoldHint}>segure...</Text>}
+        </Pressable>
+        <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
+          <View style={styles.quickActionContent}>
+            <Ionicons name="clipboard-outline" size={18} color="#FFF" />
+            <Text style={styles.fabText}>REGISTRAR</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
 
       {/* MODAL FEEDBACK SOS */}
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
@@ -1331,6 +1501,55 @@ export default function Home({ navigation }) {
         </View>
       </Modal>
 
+      <Modal
+        visible={showWatchMonitoringAlert}
+        animationType="fade"
+        onRequestClose={() => setWatchAlertDismissed(true)}
+        statusBarTranslucent
+      >
+        <View style={styles.watchAlertScreen}>
+          <View style={styles.watchAlertHeader}>
+            <Image
+              source={require('../assets/images/maos-ampara-azul.png')}
+              style={styles.watchAlertLogo}
+              resizeMode="contain"
+            />
+            <TouchableOpacity
+              onPress={() => setWatchAlertDismissed(true)}
+              style={styles.watchAlertClose}
+              accessibilityRole="button"
+              accessibilityLabel="Fechar aviso de monitoramento cardíaco"
+            >
+              <Ionicons name="close" size={24} color="#526170" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.watchAlertContent}>
+            <View style={styles.watchAlertIcon}>
+              <Ionicons name="heart-dis" size={38} color="#C4475D" />
+            </View>
+            <Text style={styles.watchAlertEyebrow}>ATENÇÃO AO MONITORAMENTO</Text>
+            <Text style={styles.watchAlertTitle}>O Ampara não está recebendo seus batimentos</Text>
+            <Text style={styles.watchAlertBody}>
+              Sua frequência cardíaca não está sendo acompanhada pelo app neste momento.
+            </Text>
+            <View style={styles.watchAlertSteps}>
+              <Text style={styles.watchAlertStepsTitle}>Confira o relógio</Text>
+              <Text style={styles.watchAlertStep}>• Ele está ligado e próximo do celular?</Text>
+              <Text style={styles.watchAlertStep}>• O Ampara está aberto no relógio?</Text>
+              <Text style={styles.watchAlertStep}>• O monitoramento cardíaco está ativo?</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.watchAlertButton}
+              onPress={() => setWatchAlertDismissed(true)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.watchAlertButtonText}>Entendi</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   )
 }
@@ -1340,9 +1559,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5EFE6' },
   scrollContent: { paddingBottom: 130 },
 
-  headerContainer: { paddingTop: 52, paddingHorizontal: 22, paddingBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  headerContainer: { paddingTop: 52, paddingHorizontal: 22, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   header: { fontSize: 34, color: '#1B3A6B', fontWeight: '200', letterSpacing: 3 },
-  subHeader: { color: '#C4687A', fontSize: 13, marginTop: 2 },
+
+  monitoringStatusRow: { minHeight: 58, marginHorizontal: 22, marginBottom: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#D8DDE1' },
+  monitoringStatusTexts: { flex: 1 },
+  monitoringStatusTitle: { color: '#1B3A6B', fontSize: 14, fontWeight: '700' },
+  monitoringStatusSubtitle: { color: '#218739', fontSize: 11, marginTop: 2 },
+  monitoringStatusOff: { color: '#737B83' },
 
   riskSection: { paddingHorizontal: 22, paddingVertical: 16, marginBottom: 4 },
   riskRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
@@ -1360,15 +1584,10 @@ const styles = StyleSheet.create({
   safeStripText: { fontSize: 13, color: '#2E8B57', fontWeight: '500' },
 
   modeGroup: { marginHorizontal: 20, marginBottom: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8E0D8', borderRadius: 8, overflow: 'hidden' },
-  modeDivider: { height: 1, marginLeft: 54, backgroundColor: '#EEE8E2' },
   activityRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#FFF' },
   activityRowActive: { backgroundColor: '#FFF7F8' },
   activityIconWrap: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEF6FC', alignItems: 'center', justifyContent: 'center' },
   activityIconWrapActive: { backgroundColor: '#C4687A' },
-  monitoringRowActive: { backgroundColor: '#F2F8FC' },
-  monitoringIconWrapActive: { backgroundColor: '#5A8FAF' },
-  monitoringRowOff: { backgroundColor: '#F2F2F2' },
-  monitoringIconWrapOff: { backgroundColor: '#E5E5E5' },
   activityTexts: { flex: 1 },
   activityTitle: { fontSize: 14, fontWeight: '700', color: '#1B3A6B' },
   activitySubtitle: { fontSize: 11, color: '#5A8FAF', marginTop: 1 },
@@ -1381,10 +1600,31 @@ const styles = StyleSheet.create({
   heartRateUnit: { marginLeft: 6, color: '#526170', fontSize: 18, fontWeight: '600' },
   heartRateDetail: { minHeight: 18, color: '#218739', fontSize: 12, fontWeight: '600', textAlign: 'center' },
   heartRateDetailStale: { color: '#9A6710' },
+  iosHeartRatePanel: { minHeight: 176, gap: 8, paddingHorizontal: 24, backgroundColor: '#EEF6FC' },
+  iosHeartRateTitle: { color: '#1B3A6B', fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  iosHeartRateBody: { maxWidth: 320, color: '#526170', fontSize: 12, lineHeight: 18, textAlign: 'center' },
   smartwatchConnectionButton: { minHeight: 66, marginHorizontal: 20, marginTop: 10, marginBottom: 18, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 12, elevation: 2, shadowColor: '#1B3A6B', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 2 }, shadowRadius: 5 },
   smartwatchConnectionTexts: { flex: 1 },
   smartwatchConnectionTitle: { color: '#FFF', fontSize: 15, fontWeight: '800' },
   smartwatchConnectionSubtitle: { color: 'rgba(255,255,255,0.88)', fontSize: 11, marginTop: 2 },
+  smartwatchWarning: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginTop: -8, marginBottom: 16, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#D97706', backgroundColor: '#FFF4E5' },
+  smartwatchWarningTexts: { flex: 1 },
+  smartwatchWarningTitle: { color: '#744210', fontSize: 13, fontWeight: '700' },
+  smartwatchWarningMessage: { color: '#775A36', fontSize: 11, marginTop: 2 },
+  watchAlertScreen: { flex: 1, backgroundColor: '#F5EFE6', paddingTop: Platform.OS === 'android' ? 34 : 18, paddingHorizontal: 24, paddingBottom: 28 },
+  watchAlertHeader: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  watchAlertLogo: { width: 58, height: 42 },
+  watchAlertClose: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#E8E0D8', alignItems: 'center', justifyContent: 'center' },
+  watchAlertContent: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 460, width: '100%', alignSelf: 'center' },
+  watchAlertIcon: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#FBECEF', alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
+  watchAlertEyebrow: { color: '#A93B50', fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
+  watchAlertTitle: { color: '#1B3A6B', fontSize: 26, lineHeight: 32, fontWeight: '800', textAlign: 'center' },
+  watchAlertBody: { color: '#526170', fontSize: 16, lineHeight: 23, textAlign: 'center', marginTop: 14 },
+  watchAlertSteps: { width: '100%', marginTop: 28, padding: 18, backgroundColor: '#FFF', borderRadius: 8, gap: 10 },
+  watchAlertStepsTitle: { color: '#1B3A6B', fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  watchAlertStep: { color: '#526170', fontSize: 14, lineHeight: 20 },
+  watchAlertButton: { width: '100%', minHeight: 54, marginTop: 24, backgroundColor: '#1B3A6B', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  watchAlertButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 
   separator: { height: 1, backgroundColor: '#E8E0D8', marginHorizontal: 22 },
 
@@ -1402,9 +1642,7 @@ const styles = StyleSheet.create({
 
   mapContainer: { height: 300, borderRadius: 20, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
   map: { flex: 1 },
-  mapUnavailable: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#EEF3F7' },
-  mapUnavailableText: { color: '#526170', fontSize: 14, fontWeight: '600' },
-  recenterButton: { position: 'absolute', bottom: 14, alignSelf: 'center', backgroundColor: '#1B3A6B', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 20 },
+  recenterButton: { position: 'absolute', bottom: 44, left: 12, backgroundColor: '#1B3A6B', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20 },
   mapLegend: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
@@ -1419,13 +1657,18 @@ const styles = StyleSheet.create({
   forceLabel: { fontSize: 13, color: '#AAA', flex: 1 },
   forcePill: { backgroundColor: '#FDEAEC', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
   forcePillText: { color: '#C4687A', fontSize: 11, fontWeight: '700' },
+  watchMotionRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 22, paddingVertical: 8 },
+  watchMotionValue: { minWidth: 82, color: '#1B3A6B', fontSize: 14, fontWeight: '700' },
+  watchMotionTexts: { flex: 1 },
+  watchMotionTitle: { color: '#526170', fontSize: 12, fontWeight: '700' },
+  watchMotionDetail: { color: '#737B83', fontSize: 10, marginTop: 2 },
 
-  quickActions: { flexDirection: 'row', gap: 8, marginHorizontal: 20, marginBottom: 18 },
+  floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end', zIndex: 10 },
   quickActionContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  fabHelp: { minHeight: 48, flex: 1, backgroundColor: '#E8622A', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, elevation: 2, alignItems: 'center', justifyContent: 'center' },
+  fabHelp: { backgroundColor: '#E8622A', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8, alignItems: 'center' },
   fabHelpHolding: { backgroundColor: '#B84C14', transform: [{ scale: 1.08 }] },
   fabHoldHint: { color: '#FFD8B0', fontSize: 10, fontWeight: '600', marginTop: 2 },
-  fabRegister: { minHeight: 48, flex: 1, backgroundColor: '#C4687A', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, elevation: 2, alignItems: 'center', justifyContent: 'center' },
+  fabRegister: { backgroundColor: '#C4687A', marginTop: 10, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
   fabText: { color: '#FFF', fontWeight: '600', fontSize: 13 },
 
   overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
