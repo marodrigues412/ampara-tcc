@@ -25,6 +25,12 @@ data/ssp_downloads.csv
 # Android/iOS build (caso use)
 android/build/
 ios/build/
+watch/app/libs/samsung-health-sensor-api-1.4.1.aar
+mobile/modules/ampara-watch/android/build/
+watch/.gradle/
+watch/.kotlin/
+watch/build/
+watch/app/build/
 
 # Python
 __pycache__/
