@@ -1338,7 +1338,7 @@ export default function Home({ navigation }) {
                 <>
                   <Text style={[styles.cardTitleCritical, { color: '#2E8B57' }]}>Alerta Enviado</Text>
                   <Text style={styles.cardSubtitle}>
-                    SMS com sua localização enviado para {sosFeedbackData.enviados.length} {sosFeedbackData.enviados.length === 1 ? 'contato' : 'contatos'}.
+                    Mensagem de WhatsApp com sua localização enviada para {sosFeedbackData.enviados.length} {sosFeedbackData.enviados.length === 1 ? 'contato' : 'contatos'}.
                   </Text>
                 </>
               )}
@@ -1366,8 +1366,8 @@ export default function Home({ navigation }) {
                   {sosFeedbackData.enviados.length > 0 && (
                     <>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 4 }}>
-                        <Ionicons name="checkmark-circle" size={14} color="#2E8B57" />
-                        <Text style={styles.feedbackLabel}>SMS enviado para</Text>
+                        <Ionicons name="logo-whatsapp" size={14} color="#2E8B57" />
+                        <Text style={styles.feedbackLabel}>Mensagem de WhatsApp enviada para</Text>
                       </View>
                       {sosFeedbackData.enviados.map((c) => (
                         <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)}>

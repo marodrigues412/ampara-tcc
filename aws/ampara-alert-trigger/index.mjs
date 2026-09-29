@@ -115,6 +115,12 @@ export const handler = async (event) => {
     return resposta(400, { erro: "localizacao invalida" });
   }
 
+  // Com o SMS desligado, o WhatsApp é o único canal: sem ele o alerta não sai, e a
+  // usuária precisa saber disso em vez de ver uma lista vazia de falhas.
+  if (!WHATSAPP_ATIVO) {
+    return resposta(503, { erro: "nenhum canal de envio configurado" });
+  }
+
   // Os destinatários vêm do banco, nunca do corpo da requisição: aceitar a lista do app
   // deixaria qualquer conta logada mandar mensagem para números arbitrários.
   const contatos = await supabase(`/rest/v1/emergency_contacts?select=telefone&user_id=eq.${usuario.id}`, token);
@@ -127,17 +133,28 @@ export const handler = async (event) => {
   const nomeCompleto = (perfil?.[0]?.nome || "Uma usuária do Ampara").slice(0, 40);
   const riscoCompleto = String(dados.nivelRisco ?? "").slice(0, 12);
   const enderecoCompleto = String(dados.endereco ?? "").slice(0, 80);
-  const coordenadas = `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
+  // As coordenadas vão cruas para o Maps não "corrigir" o ponto, mas o rótulo entre
+  // parênteses vira o título do marcador. Sem ele o Google mostra 23°38'53.6"S
+  // 46°34'24.8"W, que não diz nada a quem está tentando socorrer alguém — com ele
+  // aparece o endereço que o app já traduziu a partir do GPS.
+  const coordenadas = enderecoCompleto
+    ? `${latitude.toFixed(5)},${longitude.toFixed(5)}(${encodeURIComponent(enderecoCompleto)})`
+    : `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
   const mensagemSms = `ALERTA AMPARA: ${semAcento(nomeCompleto)} pode estar em perigo. Risco: ${semAcento(riscoCompleto)}. ${semAcento(enderecoCompleto)} https://maps.google.com/?q=${coordenadas}`;
 
-  // Os dois canais saem em paralelo. Um contato conta como avisado se PELO MENOS UM
-  // chegou: WhatsApp falha para quem não tem conta, e SMS falha fora do sandbox — mandar
-  // pelos dois aumenta muito a chance de alguém ver o alerta.
+  // SMS está desligado de propósito. A conta SNS ainda está em sandbox (só entrega em
+  // número verificado) e o teto de gasto é de US$ 1/mês, o que dá ~7 mensagens para o
+  // Brasil. Como a Meta cobra à parte e o WhatsApp já entrega, manter o SMS ligado só
+  // produzia falha registrada em alerta que na prática chegou.
+  //
+  // Para religar: saia do sandbox do SNS, aumente o teto de gasto e descomente o bloco
+  // dentro de `canais` abaixo. O resto (função enviarSms, permissão da role, montagem da
+  // mensagem em mensagemSms) continua pronto.
   const tentativas = telefones.flatMap((telefone) => {
     const canais = [
-      enviarSms({ telefone, mensagem: mensagemSms })
-        .then((id) => ({ telefone, canal: "sms", id }))
-        .catch((e) => Promise.reject({ telefone, canal: "sms", erro: e?.name || String(e) })),
+      // enviarSms({ telefone, mensagem: mensagemSms })
+      //   .then((id) => ({ telefone, canal: "sms", id }))
+      //   .catch((e) => Promise.reject({ telefone, canal: "sms", erro: e?.name || String(e) })),
     ];
     if (WHATSAPP_ATIVO) {
       canais.push(
