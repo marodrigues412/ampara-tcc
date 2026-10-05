@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
 import tempfile
@@ -39,20 +40,47 @@ IMPORT_SQL_PATH = PROJECT_ROOT / "data" / "ssp_importacao.sql"
 TARGET_TABLE = "public.crime_occurrences"
 IMPORT_TABLE = "public.ssp_imported_months"
 
-# A SSP abrevia todo "Santo"/"Santa"/"Sao" como "S." em NOME_MUNICIPIO — Santo Andre
-# aparece como "S.ANDRE", nunca por extenso. Escrever o nome completo aqui faz o filtro
-# descartar a cidade inteira em silencio, sem erro nenhum.
-CIDADES_RMSP = [
-    "S.PAULO",
-    "S.CAETANO DO SUL",
-    "S.BERNARDO DO CAMPO",
-    "S.ANDRE",
-    "DIADEMA",
-    "MAUA",
-    "OSASCO",
-    "GUARULHOS",
-    "BARUERI",
-]
+# Os municipios atendidos sao recortados pelos limites oficiais do IBGE, e nao pelo nome.
+#
+# Filtrar por NOME_MUNICIPIO era fragil: a SSP abrevia "Santo"/"Santa"/"Sao" como "S."
+# (Santo Andre vira "S.ANDRE"), e qualquer divergencia de grafia descartava a cidade
+# inteira em silencio, sem erro nenhum — foi assim que Santo Andre ficou fora da base.
+# Codigo do IBGE e numerico e estavel; grafia de nome nao e.
+#
+# Para incluir outra cidade: pegue o codigo em servicodados.ibge.gov.br e regenere o
+# geojson com data-processing/baixar_limites_ibge.py.
+LIMITES_PATH = PROJECT_ROOT / "data" / "municipios_rmsp.geojson"
+
+
+_LIMITES = None
+
+
+def carregar_limites():
+    global _LIMITES
+    if _LIMITES is None:
+        from shapely.geometry import shape
+
+        dados = json.loads(LIMITES_PATH.read_text(encoding="utf-8"))
+        _LIMITES = [(f["properties"]["nome"], shape(f["geometry"])) for f in dados["features"]]
+    return _LIMITES
+
+
+def dentro_dos_municipios(latitudes: pd.Series, longitudes: pd.Series) -> pd.Series:
+    """Marca as linhas cuja coordenada cai dentro de algum dos municipios atendidos."""
+    from shapely import contains_xy
+
+    dentro = pd.Series(False, index=latitudes.index)
+    for _, geometria in carregar_limites():
+        pendentes = ~dentro
+        if not pendentes.any():
+            break
+        # Testa so quem ainda nao foi aceito: cada ocorrencia pertence a um municipio so.
+        dentro.loc[pendentes] = contains_xy(
+            geometria,
+            longitudes[pendentes].to_numpy(dtype=float),
+            latitudes[pendentes].to_numpy(dtype=float),
+        )
+    return dentro
 
 COLUMN_ALIASES = {
     "data_ocorrencia": ["DATA_OCORRENCIA_BO"],
@@ -185,7 +213,6 @@ def processar_aba_ssp(path: Path, sheet: str) -> pd.DataFrame:
 
     df = pd.read_excel(path, sheet_name=sheet, dtype=object)
     df = selecionar_colunas(df, path, sheet)
-    df = df[df["cidade"].isin(CIDADES_RMSP)]
 
     for column in ["LATITUDE", "LONGITUDE"]:
         target = column.lower()
@@ -198,6 +225,10 @@ def processar_aba_ssp(path: Path, sheet: str) -> pd.DataFrame:
 
     df = df.dropna(subset=["latitude", "longitude"])
     df = df[(df["latitude"] != 0) & (df["longitude"] != 0)]
+
+    # O recorte vem depois da conversao numerica: sem coordenada valida nao ha como
+    # localizar a ocorrencia, e ela nao serviria para o mapa de qualquer forma.
+    df = df[dentro_dos_municipios(df["latitude"], df["longitude"])]
 
     df = df[
         ~df["logradouro"]
