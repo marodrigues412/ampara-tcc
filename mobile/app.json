@@ -16,12 +16,7 @@
         "backgroundColor": "#F5EFE6",
         "foregroundImage": "./assets/images/maos-ampara-rosa.png"
       },
-      "package": "com.anonymous.amparaapp",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyBB9hq4T-GW5y-IiokUva0afwWXtYDWrlI"
-        }
-      },
+      "package": "com.ampara",
       "permissions": [
         "android.permission.health.READ_HEART_RATE"
       ]

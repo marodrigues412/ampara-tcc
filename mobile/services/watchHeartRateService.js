@@ -85,9 +85,10 @@ export async function getDirectWatchMonitoringStatus() {
     const monitorStatus = await getWatchHeartRateModule()?.getMonitorStatus()
     const receivedAt = Number(monitorStatus?.receivedAt)
     const isFresh = Number.isFinite(receivedAt) && Date.now() - receivedAt <= MONITOR_STATUS_FRESH_MS
-    return monitorStatus?.active && isFresh ? 'active' : 'inactive'
+    if (!isFresh) return 'unknown'
+    return monitorStatus?.active ? 'active' : 'inactive'
   } catch {
-    return 'inactive'
+    return 'unknown'
   }
 }
 

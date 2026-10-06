@@ -214,19 +214,16 @@ class HeartRateService : Service() {
   }
 
   private fun sendMotionWindow(peak: Double, rms: Double, jerkPeak: Double, sampleCount: Int, timestamp: Long, source: String) {
-    val client = Wearable.getNodeClient(this)
-    client.connectedNodes.addOnSuccessListener { nodes ->
-      val payload = JSONObject()
-        .put("peak", peak)
-        .put("rms", rms)
-        .put("jerk", jerkPeak)
-        .put("samples", sampleCount)
-        .put("timestamp", timestamp)
-        .put("source", source)
-        .toString()
-        .toByteArray(Charsets.UTF_8)
-      nodes.forEach { node -> Wearable.getMessageClient(this).sendMessage(node.id, MOTION_PATH, payload) }
-    }
+    val payload = JSONObject()
+      .put("peak", peak)
+      .put("rms", rms)
+      .put("jerk", jerkPeak)
+      .put("samples", sampleCount)
+      .put("timestamp", timestamp)
+      .put("source", source)
+      .toString()
+      .toByteArray(Charsets.UTF_8)
+    sendToNearbyNodes(MOTION_PATH, payload)
   }
 
   private val trackerListener = object : HealthTracker.TrackerEventListener {
@@ -255,11 +252,8 @@ class HeartRateService : Service() {
   }
 
   private fun sendToPhone(bpm: Int, timestamp: Long) {
-    val client = Wearable.getNodeClient(this)
-    client.connectedNodes.addOnSuccessListener { nodes ->
-      val payload = JSONObject().put("bpm", bpm).put("timestamp", timestamp).toString().toByteArray(Charsets.UTF_8)
-      nodes.forEach { node -> Wearable.getMessageClient(this).sendMessage(node.id, HEART_RATE_PATH, payload) }
-    }
+    val payload = JSONObject().put("bpm", bpm).put("timestamp", timestamp).toString().toByteArray(Charsets.UTF_8)
+    sendToNearbyNodes(HEART_RATE_PATH, payload)
   }
 
   private fun sendMonitorStatus(active: Boolean) {
@@ -270,10 +264,15 @@ class HeartRateService : Service() {
     } else {
       lastMonitorStatusSentAt = 0L
     }
-    val client = Wearable.getNodeClient(this)
-    client.connectedNodes.addOnSuccessListener { nodes ->
-      val payload = JSONObject().put("active", active).toString().toByteArray(Charsets.UTF_8)
-      nodes.forEach { node -> Wearable.getMessageClient(this).sendMessage(node.id, MONITOR_STATUS_PATH, payload) }
+    val payload = JSONObject().put("active", active).toString().toByteArray(Charsets.UTF_8)
+    sendToNearbyNodes(MONITOR_STATUS_PATH, payload)
+  }
+
+  private fun sendToNearbyNodes(path: String, payload: ByteArray) {
+    Wearable.getNodeClient(this).connectedNodes.addOnSuccessListener { nodes ->
+      nodes.filter { it.isNearby }.forEach { node ->
+        Wearable.getMessageClient(this).sendMessage(node.id, path, payload)
+      }
     }
   }
 

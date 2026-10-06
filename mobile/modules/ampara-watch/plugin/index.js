@@ -17,7 +17,9 @@ module.exports = function withAmparaWatch(config) {
         },
         'intent-filter': [{
           category: [{ $: { 'android:name': 'android.intent.category.DEFAULT' } }],
-          action: [{ $: { 'android:name': 'com.google.android.gms.wearable.MESSAGE_RECEIVED' } }],
+          action: [
+            { $: { 'android:name': 'com.google.android.gms.wearable.MESSAGE_RECEIVED' } },
+          ],
           data: [{ $: { 'android:scheme': 'wear', 'android:host': '*', 'android:pathPrefix': '/ampara/' } }],
         }],
       })
