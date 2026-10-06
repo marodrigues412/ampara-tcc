@@ -11,7 +11,7 @@ O SDK e distribuido pela Samsung sob licenca propria e nao deve ser versionado j
 1. Baixe o Samsung Health Sensor SDK 1.4.1 e coloque `samsung-health-sensor-api-1.4.1.aar` em `watch/app/libs/`.
 2. No Galaxy Watch 5, habilite o modo de desenvolvedor do Health Platform para testes. No Wear OS 6, a tela pode aparecer como **Health Platform [Dev mode]**. Essa configuracao e apenas para desenvolvimento; a Samsung exige validacao de pacote/assinatura para distribuicao de producao.
 3. No Moto G7, conecte o USB e execute `npx expo run:android` dentro de `mobile/`. Expo Go nao inclui o modulo nativo desta integracao. Esse build cria a chave de depuracao compartilhada pelo app do relogio.
-4. Abra `watch/` no Android Studio, sincronize o Gradle e execute o app no Galaxy Watch 5. Os dois builds usam o pacote `com.anonymous.amparaapp` e a mesma assinatura; o Wearable Data Layer exige isso e que os dois dispositivos estejam conectados pelo Galaxy Wearable.
+4. Abra `watch/` no Android Studio, sincronize o Gradle e execute o app no Galaxy Watch 5. Os dois builds usam o pacote `com.ampara` e a mesma assinatura; o Wearable Data Layer exige isso e que os dois dispositivos estejam conectados pelo Galaxy Wearable.
 5. Abra Ampara no relogio, toque em **Ativar monitoramento** e aceite as permissoes de frequencia cardiaca e atividade em segundo plano quando solicitadas. Em Wear OS 6, elas sao permissao de leitura de frequencia cardiaca e de dados de saude em segundo plano; em versoes anteriores, os nomes podem ser diferentes.
 6. Deixe o Ampara aberto no Moto G7. O status e o batimento aparecem na tela inicial quando chega uma amostra recente.
 

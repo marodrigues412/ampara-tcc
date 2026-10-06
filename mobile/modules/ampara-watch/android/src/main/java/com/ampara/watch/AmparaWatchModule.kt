@@ -103,7 +103,7 @@ class AmparaWatchModule : Module() {
         return@AsyncFunction
       }
       Wearable.getNodeClient(context).connectedNodes
-        .addOnSuccessListener { promise.resolve(it.isNotEmpty()) }
+        .addOnSuccessListener { nodes -> promise.resolve(nodes.any { it.isNearby }) }
         .addOnFailureListener { promise.resolve(false) }
     }
   }

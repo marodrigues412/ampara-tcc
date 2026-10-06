@@ -215,6 +215,10 @@ export default function Home({ navigation }) {
     ? `RMS ${smartwatch.watchMotion.rms.toFixed(1)} m/s²${motionRisk.watchPoints ? ` · relógio +${motionRisk.watchPoints}` : ' · sem elevação'}${motionRisk.corroborationPoints ? ' · conjunto +1' : ''}`
     : smartwatchConnected ? 'Sem leitura recente' : 'Desconectado'
   const smartwatchConnected = smartwatch.directWatchStatus === 'connected'
+  const heartRateIsCurrent = smartwatchConnected
+    && smartwatch.measurement?.isDirect
+    && smartwatch.measurement?.isRecent
+    && !heartRateFreshnessExpired
   const smartwatchWarning = ['disconnected', 'error', 'development_build_required'].includes(smartwatch.directWatchStatus)
     ? {
         title: smartwatch.directWatchStatus === 'development_build_required'
@@ -229,11 +233,17 @@ export default function Home({ navigation }) {
           title: 'Monitoramento cardíaco desligado',
           message: 'No relógio, toque em “Ativar monitoramento” para voltar a enviar os batimentos.',
         }
+      : smartwatchConnected && smartwatch.monitoringStatus === 'active' && !heartRateIsCurrent
+        ? {
+            title: 'Sem batimentos recentes',
+            message: 'O relógio informa que o monitoramento está ativo, mas o celular ainda não recebeu uma leitura recente.',
+          }
+        : smartwatchConnected && smartwatch.monitoringStatus === 'unknown' && !heartRateIsCurrent
+          ? {
+              title: 'Sem confirmação do relógio',
+              message: 'O celular ainda não recebeu o status do monitoramento nem uma leitura recente do Ampara no relógio.',
+            }
       : null
-  const heartRateIsCurrent = smartwatchConnected
-    && smartwatch.measurement?.isDirect
-    && smartwatch.measurement?.isRecent
-    && !heartRateFreshnessExpired
   const isReceivingHeartRate = smartwatch.measurement?.isDirect
     && smartwatch.measurement?.isRecent
     && !heartRateFreshnessExpired
