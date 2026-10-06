@@ -24,7 +24,7 @@ import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import { Svg, Path } from 'react-native-svg'
 import { useRiskDetection } from '../hooks/useRiskDetection'
-import { buscarCrimes, buscarOcorrencias } from '../services/crimesService'
+import { buscarOcorrencias, buscarMapaCalor, buscarResumoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
 import { saveLocationPoint } from "../services/locationService"
@@ -32,6 +32,18 @@ import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 
 import { dispararAlerta } from '../services/alertService'
+import { camadasDifusas, DENSIDADE_VERMELHO } from '../utils/mapaCalor'
+import { distanceKm } from '../utils/geo'
+
+// Raio da primeira busca, antes de o mapa informar a área que está mostrando.
+const RAIO_INICIAL_KM = 3
+// Teto do raio: o Supabase devolve no máximo 1.000 registros por consulta, então pedir
+// uma área muito maior só espalharia os mesmos pontos e deixaria o calor sem sentido.
+const RAIO_MAXIMO_KM = 12
+// Quanto buscar além da tela. Só o suficiente para cobrir o arredondamento da grade e o
+// fato de a área ser um círculo inscrito num retângulo: com margem grande, o recorte
+// quadrado da busca aparecia dentro da tela como uma borda reta de cor.
+const MARGEM_BUSCA = 1.2
 
 const mapLibre = Platform.OS === 'ios' ? null : require('@maplibre/maplibre-react-native')
 const nativeMaps = Platform.OS === 'ios' ? require('react-native-maps') : null
@@ -286,14 +298,22 @@ export default function Home({ navigation }) {
 
   // --- Estados de Interface e Mapa ---
   const [modalVisible, setModalVisible] = useState(false)
-  const [crimeData, setCrimeData] = useState([])
+  // { roubo: 3475, furto: 12738, ... } no raio de RAIO_INICIAL_KM em volta da usuária.
+  const [resumoCrimes, setResumoCrimes] = useState({})
   const [occurrenceData, setOccurrenceData] = useState([])
   const [region, setRegion] = useState(null)
   const [userRegion, setUserRegion] = useState(null)
   const [mapMoved, setMapMoved] = useState(false)
+  // Centro e raio da área que o mapa está mostrando. Alimenta a busca de crimes para que
+  // o calor exista em qualquer lugar que a usuária navegue, não só em volta dela.
+  const [areaVisivel, setAreaVisivel] = useState(null)
+  const [celulasCalor, setCelulasCalor] = useState([])
+  const [celulaGraus, setCelulaGraus] = useState(0.00063)
   // Abre já filtrado no que é mais relevante para segurança pessoal e no ano corrente.
   // Lista vazia = sem filtro de tipo (mostra tudo).
-  const [tiposSelecionados, setTiposSelecionados] = useState(['roubo'])
+  // Roubo e furto respondem por mais de 90% das ocorrências e são o que afeta quem anda
+  // na rua. Abrir com os dois mantém a mancha de calor legível em vez de cobrir tudo.
+  const [tiposSelecionados, setTiposSelecionados] = useState(['roubo', 'furto'])
   const [anoFiltro, setAnoFiltro] = useState(2026)
   const cameraRef = useRef(null)
 
@@ -528,8 +548,13 @@ export default function Home({ navigation }) {
     let score = 0
 
     // Crimes na área
-    if (crimeData.length > 15) { score += 4; }
-    else if (crimeData.length > 5) { score += 2; }
+    // Densidade por km², e não contagem bruta: a contagem dependia do raio buscado e
+    // vinha truncada em 1.000, então qualquer região urbana batia no teto e somava os
+    // mesmos 4 pontos. Os limites são os mesmos que pintam o mapa de calor, para a cor
+    // que a usuária vê e o score contarem a mesma história.
+    const densidadeCrimes = totalCrimesEntorno / (Math.PI * RAIO_INICIAL_KM ** 2)
+    if (densidadeCrimes > 700) { score += 4; }
+    else if (densidadeCrimes > 250) { score += 2; }
 
     // Fator horário
     const hora = new Date().getHours()
@@ -561,7 +586,7 @@ export default function Home({ navigation }) {
     if (score > 8) { setRiskLevel("Crítico") }
     else if (score >= 5) { setRiskLevel("Moderado") }
     else { setRiskLevel("Baixo") }
-  }, [crimeData, activityMode, location, safeLocations, motionRisk.total])
+  }, [totalCrimesEntorno, activityMode, location, safeLocations, motionRisk.total])
 
   // --- Função do Disparo de Socorro ---
   const executarEnvioDeSocorro = async () => {
@@ -639,24 +664,47 @@ export default function Home({ navigation }) {
   }, [location])
 
   // Crimes oficiais (SSP) já chegam do serviço ordenados do mais próximo ao mais distante.
+  // A busca acompanha a área visível do mapa, não a posição da usuária: sem isso, arrastar
+  // o mapa mostrava região em branco, como se não houvesse ocorrência por lá.
+  // Grade do mapa de calor: acompanha a área visível e os filtros de tipo e ano.
   useEffect(() => {
-    async function carregarCrimes() {
-      if (!location) return
-      try {
-        const crimes = await buscarCrimes(location.coords.latitude, location.coords.longitude, 3, anoFiltro)
-
-        setCrimeData(crimes.map((crime) => ({
-          id: crime.id || Math.random().toString(),
-          lat: crime.latitude,
-          lon: crime.longitude,
-          tipo: crime.natureza_apurada || crime.conduta || 'Ocorrência',
-          distancia: crime.distancia_km
-        })))
-      } catch (error) {
-        console.error('❌ ERRO AO FILTRAR CRIMES:', error)
+    async function carregarCalor() {
+      const alvo = areaVisivel ?? (location && {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        raioKm: RAIO_INICIAL_KM,
+      })
+      if (!alvo) return
+      // Busca além da borda da tela: sem essa margem, a região que entra ao arrastar
+      // chega sem cor e o calor parece ir "aparecendo" conforme a usuária move o mapa.
+      // O teto vale depois da margem — pedir 21 km levava a consulta a 6 s na primeira
+      // leitura, perto do limite de 8 s que o banco impõe.
+      const raioBusca = Math.min(alvo.raioKm * MARGEM_BUSCA, RAIO_MAXIMO_KM)
+      const { celulas, celulaGraus: tamanho } = await buscarMapaCalor(
+        alvo.latitude, alvo.longitude, raioBusca, anoFiltro, tiposSelecionados,
+      )
+      // Em falha, celulas vem nulo e o mapa mantém o que já estava desenhado: apagar o
+      // calor por causa de uma consulta lenta é pior do que mostrar dado de um segundo atrás.
+      if (celulas) {
+        setCelulasCalor(celulas)
+        setCelulaGraus(tamanho)
       }
     }
-    carregarCrimes()
+    carregarCalor()
+  }, [areaVisivel, location, anoFiltro, tiposSelecionados])
+
+  // Contagem por tipo no entorno da usuária, para o score, os números dos filtros e a
+  // faixa de status. Fica presa à posição dela, e não à área visível: o risco é de onde
+  // ela está, não de onde ela está olhando no mapa.
+  useEffect(() => {
+    async function carregarResumo() {
+      if (!location) return
+      const resumo = await buscarResumoCrimes(
+        location.coords.latitude, location.coords.longitude, RAIO_INICIAL_KM, anoFiltro,
+      )
+      if (resumo) setResumoCrimes(resumo)
+    }
+    carregarResumo()
   }, [location, anoFiltro])
 
   // Relatos da comunidade — mesma ordenação por proximidade vinda do serviço.
@@ -772,13 +820,39 @@ export default function Home({ navigation }) {
     setOccData(new Date().toLocaleDateString('pt-BR'))
   }
 
+  // Só vale a pena rebuscar quando a área nova é de fato outra: sem esse corte, cada
+  // quadro da animação de arrastar dispararia uma consulta.
+  const atualizarAreaVisivel = (latitude, longitude, raioKm) => {
+    const limitado = Math.min(Math.max(raioKm, 0.5), RAIO_MAXIMO_KM)
+    setAreaVisivel((atual) => {
+      if (atual) {
+        const deslocamentoKm = distanceKm(atual.latitude, atual.longitude, latitude, longitude)
+        // Com a margem curta, a busca precisa acompanhar o movimento de perto: qualquer
+        // deslocamento relevante já descobre área sem cor.
+        const mudouPouco = deslocamentoKm < atual.raioKm * 0.15
+        const zoomParecido = Math.abs(limitado - atual.raioKm) < atual.raioKm * 0.2
+        if (mudouPouco && zoomParecido) return atual
+      }
+      return { latitude, longitude, raioKm: limitado }
+    })
+  }
+
   const handleMapLibreRegionWillChange = (event) => {
     if (event.nativeEvent.userInteraction) setMapMoved(true)
   }
 
   const handleMapLibreRegionChange = (event) => {
-    if (!userRegion) return
     const [longitude, latitude] = event.nativeEvent.center
+    const limites = event.nativeEvent.visibleBounds
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      // visibleBounds vem como [[lonNE, latNE], [lonSO, latSO]]: metade da diagonal é o
+      // raio que cobre a tela inteira.
+      const raioKm = limites
+        ? distanceKm(limites[1][1], limites[1][0], limites[0][1], limites[0][0]) / 2
+        : RAIO_INICIAL_KM
+      atualizarAreaVisivel(latitude, longitude, raioKm)
+    }
+    if (!userRegion) return
     const distance = Math.abs(latitude - userRegion.latitude) + Math.abs(longitude - userRegion.longitude)
     setMapMoved(distance > 0.0007)
   }
@@ -796,22 +870,43 @@ export default function Home({ navigation }) {
 
   const displayScore = monitoramentoAtivo ? riskScore : 0
   const displayLevel = displayScore > 8 ? 'Crítico' : displayScore >= 5 ? 'Moderado' : 'Baixo'
-  // O filtro vale só para o mapa e para a faixa de status. O score continua olhando a
-  // vizinhança inteira (crimeData): esconder um tipo de crime não torna a região segura.
-  const contagemPorTipo = FILTROS_CRIME.reduce((acc, filtro) => {
-    acc[filtro.id] = crimeData.filter((crime) => filtro.combina(semAcento(crime.tipo))).length
-    return acc
-  }, {})
-  const crimesVisiveis = useMemo(() => (
+  // O filtro vale para o mapa e para a faixa de status. O score continua olhando todos os
+  // tipos: esconder um deles no mapa não torna a região mais segura.
+  // Os números dos botões de filtro e o total do entorno vêm prontos do banco, agrupados
+  // pelos mesmos quatro tipos que o filtro oferece.
+  const contagemPorTipo = useMemo(() => (
+    FILTROS_CRIME.reduce((acc, filtro) => ({ ...acc, [filtro.id]: resumoCrimes[filtro.id] ?? 0 }), {})
+  ), [resumoCrimes])
+  const totalCrimesEntorno = useMemo(
+    () => Object.values(resumoCrimes).reduce((soma, n) => soma + n, 0),
+    [resumoCrimes],
+  )
+  // Quantos crimes dos tipos marcados existem no entorno — é o que a faixa de status diz.
+  const totalFiltrado = useMemo(() => (
     tiposSelecionados.length === 0
-      ? crimeData
-      : crimeData.filter((crime) =>
-          tiposSelecionados.some((id) => FILTROS_CRIME.find((f) => f.id === id).combina(semAcento(crime.tipo)))
-        )
-  ), [crimeData, tiposSelecionados])
+      ? totalCrimesEntorno
+      : tiposSelecionados.reduce((soma, id) => soma + (resumoCrimes[id] ?? 0), 0)
+  ), [resumoCrimes, tiposSelecionados, totalCrimesEntorno])
   const mapFeatures = useMemo(
-    () => criarGeoJSONMapa(crimesVisiveis, occurrenceData),
-    [crimesVisiveis, occurrenceData],
+    () => criarGeoJSONMapa([], occurrenceData),
+    [occurrenceData],
+  )
+  // A grade do calor vem somada do banco e cobre a área inteira do mapa.
+  const crimesGeoJSON = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: celulasCalor.map((celula) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [Number(celula.lon), Number(celula.lat)] },
+      properties: { peso: Number(celula.peso) },
+    })).filter((f) => f.geometry.coordinates.every(Number.isFinite)),
+  }), [celulasCalor])
+  // Área da célula em km². É o divisor que torna a cor comparável entre zooms e entre
+  // regiões, já que a célula cresce quando o mapa se afasta.
+  const areaCelulaKm2 = useMemo(() => (celulaGraus * 111) ** 2, [celulaGraus])
+  // Contagem equivalente ao vermelho nesta célula: a camada do Android espera peso de 0 a 1.
+  const pesoVermelho = useMemo(
+    () => Math.max(DENSIDADE_VERMELHO * areaCelulaKm2, 1),
+    [areaCelulaKm2],
   )
   const userLocationFeature = useMemo(() => ({
     type: 'FeatureCollection',
@@ -830,9 +925,6 @@ export default function Home({ navigation }) {
     : tiposSelecionados.map((id) => FILTROS_CRIME.find((f) => f.id === id).rotulo.toLowerCase()).join(' + ')
   const alternarTipo = (id) =>
     setTiposSelecionados((atual) => atual.includes(id) ? atual.filter((t) => t !== id) : [...atual, id])
-  // A lista vem ordenada por distância e cortada nos mais próximos, então o último item
-  // marca o raio realmente coberto — anunciar "3 km" fixo mentiria em área densa.
-  const raioCoberto = crimesVisiveis.length > 0 ? crimesVisiveis[crimesVisiveis.length - 1].distancia : null
   const riskBg = !monitoramentoAtivo ? '#EDEDED' : displayLevel === 'Crítico' ? '#FDEAEA' : displayLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
   const riskAccent = !monitoramentoAtivo ? '#9AA0A6' : displayLevel === 'Crítico' ? '#D32F2F' : displayLevel === 'Moderado' ? '#E6A200' : '#27AE60'
   const riskRgb = !monitoramentoAtivo ? '154, 160, 166' : getRiskRGB(displayLevel)
@@ -1101,13 +1193,52 @@ export default function Home({ navigation }) {
                     paint={{ 'line-color': '#C4687A', 'line-width': 1.5 }}
                   />
                 </MapLibreGeoJSONSource>
+                {/* Crimes viram mancha de calor: mil alfinetes sobrepostos não dizem onde
+                    o risco se concentra, e ainda escondem o mapa embaixo. */}
+                <MapLibreGeoJSONSource id="ampara-crimes" data={crimesGeoJSON}>
+                  <MapLibreLayer
+                    id="ampara-crimes-heat"
+                    type="heatmap"
+                    paint={{
+                      // Cada ponto é uma célula somada. O divisor é fixo (densidade que
+                      // corresponde ao vermelho), não o máximo da tela: assim a mesma rua
+                      // mantém a cor quando a usuária arrasta o mapa.
+                      'heatmap-weight': ['min', 1, ['/', ['get', 'peso'], pesoVermelho]],
+                      // Raio generoso para as manchas se fundirem em áreas contínuas, em
+                      // vez de virar bolinhas separadas. Cresce com o zoom, senão some a
+                      // diferença entre as regiões quando a usuária se aproxima.
+                      // Raio curto de propósito: as ocorrências são geocodificadas em
+                      // endereços, então manchas pequenas acompanham o traçado das ruas.
+                      // Raio grande engorda tudo e cobre o quarteirão inteiro.
+                      'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 11, 14, 15, 34, 18, 70],
+                      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 0.4, 18, 0.7],
+                      // Opacidade baixa para os nomes das ruas continuarem legíveis.
+                      'heatmap-opacity': 0.45,
+                      // Verde, amarelo, laranja, vermelho: a sequência é lida como
+                      // intensidade sem precisar de legenda.
+                      'heatmap-color': [
+                        'interpolate', ['linear'], ['heatmap-density'],
+                        0, 'rgba(76, 175, 80, 0)',
+                        0.15, 'rgba(76, 175, 80, 0.20)',
+                        0.35, 'rgba(174, 213, 129, 0.30)',
+                        0.5, 'rgba(255, 235, 59, 0.38)',
+                        0.65, 'rgba(255, 183, 77, 0.45)',
+                        0.8, 'rgba(255, 152, 0, 0.52)',
+                        1, 'rgba(211, 47, 47, 0.62)',
+                      ],
+                    }}
+                  />
+                </MapLibreGeoJSONSource>
+                {/* Relatos da comunidade seguem como pontos: são poucos e identificam um
+                    local específico, não uma área. */}
                 <MapLibreGeoJSONSource id="ampara-map-points" data={mapFeatures}>
                   <MapLibreLayer
                     id="ampara-map-points-layer"
                     type="circle"
+                    filter={['==', ['get', 'kind'], 'occurrence']}
                     paint={{
-                      'circle-radius': ['match', ['get', 'kind'], 'user', 9, 6],
-                      'circle-color': ['match', ['get', 'kind'], 'user', '#5A8FAF', 'crime', '#6B1A2E', '#C4687A'],
+                      'circle-radius': 6,
+                      'circle-color': '#C4687A',
                       'circle-stroke-color': '#FFFFFF',
                       'circle-stroke-width': 2,
                     }}
@@ -1135,6 +1266,13 @@ export default function Home({ navigation }) {
                   showsMyLocationButton={false}
                   onPanDrag={() => setMapMoved(true)}
                   onRegionChangeComplete={(nextRegion) => {
+                    // latitudeDelta é a altura da tela em graus; metade dela, em km, é o
+                    // raio que cobre o que está visível.
+                    atualizarAreaVisivel(
+                      nextRegion.latitude,
+                      nextRegion.longitude,
+                      (nextRegion.latitudeDelta * 111) / 2,
+                    )
                     if (!userRegion) return
                     const distance = Math.abs(nextRegion.latitude - userRegion.latitude)
                       + Math.abs(nextRegion.longitude - userRegion.longitude)
@@ -1150,14 +1288,23 @@ export default function Home({ navigation }) {
                       strokeWidth={1.5}
                     />
                   )}
-                  {crimesVisiveis.map((crime) => (
-                    <Marker
-                      key={`crime-${crime.id}`}
-                      coordinate={{ latitude: Number(crime.lat), longitude: Number(crime.lon) }}
-                      pinColor="#6B1A2E"
-                      title={crime.tipo}
-                    />
-                  ))}
+                  {/* Equivalente ao mapa de calor do Android: o Apple Maps não tem camada
+                      de calor, então a densidade vira um círculo por célula da grade. */}
+                  {celulasCalor.flatMap((celula, indice) =>
+                    // 0,85 do lado da célula, e não metade: círculos do tamanho exato da
+                    // célula deixam vãos nos cantos da grade, e a mancha fica pontilhada.
+                    // Com a sobreposição, as áreas vizinhas se fundem.
+                    camadasDifusas({ ...celula, chave: `c${indice}` }, areaCelulaKm2, celulaGraus * 111000 * 0.85).map((camada) => (
+                      <Circle
+                        key={`calor-${camada.id}`}
+                        center={{ latitude: Number(celula.lat), longitude: Number(celula.lon) }}
+                        radius={camada.raio}
+                        fillColor={camada.cor}
+                        strokeColor="transparent"
+                        strokeWidth={0}
+                      />
+                    ))
+                  )}
                   {occurrenceData.map((occurrence) => (
                     <Marker
                       key={`occurrence-${occurrence.id}`}
@@ -1172,7 +1319,7 @@ export default function Home({ navigation }) {
 
               <View style={styles.mapLegend}>
                 <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#5A8FAF' }]} /><Text style={styles.legendText}>Você</Text></View>
-                <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#6B1A2E' }]} /><Text style={styles.legendText}>SSP</Text></View>
+                <View style={styles.legendItem}><View style={[styles.legendDot, styles.legendCalor]} /><Text style={styles.legendText}>Concentração SSP</Text></View>
                 <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C4687A' }]} /><Text style={styles.legendText}>Ampara</Text></View>
               </View>
 
@@ -1189,15 +1336,15 @@ export default function Home({ navigation }) {
         </View>
 
         {/* ── CRIME STRIP ── */}
-        <View style={[styles.crimeStrip, { borderLeftColor: crimesVisiveis.length > 0 ? '#C4687A' : '#2E8B57' }]}>
+        <View style={[styles.crimeStrip, { borderLeftColor: totalFiltrado > 0 ? '#C4687A' : '#2E8B57' }]}>
           <Ionicons
-            name={crimesVisiveis.length > 0 ? 'warning-outline' : 'checkmark-circle-outline'}
+            name={totalFiltrado > 0 ? 'warning-outline' : 'checkmark-circle-outline'}
             size={16}
-            color={crimeData.length > 0 ? '#C4687A' : '#2E8B57'}
+            color={totalFiltrado > 0 ? '#C4687A' : '#2E8B57'}
           />
-          <Text style={[styles.crimeStripText, { color: crimesVisiveis.length > 0 ? '#C4687A' : '#2E8B57' }]}>
-            {crimesVisiveis.length > 0
-              ? `${crimesVisiveis.length} ${rotuloFiltro} num raio de ${raioCoberto.toFixed(1)} km${anoFiltro ? ` em ${anoFiltro}` : ''}`
+          <Text style={[styles.crimeStripText, { color: totalFiltrado > 0 ? '#C4687A' : '#2E8B57' }]}>
+            {totalFiltrado > 0
+              ? `${totalFiltrado.toLocaleString('pt-BR')} ${rotuloFiltro} num raio de ${RAIO_INICIAL_KM} km${anoFiltro ? ` em ${anoFiltro}` : ''}`
               : `Nenhum registro${tiposSelecionados.length > 0 ? ` de ${rotuloFiltro}` : ''} por perto${anoFiltro ? ` em ${anoFiltro}` : ''}`}
           </Text>
         </View>
@@ -1700,6 +1847,8 @@ const styles = StyleSheet.create({
   mapLegend: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
+  // Quadrado, e não bolinha: representa uma área de concentração, não um ponto exato.
+  legendCalor: { borderRadius: 5, backgroundColor: 'rgba(255, 152, 0, 0.8)', borderWidth: 1, borderColor: 'rgba(211, 47, 47, 0.9)' },
   legendText: { fontSize: 11, color: '#333', fontWeight: '600' },
   recenterText: { color: '#FFF', fontWeight: '600', fontSize: 13 },
 

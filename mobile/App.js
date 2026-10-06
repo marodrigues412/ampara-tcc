@@ -11,6 +11,7 @@ import EmergencyContacts from './screens/EmergencyContacts'
 import SafeLocations from './screens/SafeLocations'
 import MyReports from './screens/MyReports'
 import HelpGuide from './screens/HelpGuide'
+import ChatBot from './screens/ChatBot'
 
 import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -47,6 +48,7 @@ function Tabs() {
 
           if (route.name === 'Início') iconName = focused ? 'home' : 'home-outline'
           else if (route.name === 'Dashboard') iconName = focused ? 'bar-chart' : 'bar-chart-outline'
+          else if (route.name === 'Assistente') iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'
           else if (route.name === 'Perfil') iconName = focused ? 'person' : 'person-outline'
 
           return (
@@ -66,6 +68,7 @@ function Tabs() {
     >
       <Tab.Screen name="Início" component={Home} />
       <Tab.Screen name="Dashboard" component={Dashboard} />
+      <Tab.Screen name="Assistente" component={ChatBot} />
       <Tab.Screen name="Perfil" component={Profile} />
     </Tab.Navigator>
   )
@@ -111,6 +114,7 @@ export default function App() {
 
           <Stack.Screen name="MyReports" component={MyReports} />
           <Stack.Screen name="HelpGuide" component={HelpGuide} />
+          <Stack.Screen name="ChatBot" component={ChatBot} />
 
         </Stack.Navigator>
       )}
