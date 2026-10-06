@@ -9,15 +9,8 @@ class AmparaHeartRateListenerService : WearableListenerService() {
   override fun onMessageReceived(messageEvent: MessageEvent) {
     if (messageEvent.path == MONITOR_STATUS_PATH) {
       try {
-        val active = JSONObject(String(messageEvent.data, Charsets.UTF_8)).optBoolean("active", false)
-        val receivedAt = System.currentTimeMillis()
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-          .putBoolean(MONITORING_ACTIVE, active)
-          .putLong(MONITOR_STATUS_RECEIVED_AT, receivedAt)
-          .apply()
-        sendBroadcast(Intent(ACTION_MONITOR_STATUS).setPackage(packageName)
-          .putExtra("active", active)
-          .putExtra("receivedAt", receivedAt))
+        val data = JSONObject(String(messageEvent.data, Charsets.UTF_8))
+        saveMonitorStatus(data.optBoolean("active", false))
       } catch (_: Exception) {
         // Ignore malformed monitor-status messages.
       }
@@ -64,17 +57,33 @@ class AmparaHeartRateListenerService : WearableListenerService() {
       val now = System.currentTimeMillis()
       if (bpm !in 25..240 || timestamp <= 0 || timestamp > now + 10_000 || now - timestamp > 30_000) return
 
-      getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-        .putInt("bpm", bpm)
-        .putLong("timestamp", timestamp)
-        .apply()
-
-      sendBroadcast(Intent(ACTION_HEART_RATE).setPackage(packageName)
-        .putExtra("bpm", bpm)
-        .putExtra("timestamp", timestamp))
+      saveHeartRate(bpm, timestamp)
     } catch (_: Exception) {
       // Ignore malformed or incomplete wearable payloads.
     }
+  }
+
+  private fun saveMonitorStatus(active: Boolean) {
+    val receivedAt = System.currentTimeMillis()
+    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+      .putBoolean(MONITORING_ACTIVE, active)
+      .putLong(MONITOR_STATUS_RECEIVED_AT, receivedAt)
+      .apply()
+    sendBroadcast(Intent(ACTION_MONITOR_STATUS).setPackage(packageName)
+      .putExtra("active", active)
+      .putExtra("receivedAt", receivedAt))
+  }
+
+  private fun saveHeartRate(bpm: Int, timestamp: Long) {
+    val now = System.currentTimeMillis()
+    if (bpm !in 25..240 || timestamp <= 0 || timestamp > now + 10_000 || now - timestamp > 30_000) return
+    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+      .putInt("bpm", bpm)
+      .putLong("timestamp", timestamp)
+      .apply()
+    sendBroadcast(Intent(ACTION_HEART_RATE).setPackage(packageName)
+      .putExtra("bpm", bpm)
+      .putExtra("timestamp", timestamp))
   }
 
   companion object {
