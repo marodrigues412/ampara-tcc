@@ -13,7 +13,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   Switch,
   Linking,
   Image
@@ -22,7 +21,6 @@ import {
 import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
-import { Svg, Path } from 'react-native-svg'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import { buscarOcorrencias, buscarMapaCalor, buscarResumoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
@@ -30,6 +28,7 @@ import { getActivityStatus, updateActivityStatus } from "../services/activitySer
 import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
+import { Brand } from '../constants/brandTheme'
 
 import { dispararAlerta } from '../services/alertService'
 import { camadasDifusas, DENSIDADE_VERMELHO } from '../utils/mapaCalor'
@@ -54,7 +53,6 @@ const MapLibreLayer = mapLibre?.Layer
 const MapView = nativeMaps?.default
 const { Circle, Marker } = nativeMaps || {}
 
-const screenWidth = Dimensions.get('window').width
 const SHOW_PRESENTATION_MODE = false
 const LIVE_HEART_RATE_MS = 10_000
 
@@ -118,18 +116,6 @@ const ANOS_DISPONIVEIS = [null, 2026, 2025, 2024, 2023, 2022]
 
 const semAcento = (texto) => String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
 
-const getRiskRGB = (level) => {
-  if (level === 'Crítico') return '211, 47, 47'
-  if (level === 'Moderado') return '230, 162, 0'
-  return '39, 174, 96'
-}
-
-const getRiskLabel = (level) => {
-  if (level === 'Crítico') return 'Alto risco · contatos serão acionados automaticamente'
-  if (level === 'Moderado') return 'Risco moderado · você será consultada se necessário'
-  return 'Baixo risco · ambiente monitorado'
-}
-
 const getTimeLabel = () => {
   const h = new Date().getHours()
   if (h >= 0 && h < 6) return 'madrugada (+3 risco)'
@@ -166,44 +152,6 @@ const getSmartwatchConnectionText = (status, directWatchStatus, measurement, liv
   if (status === 'error') return 'Falha na conexão · toque para tentar novamente'
   if (measurement?.source) return measurement.source
   return 'Conectado · aguardando batimentos'
-}
-
-function HomeGaugeChart({ score, rgbColor }) {
-  const cx = 100, cy = 100, r = 70, sw = 22
-  const viewH = 112
-  const svgWidth = screenWidth - 140
-  const svgHeight = svgWidth * viewH / 200
-
-  const bgPath = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`
-
-  let fgPath = null
-  if (score > 0) {
-    const angleRad = Math.PI * (1 - score / 10)
-    const xEnd = cx + r * Math.cos(angleRad)
-    const yEnd = cy - r * Math.sin(angleRad)
-    fgPath = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${xEnd.toFixed(2)} ${yEnd.toFixed(2)}`
-  }
-
-  return (
-    <Svg width={svgWidth} height={svgHeight} viewBox={`0 0 200 ${viewH}`}>
-      <Path
-        d={bgPath}
-        stroke="rgba(180,180,180,0.25)"
-        strokeWidth={sw}
-        fill="none"
-        strokeLinecap="round"
-      />
-      {fgPath && (
-        <Path
-          d={fgPath}
-          stroke={`rgb(${rgbColor})`}
-          strokeWidth={sw}
-          fill="none"
-          strokeLinecap="round"
-        />
-      )}
-    </Svg>
-  )
 }
 
 export default function Home({ navigation }) {
@@ -315,6 +263,7 @@ export default function Home({ navigation }) {
   // na rua. Abrir com os dois mantém a mancha de calor legível em vez de cobrir tudo.
   const [tiposSelecionados, setTiposSelecionados] = useState(['roubo', 'furto'])
   const [anoFiltro, setAnoFiltro] = useState(2026)
+  const [homeSection, setHomeSection] = useState('mapa')
   const cameraRef = useRef(null)
 
   // --- Estados do Registro de Ocorrência ---
@@ -925,9 +874,7 @@ export default function Home({ navigation }) {
     : tiposSelecionados.map((id) => FILTROS_CRIME.find((f) => f.id === id).rotulo.toLowerCase()).join(' + ')
   const alternarTipo = (id) =>
     setTiposSelecionados((atual) => atual.includes(id) ? atual.filter((t) => t !== id) : [...atual, id])
-  const riskBg = !monitoramentoAtivo ? '#EDEDED' : displayLevel === 'Crítico' ? '#FDEAEA' : displayLevel === 'Moderado' ? '#FFFBEB' : '#EAF5EC'
-  const riskAccent = !monitoramentoAtivo ? '#9AA0A6' : displayLevel === 'Crítico' ? '#D32F2F' : displayLevel === 'Moderado' ? '#E6A200' : '#27AE60'
-  const riskRgb = !monitoramentoAtivo ? '154, 160, 166' : getRiskRGB(displayLevel)
+  const riskAccent = !monitoramentoAtivo ? '#9A8C93' : displayLevel === 'Crítico' ? Brand.danger : displayLevel === 'Moderado' ? Brand.amber : Brand.green
 
   const simularNivel = (score) => {
     setDemoEnvLabel(null)
@@ -953,63 +900,77 @@ export default function Home({ navigation }) {
 
         {/* ── HEADER ── */}
         <View style={styles.headerContainer}>
-          <Text style={styles.header}>Ampara</Text>
-          <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 38, height: 38 }} resizeMode="contain" />
+          <View style={styles.headerBrandRow}>
+            <Image source={require('../assets/images/maos-ampara-azul.png')} style={styles.headerLogo} resizeMode="contain" />
+            <Text style={styles.header}>Ampara</Text>
+          </View>
         </View>
 
-        <View style={styles.monitoringStatusRow}>
-          <Ionicons
-            name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'}
-            size={22}
-            color={monitoramentoAtivo ? '#218739' : '#737B83'}
-          />
-          <View style={styles.monitoringStatusTexts}>
-            <Text style={styles.monitoringStatusTitle}>Modo monitoramento</Text>
-            <Text style={[styles.monitoringStatusSubtitle, !monitoramentoAtivo && styles.monitoringStatusOff]}>
-              {monitoramentoAtivo ? 'Ativo · sensores e alertas ligados' : 'Desativado · alertas pausados'}
-            </Text>
+        <View style={styles.topModesRow}>
+          <View style={styles.topModeCell}>
+            <View style={styles.topModeHeading}>
+              <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={17} color={monitoramentoAtivo ? Brand.green : Brand.muted} />
+              <Text style={styles.topModeTitle}>Monitoramento</Text>
+            </View>
+            <View style={styles.topModeControlRow}>
+              <Text style={[styles.topModeSubtitle, !monitoramentoAtivo && styles.monitoringStatusOff]} numberOfLines={1}>
+                {monitoramentoAtivo ? 'Alertas ativos' : 'Alertas pausados'}
+              </Text>
+              <Switch
+                value={monitoramentoAtivo}
+                onValueChange={toggleMonitoramento}
+                trackColor={{ false: '#E6DCE0', true: Brand.green }}
+                thumbColor="#FFF"
+                accessibilityLabel="Modo monitoramento"
+              />
+            </View>
           </View>
-          <Switch
-            value={monitoramentoAtivo}
-            onValueChange={toggleMonitoramento}
-            trackColor={{ false: '#D0C8C0', true: '#5A8FAF' }}
-            thumbColor="#FFF"
-            accessibilityLabel="Modo monitoramento"
-          />
+          <View style={styles.topModeDivider} />
+          <View style={styles.topModeCell}>
+            <View style={styles.topModeHeading}>
+              <Ionicons name="fitness-outline" size={17} color={activityMode ? Brand.roseDeep : Brand.muted} />
+              <Text style={styles.topModeTitle}>Atividade</Text>
+            </View>
+            <View style={styles.topModeControlRow}>
+              <Text style={styles.topModeSubtitle} numberOfLines={1}>
+                {activityMode ? 'Exercício ativo' : 'Para exercícios'}
+              </Text>
+              <Switch
+                value={activityMode}
+                onValueChange={toggleActivity}
+                trackColor={{ false: '#E6DCE0', true: Brand.rose }}
+                thumbColor="#FFF"
+                accessibilityLabel="Modo atividade"
+              />
+            </View>
+          </View>
         </View>
 
         {/* ── RISCO ── */}
         <View style={styles.riskSection}>
           <View style={styles.riskRow}>
             <Text style={styles.riskLabel}>Risco atual</Text>
-            <View style={[styles.riskBadge, { backgroundColor: riskAccent }]}>
-              <Text style={styles.riskBadgeText}>
-                {!monitoramentoAtivo ? 'Monitoramento desativado' : displayLevel}
+            <View style={styles.riskSummary}>
+              <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
+                {displayScore}<Text style={styles.gaugeScoreMax}>/10</Text>
+              </Text>
+              <Text style={[styles.riskBadgeText, { color: riskAccent }]}>
+                {monitoramentoAtivo ? displayLevel : 'Pausado'}
               </Text>
             </View>
           </View>
-
-          <View style={{ alignItems: 'center' }}>
-            <View>
-              <HomeGaugeChart score={displayScore} rgbColor={riskRgb} />
-              <View style={styles.gaugeScoreOverlay}>
-                <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
-                  {displayScore}
-                  <Text style={styles.gaugeScoreMax}>/10</Text>
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.gaugeDesc}>
-              {!monitoramentoAtivo ? 'Alertas automáticos pausados' : getRiskLabel(displayLevel)}
-            </Text>
-            {monitoramentoAtivo && (
+          <View style={styles.riskCompactRow}>
+            {monitoramentoAtivo ? (
               <View style={styles.timeFactorRow}>
-                <Ionicons name="time-outline" size={13} color="#5A8FAF" />
-                <Text style={styles.timeFactorText}>
-                {getTimeLabel()}
-                </Text>
+                <Ionicons name="time-outline" size={12} color={Brand.blue} />
+                <Text style={styles.timeFactorText} numberOfLines={1}>{getTimeLabel()}</Text>
               </View>
+            ) : (
+              <Text style={styles.gaugeDesc}>Alertas automáticos pausados</Text>
             )}
+          </View>
+          <View style={styles.scoreTrack}>
+            <View style={[styles.scoreFill, { width: `${Math.min(Math.max(Number(displayScore), 0), 10) * 10}%`, backgroundColor: riskAccent }]} />
           </View>
         </View>
 
@@ -1020,36 +981,33 @@ export default function Home({ navigation }) {
           </View>
         )}
 
-        {/* ── MODOS ── */}
-        <View style={styles.modeGroup}>
-          <View style={[styles.activityRow, activityMode && styles.activityRowActive]}>
-            <View style={[styles.activityIconWrap, activityMode && styles.activityIconWrapActive]}>
-              <Ionicons name="fitness-outline" size={18} color={activityMode ? '#FFF' : '#5A8FAF'} />
-            </View>
-            <View style={styles.activityTexts}>
-              <Text style={[styles.activityTitle, activityMode && { color: '#C4687A' }]}>Modo atividade</Text>
-              <Text style={styles.activitySubtitle} numberOfLines={1}>
-                {activityMode ? 'Ajuste para exercícios ativo' : 'Reduz alertas durante exercícios'}
-              </Text>
-            </View>
-            <Switch
-              value={activityMode}
-              onValueChange={toggleActivity}
-              trackColor={{ false: '#D0C8C0', true: '#C4687A' }}
-              thumbColor="#FFF"
-            />
-          </View>
-
+        <View style={styles.homeSectionTabs} accessibilityRole="tablist">
+          {[
+            { id: 'mapa', label: 'Mapa', icon: 'map-outline' },
+            { id: 'sensores', label: 'Sensores', icon: 'pulse-outline' },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.homeSectionTab, homeSection === item.id && styles.homeSectionTabActive]}
+              onPress={() => setHomeSection(item.id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: homeSection === item.id }}
+            >
+              <Ionicons name={item.icon} size={17} color={homeSection === item.id ? Brand.roseDeep : Brand.muted} />
+              <Text style={[styles.homeSectionTabText, homeSection === item.id && styles.homeSectionTabTextActive]}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* ── BATIMENTOS E SMARTWATCH ── */}
-        {Platform.OS !== 'ios' && (
+        {homeSection === 'sensores' && <>
+        <Text style={styles.mapSectionTitle}>Sensores do dispositivo</Text>
+        {Platform.OS === 'android' && (
           <>
             <View style={styles.heartRatePanel}>
               <Ionicons
                 name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
-                size={42}
-                color={heartRateIsCurrent ? '#C4475D' : '#8C949C'}
+                size={23}
+                color={heartRateIsCurrent ? Brand.roseDeep : '#9A8C93'}
               />
               <Text style={styles.heartRateLabel}>FREQUÊNCIA CARDÍACA</Text>
               <View style={styles.heartRateValueRow}>
@@ -1066,14 +1024,16 @@ export default function Home({ navigation }) {
             <TouchableOpacity
               style={[
                 styles.smartwatchConnectionButton,
-                { backgroundColor: smartwatchConnected ? '#218739' : '#C73E4D' },
+                smartwatchConnected ? styles.smartwatchConnectionButtonConnected : styles.smartwatchConnectionButtonDisconnected,
               ]}
               onPress={handleSmartwatchPress}
               disabled={smartwatch.isBusy || !['connected', 'permission_required', 'error'].includes(smartwatch.status)}
               accessibilityRole="button"
               accessibilityLabel="Conexão com smartwatch"
             >
-              <Ionicons name="watch-outline" size={24} color="#FFF" />
+              <View style={styles.smartwatchIconWrap}>
+                <Ionicons name="watch-outline" size={22} color={smartwatchConnected ? Brand.green : Brand.roseDeep} />
+              </View>
               <View style={styles.smartwatchConnectionTexts}>
                 <Text style={styles.smartwatchConnectionTitle}>
                   {smartwatchConnected ? 'Smartwatch conectado' : 'Smartwatch desconectado'}
@@ -1081,12 +1041,12 @@ export default function Home({ navigation }) {
                 <Text style={styles.smartwatchConnectionSubtitle}>{smartwatchConnectionText}</Text>
               </View>
               {smartwatch.isBusy ? (
-                <ActivityIndicator size="small" color="#FFF" />
+                <ActivityIndicator size="small" color={Brand.roseDeep} />
               ) : (
                 <Ionicons
                   name={smartwatchConnected ? 'checkmark-circle' : 'link-outline'}
                   size={23}
-                  color="#FFF"
+                  color={smartwatchConnected ? Brand.green : Brand.roseDeep}
                 />
               )}
             </TouchableOpacity>
@@ -1104,11 +1064,35 @@ export default function Home({ navigation }) {
                 </View>
               </View>
             )}
+
+            {Platform.OS === 'android' && (
+              <View style={styles.watchMotionRow}>
+                <Ionicons name="watch-outline" size={18} color={motionRisk.watchIsRecent ? Brand.green : Brand.muted} />
+                <Text style={styles.watchMotionValue}>
+                  {motionRisk.watchIsRecent ? `${smartwatch.watchMotion.peak.toFixed(1)} m/s²` : '—'}
+                </Text>
+                <View style={styles.watchMotionTexts}>
+                  <Text style={styles.watchMotionTitle}>Acelerômetro do relógio</Text>
+                  <Text style={styles.watchMotionDetail}>{watchMotionDetail}</Text>
+                </View>
+              </View>
+            )}
           </>
         )}
+        <View style={styles.forceRow}>
+          <Ionicons name="phone-portrait-outline" size={18} color={isHighRisk ? Brand.roseDeep : Brand.muted} />
+          <Text style={[styles.forceValue, { color: isHighRisk ? Brand.roseDeep : Brand.ink }]}>{magnitude}G</Text>
+          <Text style={styles.forceLabel}>Acelerômetro do celular{motionRisk.phonePoints > 0 ? ` · +${motionRisk.phonePoints}` : ''}</Text>
+          {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
+        </View>
+        {Platform.OS === 'ios' && (
+          <Text style={styles.sensorAvailabilityNote}>A leitura cardíaca e o acelerômetro do relógio ficam disponíveis no Android.</Text>
+        )}
 
-        <View style={styles.separator} />
+        </>}
 
+        {homeSection === 'mapa' && <>
+        <Text style={styles.mapSectionTitle}>Ocorrências próximas</Text>
         {/* ── FILTROS DO MAPA ── */}
         <View style={styles.filtroBloco}>
           <View style={styles.filtroCabecalho}>
@@ -1348,33 +1332,7 @@ export default function Home({ navigation }) {
               : `Nenhum registro${tiposSelecionados.length > 0 ? ` de ${rotuloFiltro}` : ''} por perto${anoFiltro ? ` em ${anoFiltro}` : ''}`}
           </Text>
         </View>
-
-        {/* ── FORÇA G ── */}
-        <View style={styles.forceRow}>
-          <Ionicons name="pulse-outline" size={20} color={isHighRisk ? '#C4687A' : '#5A8FAF'} />
-          <Text style={[styles.forceValue, { color: isHighRisk ? '#C4687A' : '#1B3A6B' }]}>{magnitude}G</Text>
-          <Text style={styles.forceLabel}>Celular{motionRisk.phonePoints > 0 ? ` · +${motionRisk.phonePoints}` : ''}</Text>
-          {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
-        </View>
-        {Platform.OS === 'android' && (
-          <View style={styles.watchMotionRow}>
-            <Ionicons
-              name="watch-outline"
-              size={19}
-              color={motionRisk.watchIsRecent ? '#5A8FAF' : '#8C949C'}
-            />
-            <Text style={styles.watchMotionValue}>
-              {motionRisk.watchIsRecent ? `${smartwatch.watchMotion.peak.toFixed(1)} m/s²` : '—'}
-            </Text>
-            <View style={styles.watchMotionTexts}>
-              <Text style={styles.watchMotionTitle}>Relógio · pico</Text>
-              <Text style={styles.watchMotionDetail}>
-                {watchMotionDetail}
-              </Text>
-            </View>
-          </View>
-        )}
-        <View style={styles.separator} />
+        </>}
 
         {/* Mantido oculto para possível reutilização futura; não participa do score real. */}
         {SHOW_PRESENTATION_MODE && (
@@ -1470,12 +1428,6 @@ export default function Home({ navigation }) {
           </View>
           {sosHolding && <Text style={styles.fabHoldHint}>segure...</Text>}
         </Pressable>
-        <TouchableOpacity style={styles.fabRegister} onPress={() => setReportModalVisible(true)}>
-          <View style={styles.quickActionContent}>
-            <Ionicons name="clipboard-outline" size={18} color="#FFF" />
-            <Text style={styles.fabText}>REGISTRAR</Text>
-          </View>
-        </TouchableOpacity>
       </View>
 
       {/* MODAL FEEDBACK SOS */}
@@ -1760,71 +1712,80 @@ export default function Home({ navigation }) {
 
 const styles = StyleSheet.create({
   flexOne: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F5EFE6' },
+  container: { flex: 1, backgroundColor: Brand.canvas },
   scrollContent: { paddingBottom: 130 },
 
-  headerContainer: { paddingTop: 52, paddingHorizontal: 22, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  header: { fontSize: 34, color: '#1B3A6B', fontWeight: '200', letterSpacing: 3 },
+  headerContainer: { paddingTop: 52, paddingHorizontal: 22, paddingBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerLogo: { width: 42, height: 36 },
+  header: { fontSize: 29, color: Brand.roseDeep, fontWeight: '700' },
 
-  monitoringStatusRow: { minHeight: 58, marginHorizontal: 22, marginBottom: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#D8DDE1' },
-  monitoringStatusTexts: { flex: 1 },
-  monitoringStatusTitle: { color: '#1B3A6B', fontSize: 14, fontWeight: '700' },
-  monitoringStatusSubtitle: { color: '#218739', fontSize: 11, marginTop: 2 },
-  monitoringStatusOff: { color: '#737B83' },
+  topModesRow: { minHeight: 70, marginHorizontal: 22, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: Brand.line },
+  topModeCell: { flex: 1, minWidth: 0, paddingVertical: 7, paddingHorizontal: 4 },
+  topModeHeading: { minHeight: 25, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  topModeTitle: { flex: 1, minWidth: 0, color: Brand.ink, fontSize: 11, fontWeight: '700' },
+  topModeControlRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  topModeSubtitle: { flex: 1, minWidth: 0, color: Brand.green, fontSize: 10 },
+  topModeDivider: { width: 1, height: 42, backgroundColor: Brand.line, marginHorizontal: 8 },
+  monitoringStatusOff: { color: Brand.muted },
 
-  riskSection: { paddingHorizontal: 22, paddingVertical: 16, marginBottom: 4 },
-  riskRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  riskLabel: { fontSize: 13, color: '#5A8FAF', fontWeight: '700' },
-  riskBadge: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20 },
-  riskBadgeText: { color: '#FFF', fontWeight: '600', fontSize: 13, letterSpacing: 0.5 },
-  gaugeScoreOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center' },
-  gaugeScoreBig: { fontSize: 44, fontWeight: '900', lineHeight: 50 },
-  gaugeScoreMax: { fontSize: 20, fontWeight: '400', color: '#888' },
-  gaugeDesc: { fontSize: 13, color: '#666', marginTop: 14, textAlign: 'center' },
-  timeFactorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  timeFactorText: { fontSize: 11, color: '#5A8FAF', fontWeight: '600' },
+  riskSection: { paddingHorizontal: 22, paddingTop: 5, paddingBottom: 20, marginHorizontal: 0, marginTop: 0, marginBottom: 0 },
+  riskRow: { minHeight: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  riskSummary: { flexDirection: 'row', alignItems: 'baseline', gap: 9 },
+  riskLabel: { fontSize: 12, color: Brand.roseDeep, fontWeight: '700', textTransform: 'uppercase' },
+  riskBadgeText: { color: Brand.roseDeep, fontWeight: '700', fontSize: 12 },
+  riskCompactRow: { minHeight: 17, flexDirection: 'row', alignItems: 'center' },
+  gaugeScoreBig: { fontSize: 32, fontWeight: '800', lineHeight: 36 },
+  gaugeScoreMax: { fontSize: 14, fontWeight: '500', color: Brand.muted },
+  gaugeDesc: { fontSize: 10, lineHeight: 13, color: Brand.muted },
+  timeFactorRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  timeFactorText: { fontSize: 10, color: Brand.muted, fontWeight: '600' },
+  scoreTrack: { height: 3, overflow: 'hidden', marginTop: 2, borderRadius: 3, backgroundColor: 'rgba(118,103,112,0.16)' },
+  scoreFill: { height: '100%', borderRadius: 4 },
 
-  safeStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 10, backgroundColor: '#EAF5EC' },
-  safeStripText: { fontSize: 13, color: '#2E8B57', fontWeight: '500' },
+  safeStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 12, backgroundColor: Brand.mint },
+  safeStripText: { fontSize: 13, color: Brand.green, fontWeight: '500' },
 
-  modeGroup: { marginHorizontal: 20, marginBottom: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8E0D8', borderRadius: 8, overflow: 'hidden' },
-  activityRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#FFF' },
-  activityRowActive: { backgroundColor: '#FFF7F8' },
-  activityIconWrap: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEF6FC', alignItems: 'center', justifyContent: 'center' },
-  activityIconWrapActive: { backgroundColor: '#C4687A' },
-  activityTexts: { flex: 1 },
-  activityTitle: { fontSize: 14, fontWeight: '700', color: '#1B3A6B' },
-  activitySubtitle: { fontSize: 11, color: '#5A8FAF', marginTop: 1 },
+  homeSectionTabs: { flexDirection: 'row', marginHorizontal: 22, paddingTop: 5, borderTopWidth: 1, borderTopColor: Brand.line, borderBottomWidth: 1, borderBottomColor: Brand.line },
+  homeSectionTab: { minWidth: 112, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 13, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  homeSectionTabActive: { borderBottomColor: Brand.rose },
+  homeSectionTabText: { color: Brand.muted, fontSize: 13, fontWeight: '600' },
+  homeSectionTabTextActive: { color: Brand.roseDeep },
+  mapSectionTitle: { marginHorizontal: 22, marginTop: 20, marginBottom: 14, color: Brand.ink, fontSize: 19, fontWeight: '700' },
+  sensorAvailabilityNote: { marginHorizontal: 22, paddingVertical: 14, color: Brand.muted, fontSize: 12, lineHeight: 18, borderBottomWidth: 1, borderBottomColor: Brand.line },
 
-  heartRatePanel: { minHeight: 190, marginHorizontal: 20, marginTop: 8, paddingVertical: 20, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FBECEF', borderRadius: 8 },
-  heartRateLabel: { marginTop: 7, color: '#6D4650', fontSize: 11, fontWeight: '700' },
+  heartRatePanel: { minHeight: 132, marginHorizontal: 22, marginTop: 2, paddingVertical: 12, paddingHorizontal: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: Brand.line },
+  heartRateLabel: { marginTop: 6, color: Brand.muted, fontSize: 11, fontWeight: '700' },
   heartRateValueRow: { minHeight: 58, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
-  heartRateValue: { color: '#C4475D', fontSize: 46, lineHeight: 56, fontWeight: '800' },
-  heartRateValueUnavailable: { color: '#737B83' },
-  heartRateUnit: { marginLeft: 6, color: '#526170', fontSize: 18, fontWeight: '600' },
-  heartRateDetail: { minHeight: 18, color: '#218739', fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  heartRateDetailStale: { color: '#9A6710' },
-  smartwatchConnectionButton: { minHeight: 66, marginHorizontal: 20, marginTop: 10, marginBottom: 18, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 12, elevation: 2, shadowColor: '#1B3A6B', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 2 }, shadowRadius: 5 },
+  heartRateValue: { color: Brand.roseDeep, fontSize: 46, lineHeight: 56, fontWeight: '800' },
+  heartRateValueUnavailable: { color: Brand.muted },
+  heartRateUnit: { marginLeft: 6, color: Brand.muted, fontSize: 18, fontWeight: '600' },
+  heartRateDetail: { minHeight: 18, color: Brand.green, fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  heartRateDetailStale: { color: Brand.amber },
+  smartwatchConnectionButton: { minHeight: 66, marginHorizontal: 22, marginTop: 0, marginBottom: 14, paddingHorizontal: 0, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Brand.line, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'transparent' },
+  smartwatchConnectionButtonConnected: { borderColor: Brand.line },
+  smartwatchConnectionButtonDisconnected: { borderColor: Brand.line },
+  smartwatchIconWrap: { width: 28, height: 32, alignItems: 'center', justifyContent: 'center' },
   smartwatchConnectionTexts: { flex: 1 },
-  smartwatchConnectionTitle: { color: '#FFF', fontSize: 15, fontWeight: '800' },
-  smartwatchConnectionSubtitle: { color: 'rgba(255,255,255,0.88)', fontSize: 11, marginTop: 2 },
-  smartwatchWarning: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginTop: -8, marginBottom: 16, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#D97706', backgroundColor: '#FFF4E5' },
+  smartwatchConnectionTitle: { color: Brand.ink, fontSize: 15, fontWeight: '800' },
+  smartwatchConnectionSubtitle: { color: Brand.muted, fontSize: 11, marginTop: 2 },
+  smartwatchWarning: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginTop: -8, marginBottom: 16, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: '#F1D9B7', backgroundColor: Brand.amberSoft },
   smartwatchWarningTexts: { flex: 1 },
   smartwatchWarningTitle: { color: '#744210', fontSize: 13, fontWeight: '700' },
   smartwatchWarningMessage: { color: '#775A36', fontSize: 11, marginTop: 2 },
-  watchAlertScreen: { flex: 1, backgroundColor: '#F5EFE6', paddingTop: Platform.OS === 'android' ? 34 : 18, paddingHorizontal: 24, paddingBottom: 28 },
+  watchAlertScreen: { flex: 1, backgroundColor: Brand.canvas, paddingTop: Platform.OS === 'android' ? 34 : 18, paddingHorizontal: 24, paddingBottom: 28 },
   watchAlertHeader: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   watchAlertLogo: { width: 58, height: 42 },
-  watchAlertClose: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#E8E0D8', alignItems: 'center', justifyContent: 'center' },
+  watchAlertClose: { width: 42, height: 42, borderRadius: 21, backgroundColor: Brand.surfaceRose, alignItems: 'center', justifyContent: 'center' },
   watchAlertContent: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 460, width: '100%', alignSelf: 'center' },
-  watchAlertIcon: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#FBECEF', alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
-  watchAlertEyebrow: { color: '#A93B50', fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
-  watchAlertTitle: { color: '#1B3A6B', fontSize: 26, lineHeight: 32, fontWeight: '800', textAlign: 'center' },
-  watchAlertBody: { color: '#526170', fontSize: 16, lineHeight: 23, textAlign: 'center', marginTop: 14 },
-  watchAlertSteps: { width: '100%', marginTop: 28, padding: 18, backgroundColor: '#FFF', borderRadius: 8, gap: 10 },
-  watchAlertStepsTitle: { color: '#1B3A6B', fontSize: 15, fontWeight: '700', marginBottom: 2 },
-  watchAlertStep: { color: '#526170', fontSize: 14, lineHeight: 20 },
-  watchAlertButton: { width: '100%', minHeight: 54, marginTop: 24, backgroundColor: '#1B3A6B', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  watchAlertIcon: { width: 76, height: 76, borderRadius: 38, backgroundColor: Brand.surfaceRose, alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
+  watchAlertEyebrow: { color: Brand.roseDeep, fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
+  watchAlertTitle: { color: Brand.ink, fontSize: 26, lineHeight: 32, fontWeight: '800', textAlign: 'center' },
+  watchAlertBody: { color: Brand.muted, fontSize: 16, lineHeight: 23, textAlign: 'center', marginTop: 14 },
+  watchAlertSteps: { width: '100%', marginTop: 28, padding: 18, backgroundColor: Brand.surface, borderRadius: 20, borderWidth: 1, borderColor: Brand.line, gap: 10 },
+  watchAlertStepsTitle: { color: Brand.ink, fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  watchAlertStep: { color: Brand.muted, fontSize: 14, lineHeight: 20 },
+  watchAlertButton: { width: '100%', minHeight: 54, marginTop: 24, backgroundColor: Brand.rose, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   watchAlertButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 
   separator: { height: 1, backgroundColor: '#E8E0D8', marginHorizontal: 22 },
@@ -1841,7 +1802,7 @@ const styles = StyleSheet.create({
   filtroContagem: { fontSize: 11, color: '#9AA0A6', fontWeight: '700' },
   filtroTextoAtivo: { color: '#FFF' },
 
-  mapContainer: { height: 300, borderRadius: 20, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
+  mapContainer: { height: 300, borderTopLeftRadius: 24, borderTopRightRadius: 12, borderBottomRightRadius: 24, borderBottomLeftRadius: 12, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
   map: { flex: 1 },
   recenterButton: { position: 'absolute', bottom: 44, left: 12, backgroundColor: '#1B3A6B', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20 },
   mapLegend: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
@@ -1855,7 +1816,7 @@ const styles = StyleSheet.create({
   crimeStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 22, paddingVertical: 14, borderLeftWidth: 3 },
   crimeStripText: { fontSize: 14, fontWeight: '500' },
 
-  forceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 22, paddingVertical: 16 },
+  forceRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 22, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Brand.line },
   forceValue: { fontSize: 22, fontWeight: '700' },
   forceLabel: { fontSize: 13, color: '#AAA', flex: 1 },
   forcePill: { backgroundColor: '#FDEAEC', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
@@ -1871,7 +1832,6 @@ const styles = StyleSheet.create({
   fabHelp: { backgroundColor: '#E8622A', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8, alignItems: 'center' },
   fabHelpHolding: { backgroundColor: '#B84C14', transform: [{ scale: 1.08 }] },
   fabHoldHint: { color: '#FFD8B0', fontSize: 10, fontWeight: '600', marginTop: 2 },
-  fabRegister: { backgroundColor: '#C4687A', marginTop: 10, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8 },
   fabText: { color: '#FFF', fontWeight: '600', fontSize: 13 },
 
   overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },

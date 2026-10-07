@@ -1,0 +1,17 @@
+export const Brand = {
+  canvas: '#FFF8F6',
+  surface: '#FFFFFF',
+  surfaceRose: '#FCE9EE',
+  surfaceSoft: '#FFF1F4',
+  rose: '#C84F70',
+  roseDeep: '#96334F',
+  ink: '#382D35',
+  muted: '#766770',
+  line: '#EEDDE2',
+  blue: '#53758C',
+  mint: '#E8F4EF',
+  green: '#2F7962',
+  amber: '#A65D00',
+  amberSoft: '#FFF2DF',
+  danger: '#B83D53',
+}

@@ -359,7 +359,7 @@ export default function SafeLocations({ navigation }) {
           <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
           <Text style={styles.back}>Voltar</Text>
         </TouchableOpacity>
-        <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
+        <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
       </View>
 
       <Text style={styles.title}>Locais Seguros</Text>
@@ -562,7 +562,10 @@ const styles = StyleSheet.create({
 
   mapContainer: {
     height: 210,
-    borderRadius: 18,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 22,
+    borderBottomLeftRadius: 10,
     overflow: 'hidden',
     marginBottom: 18,
     backgroundColor: '#FFF'

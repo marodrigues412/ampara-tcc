@@ -4,7 +4,7 @@
     "slug": "ampara-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/maos-ampara-rosa.png",
+    "icon": "./assets/images/maos-ampara-azul.png",
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F5EFE6",
-        "foregroundImage": "./assets/images/maos-ampara-rosa.png"
+        "foregroundImage": "./assets/images/maos-ampara-azul.png"
       },
       "package": "com.ampara",
       "permissions": [
@@ -22,7 +22,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/maos-ampara-rosa.png"
+      "favicon": "./assets/images/maos-ampara-azul.png"
     },
     "plugins": [
       "./modules/ampara-watch/plugin",
@@ -40,7 +40,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/maos-ampara-rosa.png",
+          "image": "./assets/images/maos-ampara-azul.png",
           "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#F5EFE6"

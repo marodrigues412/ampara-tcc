@@ -252,7 +252,7 @@ return (
       <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
       <Text style={styles.back}>Voltar</Text>
     </TouchableOpacity>
-    <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
+    <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
   </View>
 
   <Text style={styles.title}>Contatos de Emergência</Text>
