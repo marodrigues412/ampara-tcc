@@ -38,3 +38,6 @@ __pycache__/
 # Credenciais e anotacoes locais
 mobile/data/ids.txt
 *.secret.txt
+
+# Build do modulo nativo do smartwatch
+mobile/modules/ampara-watch/android/.gradle/
