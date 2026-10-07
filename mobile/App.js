@@ -19,6 +19,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import { Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Brand } from './constants/brandTheme'
 
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
@@ -31,38 +32,29 @@ function Tabs() {
         headerShown: false,
 
         tabBarStyle: {
-          backgroundColor: '#1B3A6B',
-          borderTopWidth: 0,
-          height: 72,
-          paddingBottom: 12,
-          paddingTop: 12,
+          backgroundColor: Brand.surface,
+          borderTopWidth: 1,
+          borderTopColor: Brand.line,
+          height: 76,
+          paddingBottom: 9,
+          paddingTop: 8,
         },
 
-        tabBarActiveTintColor: '#C4687A',
-        tabBarInactiveTintColor: '#8EB4D0',
+        tabBarActiveTintColor: Brand.roseDeep,
+        tabBarInactiveTintColor: '#9A8C93',
 
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
 
         tabBarIcon: ({ focused, color }) => {
           let iconName
 
-          if (route.name === 'Início') iconName = focused ? 'home' : 'home-outline'
-          else if (route.name === 'Dashboard') iconName = focused ? 'bar-chart' : 'bar-chart-outline'
+          if (route.name === 'Início') iconName = focused ? 'heart' : 'heart-outline'
+          else if (route.name === 'Dashboard') iconName = focused ? 'stats-chart' : 'stats-chart-outline'
           else if (route.name === 'Assistente') iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'
-          else if (route.name === 'Perfil') iconName = focused ? 'person' : 'person-outline'
+          else if (route.name === 'Perfil') iconName = focused ? 'person-circle' : 'person-circle-outline'
 
-          return (
-            <View style={{
-              backgroundColor: focused ? 'rgba(196, 104, 122, 0.22)' : 'transparent',
-              borderRadius: 12,
-              width: 48,
-              height: 32,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Ionicons name={iconName} size={22} color={color} />
-            </View>
-          )
+          return <Ionicons name={iconName} size={22} color={color} />
         },
       })}
     >

@@ -4,6 +4,7 @@ import {
   Image, Dimensions, FlatList
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Brand } from '../constants/brandTheme'
 
 const { width, height } = Dimensions.get('window')
 
@@ -54,7 +55,7 @@ export default function OnboardingScreen({ onDone }) {
       return (
         <View style={styles.slide}>
           <Image
-            source={require('../assets/images/maos-azul-recortadas.png')}
+            source={require('../assets/images/maos-ampara-azul.png')}
             style={styles.bigLogo}
             resizeMode="cover"
           />
@@ -71,7 +72,7 @@ export default function OnboardingScreen({ onDone }) {
         <View style={styles.slide}>
           <View style={styles.fullBgWhite}>
             <Image
-              source={require('../assets/images/maos-azul-recortadas.png')}
+              source={require('../assets/images/maos-ampara-azul.png')}
               style={styles.bigLogo}
               resizeMode="cover"
               tintColor="#EFEFEF"
@@ -144,7 +145,7 @@ export default function OnboardingScreen({ onDone }) {
         }}
       />
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, currentIndex === 1 && styles.fullBgFooter]}>
         <View style={styles.dots}>
           {slides.map((_, i) => (
             <View key={i} style={[styles.dot, i === currentIndex && styles.dotActive]} />
@@ -166,20 +167,20 @@ export default function OnboardingScreen({ onDone }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF' },
+  container: { flex: 1, backgroundColor: Brand.surface },
   list: { flex: 1 },
-  slide: { width, flex: 1 },
+  slide: { width, flex: 1, backgroundColor: Brand.surface },
 
   // Slide 1 — boas-vindas
   bigLogo: { width, flex: 1 },
   welcomeBottom: { paddingBottom: 36, paddingLeft: 32 },
-  welcomeLabel: { fontSize: 18, color: '#C4687A', fontWeight: '600', letterSpacing: 0.5 },
-  welcomeBrand: { fontSize: 64, fontWeight: '200', color: '#1B3A6B', letterSpacing: 6, lineHeight: 72 },
+  welcomeLabel: { fontSize: 18, color: Brand.roseDeep, fontWeight: '600' },
+  welcomeBrand: { fontSize: 56, fontWeight: '600', color: Brand.ink, lineHeight: 64 },
 
   // Slide 2 — fullBg
   fullBgWhite: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: Brand.surface,
   },
   fullBgOverlay: {
     position: 'absolute',
@@ -195,14 +196,14 @@ const styles = StyleSheet.create({
   fullBgTitle: {
     fontSize: 40,
     fontWeight: '800',
-    color: '#1B3A6B',
+    color: Brand.ink,
     textAlign: 'center',
     lineHeight: 48,
     marginBottom: 24,
   },
   fullBgDesc: {
     fontSize: 16,
-    color: '#5A8FAF',
+    color: Brand.muted,
     textAlign: 'center',
     lineHeight: 26,
     fontWeight: '500',
@@ -219,12 +220,12 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   headerLogo: { width: 64, height: 64 },
-  headerBrand: { fontSize: 44, fontWeight: '300', color: '#1B3A6B', letterSpacing: 5 },
+  headerBrand: { fontSize: 36, fontWeight: '500', color: Brand.blue },
 
   slideTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#1B3A6B',
+    color: Brand.ink,
     paddingHorizontal: 24,
     marginBottom: 8,
     lineHeight: 36,
@@ -249,7 +250,7 @@ const styles = StyleSheet.create({
 
   slideDesc: {
     fontSize: 14,
-    color: '#5A8FAF',
+    color: Brand.muted,
     paddingHorizontal: 24,
     paddingBottom: 12,
     lineHeight: 22,
@@ -263,13 +264,14 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     gap: 10,
   },
+  fullBgFooter: { backgroundColor: Brand.surface },
   dots: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D0C8C0' },
-  dotActive: { backgroundColor: '#1B3A6B', width: 24, borderRadius: 4 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E7D5DC' },
+  dotActive: { backgroundColor: Brand.rose, width: 24, borderRadius: 8 },
   nextBtn: {
-    backgroundColor: '#C4687A',
+    backgroundColor: Brand.rose,
     paddingVertical: 16,
-    borderRadius: 30,
+    borderRadius: 22,
     alignItems: 'center',
   },
   nextBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
