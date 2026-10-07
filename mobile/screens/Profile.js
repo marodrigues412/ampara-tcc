@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
+import { Brand } from '../constants/brandTheme'
 
 export default function Profile({ navigation }) {
   const [user, setUser] = useState(null)
@@ -49,7 +50,7 @@ export default function Profile({ navigation }) {
 
       {/* ── Cabeçalho coral ── */}
       <View style={styles.header}>
-        <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ position: 'absolute', top: 16, right: 20, width: 36, height: 36, opacity: 0.85 }} resizeMode="contain" />
+        <Image source={require('../assets/images/maos-ampara-azul.png')} style={styles.headerLogo} resizeMode="contain" />
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{inicial}</Text>
         </View>
@@ -60,10 +61,10 @@ export default function Profile({ navigation }) {
       {/* ── Conteúdo sobre fundo cream ── */}
       <View style={styles.content}>
 
-        {/* ── Card info ── */}
+        {/* ── Dados da conta ── */}
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
-            <Ionicons name="person-outline" size={18} color="#5A8FAF" />
+            <Ionicons name="person-outline" size={18} color={Brand.roseDeep} />
             <View style={styles.infoTextCol}>
               <Text style={styles.infoLabel}>Nome</Text>
               <Text style={styles.infoValue}>{profile?.nome || 'Não informado'}</Text>
@@ -71,7 +72,7 @@ export default function Profile({ navigation }) {
           </View>
           <View style={styles.infoDivider} />
           <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={18} color="#5A8FAF" />
+            <Ionicons name="mail-outline" size={18} color={Brand.roseDeep} />
             <View style={styles.infoTextCol}>
               <Text style={styles.infoLabel}>E-mail</Text>
               <Text style={styles.infoValue}>{user?.email}</Text>
@@ -79,7 +80,7 @@ export default function Profile({ navigation }) {
           </View>
           <View style={styles.infoDivider} />
           <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={18} color="#5A8FAF" />
+            <Ionicons name="call-outline" size={18} color={Brand.roseDeep} />
             <View style={styles.infoTextCol}>
               <Text style={styles.infoLabel}>Telefone</Text>
               <Text style={styles.infoValue}>{profile?.telefone || 'Não informado'}</Text>
@@ -89,24 +90,25 @@ export default function Profile({ navigation }) {
 
         {/* ── Menu de ações ── */}
         {[
-          { icon: 'create-outline', label: 'Editar perfil', screen: 'EditProfile' },
-          { icon: 'call-outline', label: 'Contatos de emergência', screen: 'EmergencyContacts' },
+          { icon: 'person-circle-outline', label: 'Editar perfil', screen: 'EditProfile' },
+          { icon: 'heart-circle-outline', label: 'Contatos de emergência', screen: 'EmergencyContacts' },
           { icon: 'location-outline', label: 'Locais seguros', screen: 'SafeLocations' },
-          { icon: 'document-text-outline', label: 'Meus registros e contribuições', screen: 'MyReports' },
         ].map((item) => (
-          <TouchableOpacity
-            key={item.screen}
-            style={styles.menuItem}
-            onPress={() => navigation.navigate(item.screen)}
-          >
-            <Ionicons name={item.icon} size={22} color="#1B3A6B" />
-            <Text style={styles.menuLabel}>{item.label}</Text>
-            <Ionicons name="chevron-forward" size={18} color="#A0B8C8" />
-          </TouchableOpacity>
+          <React.Fragment key={item.screen}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate(item.screen)}
+            >
+              <Ionicons name={item.icon} size={22} color={Brand.roseDeep} />
+              <Text style={styles.menuLabel}>{item.label}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#B99AA5" />
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+          </React.Fragment>
         ))}
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#FFF" />
+          <Ionicons name="log-out-outline" size={20} color={Brand.roseDeep} />
           <Text style={styles.logoutText}>Sair da conta</Text>
         </TouchableOpacity>
 
@@ -116,15 +118,19 @@ export default function Profile({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5EFE6' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5EFE6' },
+  container: { flex: 1, backgroundColor: Brand.canvas },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Brand.canvas },
 
   header: {
-    backgroundColor: '#C4687A',
+    position: 'relative',
+    backgroundColor: Brand.rose,
     alignItems: 'center',
     paddingTop: 64,
-    paddingBottom: 40,
+    paddingBottom: 34,
+    borderBottomLeftRadius: 22,
+    borderBottomRightRadius: 22,
   },
+  headerLogo: { position: 'absolute', top: 54, right: 20, width: 36, height: 36, opacity: 0.9 },
   avatar: {
     width: 84,
     height: 84,
@@ -139,59 +145,48 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
   },
-  avatarText: { color: '#1B3A6B', fontSize: 34, fontWeight: '800' },
+  avatarText: { color: Brand.roseDeep, fontSize: 34, fontWeight: '800' },
   nome: { fontSize: 22, fontWeight: '700', color: '#FFF', marginBottom: 4 },
-  emailText: { fontSize: 13, color: 'rgba(255,255,255,0.75)' },
+  emailText: { fontSize: 13, color: 'rgba(255,255,255,0.85)' },
 
   content: {
-    backgroundColor: '#F5EFE6',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    marginTop: -20,
-    padding: 20,
+    backgroundColor: Brand.canvas,
+    paddingHorizontal: 22,
+    paddingTop: 0,
   },
 
   infoCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 18,
-    elevation: 2,
-    shadowColor: '#1B3A6B',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
+    backgroundColor: 'transparent',
+    paddingVertical: 4,
+    marginBottom: 20,
   },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
   infoTextCol: { flex: 1 },
-  infoLabel: { fontSize: 11, color: '#5A8FAF', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  infoValue: { fontSize: 16, color: '#222', fontWeight: '500', marginTop: 2 },
-  infoDivider: { height: 1, backgroundColor: '#B8D6E8', marginVertical: 2 },
+  infoLabel: { fontSize: 11, color: Brand.muted, fontWeight: '700', textTransform: 'uppercase' },
+  infoValue: { fontSize: 16, color: Brand.ink, fontWeight: '500', marginTop: 2 },
+  infoDivider: { height: 1, backgroundColor: Brand.line, marginVertical: 0, marginLeft: 32, marginRight: 4, opacity: 0.8 },
 
   menuItem: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 10,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    gap: 12,
+    paddingHorizontal: 0,
+    paddingVertical: 17,
+    borderBottomWidth: 0,
   },
-  menuLabel: { flex: 1, fontSize: 15, color: '#1B3A6B', fontWeight: '600' },
+  menuDivider: { height: 1, marginLeft: 34, marginRight: 8, backgroundColor: Brand.line, opacity: 0.72 },
+  menuLabel: { flex: 1, fontSize: 15, color: Brand.ink, fontWeight: '600' },
 
   logoutBtn: {
-    backgroundColor: '#5A8FAF',
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 16,
-    borderRadius: 16,
+    justifyContent: 'flex-start',
+    gap: 10,
+    paddingHorizontal: 0,
+    paddingVertical: 17,
     marginTop: 10,
   },
-  logoutText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  logoutText: { color: Brand.roseDeep, fontWeight: '700', fontSize: 16 },
 })

@@ -14,6 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { LineChart } from 'react-native-chart-kit'
 import { Svg, Path } from 'react-native-svg'
+import { Ionicons } from '@expo/vector-icons'
 import MapView, { Circle, Marker } from 'react-native-maps'
 import {
   calculateWeeklyMetrics,
@@ -29,6 +30,7 @@ import { supabase } from '../services/supabase'
 import { getRecentLocationHistory, getLocationHistoryBetween, getSafeLocations } from '../services/locationService'
 import { getRecentAlerts } from '../services/alertService'
 import { getRecentActivityPeriods } from '../services/activityService'
+import { Brand } from '../constants/brandTheme'
 
 const screenWidth = Dimensions.get('window').width
 const CHART_WIDTH = screenWidth - 80
@@ -179,6 +181,7 @@ export default function Dashboard() {
   const insets = useSafeAreaInsets()
   const [loading, setLoading] = useState(true)
   const [periodDays, setPeriodDays] = useState(7)
+  const [reportSection, setReportSection] = useState('resumo')
 
   const [locationHistory, setLocationHistory] = useState([])
   const [dailyScores, setDailyScores] = useState([])
@@ -293,16 +296,36 @@ export default function Dashboard() {
 
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerSub}>Últimos {periodDays} dias</Text>
-            <Text style={styles.headerTitle}>Relatório Ampara</Text>
+            <Text style={styles.headerSub}>ÚLTIMOS {periodDays} DIAS</Text>
+            <Text style={styles.headerTitle}>Sua segurança</Text>
           </View>
-          <Image source={require('../assets/images/maos-ampara-rosa.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
+          <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
         </View>
 
         <PeriodSelector value={periodDays} onChange={setPeriodDays} />
 
+        <View style={styles.reportTabs} accessibilityRole="tablist">
+          {[
+            { id: 'resumo', label: 'Resumo', icon: 'heart-outline' },
+            { id: 'rotina', label: 'Rotina', icon: 'walk-outline' },
+            { id: 'alertas', label: 'Alertas', icon: 'notifications-outline' },
+          ].map((item) => (
+            <Pressable
+              key={item.id}
+              onPress={() => setReportSection(item.id)}
+              style={[styles.reportTab, reportSection === item.id && styles.reportTabActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: reportSection === item.id }}
+            >
+              <Ionicons name={item.icon} size={17} color={reportSection === item.id ? Brand.roseDeep : Brand.muted} />
+              <Text style={[styles.reportTabText, reportSection === item.id && styles.reportTabTextActive]}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {reportSection === 'resumo' && <>
         {/* Gauge + stats */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={styles.cardTitle}>Índice de Segurança Semanal</Text>
             <TrendBadge trend={trend} />
@@ -345,7 +368,7 @@ export default function Dashboard() {
         </View>
 
         {/* Line chart */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Variação de Segurança</Text>
           <Text style={styles.cardSubtitle}>Pontuação diária de segurança</Text>
           {dailyScores.length === 0 ? (
@@ -377,9 +400,11 @@ export default function Dashboard() {
             </>
           )}
         </View>
+        </>}
 
+        {reportSection === 'rotina' && <>
         {/* Period bars */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Segurança por Período</Text>
           <Text style={styles.cardSubtitle}>Índice de segurança por período do dia</Text>
           {hourlyScores.length === 0 ? (
@@ -392,7 +417,7 @@ export default function Dashboard() {
         </View>
 
         {/* Mapa de risco */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Mapa de Risco por Localização</Text>
           <Text style={styles.cardSubtitle}>Toque e arraste pra explorar · áreas coloridas pelo índice de segurança médio</Text>
           {!mapRegion ? (
@@ -444,7 +469,7 @@ export default function Dashboard() {
         </View>
 
         {/* Locais seguros */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Locais Seguros</Text>
           <Text style={styles.cardSubtitle}>Tempo monitorado dentro dos seus locais seguros cadastrados</Text>
           {safeZoneRatio == null ? (
@@ -455,7 +480,7 @@ export default function Dashboard() {
         </View>
 
         {/* Atividade física x risco */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Atividade Física x Risco</Text>
           <Text style={styles.cardSubtitle}>Índice de segurança médio dentro e fora do modo atividade</Text>
           {!activityRisk ? (
@@ -469,7 +494,7 @@ export default function Dashboard() {
         </View>
 
         {/* Padrão de deslocamento */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Padrão de Deslocamento</Text>
           <Text style={styles.cardSubtitle}>Como você se moveu no período</Text>
           {!movement ? (
@@ -487,9 +512,11 @@ export default function Dashboard() {
             </>
           )}
         </View>
+        </>}
 
+        {reportSection === 'alertas' && <>
         {/* Alerts count */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Alertas Enviados</Text>
           <Text style={styles.cardSubtitle}>Total no período selecionado</Text>
           <View style={{ alignItems: 'center', paddingVertical: 6 }}>
@@ -499,7 +526,7 @@ export default function Dashboard() {
         </View>
 
         {/* Histórico de alertas */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Histórico de Alertas</Text>
           <Text style={styles.cardSubtitle}>Últimos disparos e quem foi notificado</Text>
           {recentAlerts.length === 0 ? (
@@ -522,7 +549,7 @@ export default function Dashboard() {
         </View>
 
         {/* Contatos mais acionados */}
-        <View style={styles.card}>
+        <View style={styles.section}>
           <Text style={styles.cardTitle}>Contatos Mais Acionados</Text>
           <Text style={styles.cardSubtitle}>Quem mais recebeu seus alertas no período</Text>
           {contactsRanking.length === 0 ? (
@@ -539,6 +566,7 @@ export default function Dashboard() {
             ))
           )}
         </View>
+        </>}
 
       </ScrollView>
     </SafeAreaView>
@@ -546,7 +574,7 @@ export default function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5EFE6' },
+  container: { flex: 1, backgroundColor: Brand.canvas },
   scrollContainer: { paddingHorizontal: 20, paddingBottom: 120 },
 
   headerRow: {
@@ -557,41 +585,43 @@ const styles = StyleSheet.create({
   },
   headerSub: {
     fontSize: 12,
-    color: '#5A8FAF',
+    color: Brand.muted,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  headerTitle: { fontSize: 26, fontWeight: 'bold', color: '#1B3A6B' },
+  headerTitle: { fontSize: 26, fontWeight: 'bold', color: Brand.roseDeep },
 
   periodSelector: {
     flexDirection: 'row',
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 4,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: Brand.line,
+    padding: 0,
     marginBottom: 16,
-    elevation: 1,
   },
-  periodOption: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  periodOptionActive: { backgroundColor: '#1B3A6B' },
-  periodOptionText: { fontSize: 13, fontWeight: '600', color: '#5A8FAF' },
-  periodOptionTextActive: { color: '#FFF' },
+  periodOption: { flex: 1, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', alignItems: 'center' },
+  periodOptionActive: { backgroundColor: 'transparent', borderBottomColor: Brand.rose },
+  periodOptionText: { fontSize: 13, fontWeight: '600', color: Brand.muted },
+  periodOptionTextActive: { color: Brand.roseDeep },
+
+  reportTabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Brand.line },
+  reportTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  reportTabActive: { borderBottomColor: Brand.rose },
+  reportTabText: { color: Brand.muted, fontSize: 12, fontWeight: '600' },
+  reportTabTextActive: { color: Brand.roseDeep },
 
   trendBadge: { fontSize: 12, fontWeight: '700' },
 
-  card: {
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#1B3A6B',
-    shadowOpacity: 0.07,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 10,
+  section: {
+    backgroundColor: 'transparent',
+    paddingVertical: 22,
+    marginBottom: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: Brand.line,
   },
-  cardTitle: { fontSize: 15, color: '#1B3A6B', fontWeight: '700', marginBottom: 2 },
-  cardSubtitle: { fontSize: 12, color: '#5A8FAF', marginBottom: 16 },
+  cardTitle: { fontSize: 15, color: Brand.ink, fontWeight: '700', marginBottom: 2 },
+  cardSubtitle: { fontSize: 12, color: Brand.muted, marginBottom: 16 },
 
   gaugeOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center' },
   gaugeBig: { fontSize: 42, fontWeight: '900', lineHeight: 48 },
@@ -611,11 +641,11 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: '#5A8FAF', fontWeight: '600', marginTop: 2 },
   statDivider: { width: 1, backgroundColor: 'rgba(27,58,107,0.1)', marginVertical: 4 },
 
-  chartStyle: { borderRadius: 12, paddingRight: 10, paddingTop: 10 },
+  chartStyle: { paddingRight: 10, paddingTop: 10 },
   chartLabelsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginTop: -6 },
   chartLabelText: { fontSize: 11, color: '#5A8FAF', fontWeight: '600' },
 
-  riskMapContainer: { height: 260, borderRadius: 16, overflow: 'hidden' },
+  riskMapContainer: { height: 260, borderTopLeftRadius: 20, borderTopRightRadius: 10, borderBottomRightRadius: 20, borderBottomLeftRadius: 10, overflow: 'hidden' },
   riskMap: { flex: 1 },
   mapLegendRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 12 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
