@@ -55,7 +55,7 @@ export async function buscarMapaCalor(userLat, userLon, raioKm, ano = null, grup
 // distância — 4,3 segundos para algo que é só uma soma, e ainda truncado em 1.000
 // registros, o que fazia o score enxergar no máximo mil ocorrências por mais densa que
 // fosse a região. Lendo da grade já somada, são 150 ms e o total é real.
-export async function buscarResumoCrimes(userLat, userLon, raioKm = 3, ano = null) {
+export async function buscarResumoCrimes(userLat, userLon, raioKm = 3, ano = null, jaTentou = false) {
   const { data, error } = await supabase.rpc("crimes_resumo", {
     user_lat: userLat,
     user_lon: userLon,
@@ -64,6 +64,12 @@ export async function buscarResumoCrimes(userLat, userLon, raioKm = 3, ano = nul
   });
 
   if (error) {
+    // A primeira chamada depois de um tempo parado leva alguns segundos enquanto a
+    // conexão "acorda"; a seguinte costuma responder em menos de um. Por isso uma
+    // tentativa extra resolve, em vez de deixar a tela sem score.
+    if (error.code === TEMPO_ESGOTADO && !jaTentou) {
+      return buscarResumoCrimes(userLat, userLon, raioKm, ano, true);
+    }
     console.error("ERRO SUPABASE (crimes_resumo):", error);
     return null;
   }
