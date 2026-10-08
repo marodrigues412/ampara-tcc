@@ -28,6 +28,8 @@ import { getActivityStatus, updateActivityStatus } from "../services/activitySer
 import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
+import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
+import { calculateExperimentalRiskScore, EXPERIMENTAL_RISK_SCORE_VERSION, getExperimentalRiskLevel } from '../services/experimentalRiskScore'
 import { Brand } from '../constants/brandTheme'
 
 import { dispararAlerta } from '../services/alertService'
@@ -163,6 +165,7 @@ export default function Home({ navigation }) {
   const [watchMonitoringWanted, setWatchMonitoringWanted] = useState(false)
   const [watchAlertDismissed, setWatchAlertDismissed] = useState(false)
   const [heartRateFreshnessExpired, setHeartRateFreshnessExpired] = useState(true)
+  const [riskContextScore, setRiskContextScore] = useState(null)
 
   const { data, location, riskStatus, errorMsg, currentScore } = useRiskDetection({ insideSafeZone, activityMode })
   const smartwatch = useSmartwatch()
@@ -179,6 +182,13 @@ export default function Home({ navigation }) {
     && smartwatch.measurement?.isDirect
     && smartwatch.measurement?.isRecent
     && !heartRateFreshnessExpired
+  const heartRateBaseline = calculateHeartRateBaseline(
+    smartwatch.heartRateSamples,
+    heartRateIsCurrent ? smartwatch.measurement : null,
+  )
+  const experimentalRiskScore = heartRateBaseline.available
+    ? calculateExperimentalRiskScore({ heartRateZScore: heartRateBaseline.zScore, contextScore: riskContextScore })
+    : null
   const smartwatchWarning = ['disconnected', 'error', 'development_build_required'].includes(smartwatch.directWatchStatus)
     ? {
         title: smartwatch.directWatchStatus === 'development_build_required'
@@ -527,6 +537,8 @@ export default function Home({ navigation }) {
     }
 
     setInsideSafeZone(emZonaSegura)
+    const contextScore = Math.max(0, Math.min(10, score))
+    setRiskContextScore(contextScore)
     score += motionRisk.total
     score = Math.max(score, 0)
     score = Math.min(score, 10)
@@ -1003,6 +1015,28 @@ export default function Home({ navigation }) {
         <Text style={styles.mapSectionTitle}>Sensores do dispositivo</Text>
         {Platform.OS === 'android' && (
           <>
+            <View style={styles.experimentalScorePanel}>
+              <View style={styles.experimentalScoreHeading}>
+                <Text style={styles.experimentalScoreTitle}>Score experimental · BPM + contexto</Text>
+                <Text style={styles.experimentalScoreVersion}>{EXPERIMENTAL_RISK_SCORE_VERSION}</Text>
+              </View>
+              {experimentalRiskScore == null ? (
+                <Text style={styles.experimentalScoreValueUnavailable}>
+                  Aguardando histórico pessoal de BPM por quase 1 hora
+                </Text>
+              ) : (
+                <View style={styles.experimentalScoreResult}>
+                  <Text style={styles.experimentalScoreValue}>{experimentalRiskScore}/10</Text>
+                  <Text style={styles.experimentalScoreLevel}>{getExperimentalRiskLevel(experimentalRiskScore)}</Text>
+                  <Text style={styles.experimentalScoreDetail}>
+                    BPM {heartRateBaseline.zScore >= 0 ? '+' : ''}{heartRateBaseline.zScore.toFixed(1)} desvios · contexto {riskContextScore}/10
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.experimentalScoreDisclaimer}>
+                Prévia exploratória. Não validada, não aciona alertas e não substitui avaliação de segurança.
+              </Text>
+            </View>
             <View style={styles.heartRatePanel}>
               <Ionicons
                 name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
@@ -1018,6 +1052,17 @@ export default function Home({ navigation }) {
               </View>
               <Text style={[styles.heartRateDetail, !heartRateIsCurrent && styles.heartRateDetailStale]}>
                 {heartRateDetail}
+              </Text>
+              <Text style={styles.heartRateBaselineDetail}>
+                {!heartRateIsCurrent
+                  ? 'Aguardando BPM atual para comparar com sua média'
+                  : heartRateBaseline.available
+                  ? `${heartRateBaseline.zScore >= 0 ? '+' : ''}${heartRateBaseline.zScore.toFixed(1)} desvios da sua média da última hora`
+                  : heartRateBaseline.sampleCount < 20
+                    ? `Formando sua média pessoal · ${heartRateBaseline.sampleCount}/20 leituras`
+                    : heartRateBaseline.baselineReady
+                      ? 'Sua média estável não permite calcular o desvio agora'
+                      : `Histórico pessoal: ${heartRateBaseline.coverageMinutes} min · precisa cobrir quase 1 hora`}
               </Text>
             </View>
 
@@ -1761,6 +1806,17 @@ const styles = StyleSheet.create({
   heartRateValueUnavailable: { color: Brand.muted },
   heartRateUnit: { marginLeft: 6, color: Brand.muted, fontSize: 18, fontWeight: '600' },
   heartRateDetail: { minHeight: 18, color: Brand.green, fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  heartRateBaselineDetail: { minHeight: 16, marginTop: 4, color: Brand.muted, fontSize: 11, textAlign: 'center' },
+  experimentalScorePanel: { marginHorizontal: 22, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Brand.line },
+  experimentalScoreHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  experimentalScoreTitle: { color: Brand.ink, fontSize: 13, fontWeight: '700' },
+  experimentalScoreVersion: { color: Brand.muted, fontSize: 10 },
+  experimentalScoreResult: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 5 },
+  experimentalScoreValue: { color: Brand.roseDeep, fontSize: 22, fontWeight: '800' },
+  experimentalScoreLevel: { color: Brand.ink, fontSize: 13, fontWeight: '600' },
+  experimentalScoreValueUnavailable: { marginTop: 5, color: Brand.muted, fontSize: 12 },
+  experimentalScoreDetail: { color: Brand.muted, fontSize: 11 },
+  experimentalScoreDisclaimer: { marginTop: 4, color: Brand.muted, fontSize: 10, lineHeight: 14 },
   heartRateDetailStale: { color: Brand.amber },
   smartwatchConnectionButton: { minHeight: 66, marginHorizontal: 22, marginTop: 0, marginBottom: 14, paddingHorizontal: 0, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Brand.line, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'transparent' },
   smartwatchConnectionButtonConnected: { borderColor: Brand.line },
