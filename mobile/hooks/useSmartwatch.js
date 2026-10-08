@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
+import { appendHeartRateSample } from '../services/heartRateBaseline'
 import {
   connectHealthConnect,
   readLatestHeartRate,
@@ -35,17 +36,37 @@ export function useSmartwatch() {
   const [directWatchStatus, setDirectWatchStatus] = useState('checking')
   const [monitoringStatus, setMonitoringStatus] = useState('checking')
   const [measurement, setMeasurement] = useState(null)
+  const [heartRateSamples, setHeartRateSamples] = useState([])
   const [watchMotion, setWatchMotion] = useState(null)
   const [isBusy, setIsBusy] = useState(false)
   const mountedRef = useRef(true)
   const refreshInFlightRef = useRef(false)
   const lastDirectReadingRef = useRef(null)
+  const heartRateSamplesRef = useRef([])
+
+  const recordHeartRate = useCallback((reading) => {
+    if (!reading?.isDirect) return
+    const previous = heartRateSamplesRef.current
+    const next = appendHeartRateSample(previous, {
+      bpm: reading.bpm,
+      timestamp: reading.time,
+    })
+    const changed = next.length !== previous.length
+      || next.some((sample, index) => sample.timestampMs !== previous[index]?.timestampMs
+        || sample.bpm !== previous[index]?.bpm)
+    if (!changed) return
+    heartRateSamplesRef.current = next
+    setHeartRateSamples(next)
+  }, [])
 
   const applyResult = useCallback((result) => {
     if (!mountedRef.current) return
     setStatus(result.status)
-    if ('measurement' in result) setMeasurement(result.measurement)
-  }, [])
+    if ('measurement' in result) {
+      setMeasurement(result.measurement)
+      recordHeartRate(result.measurement)
+    }
+  }, [recordHeartRate])
 
   const refresh = useCallback(async () => {
     if (refreshInFlightRef.current) return null
@@ -159,5 +180,5 @@ export function useSmartwatch() {
     return () => clearInterval(interval)
   }, [directWatchStatus, refresh])
 
-  return { status, directWatchStatus, monitoringStatus, measurement, watchMotion, isBusy, connect, refresh }
+  return { status, directWatchStatus, monitoringStatus, measurement, heartRateSamples, watchMotion, isBusy, connect, refresh }
 }
