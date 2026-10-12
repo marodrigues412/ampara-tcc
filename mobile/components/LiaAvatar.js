@@ -71,7 +71,7 @@ const REACTIONS = {
 
 const OLD_EXPRESSIONS = { acolhedora: 'oi', tranquila: 'seguro', atenta: 'checagem' }
 
-function SvgPortrait({ reaction, skin, hair, part, reduceMotion }) {
+function SvgPortrait({ reaction, skin, hair, part, reduceMotion, transparentBackground }) {
   const face = REACTIONS[reaction] || REACTIONS.ociosa
   const shade = `#${[1, 3, 5].map((i) => Math.round(parseInt(skin.slice(i, i + 2), 16) * 0.84).toString(16).padStart(2, '0')).join('')}`
   const mouth = MOUTHS[face.mouth]
@@ -79,7 +79,7 @@ function SvgPortrait({ reaction, skin, hair, part, reduceMotion }) {
   if (part === 'body') {
     return (
       <Svg width="100%" height="100%" viewBox="0 0 400 400">
-        <Rect width="400" height="400" fill={COLORS.background} />
+        {!transparentBackground && <Rect width="400" height="400" fill={COLORS.background} />}
         <Path d="M58,440 L58,400 C68,332 120,298 200,298 C280,298 332,332 342,400 L342,440 Z" fill={COLORS.blue} />
         <Path d="M174,250 L174,300 Q200,316 226,300 L226,250 Z" fill={shade} />
         <Path d="M166,300 Q200,313 234,300 L200,348 Z" fill={skin} />
@@ -240,6 +240,7 @@ export default function LiaAvatar({
   hair = COLORS.hair,
   showRing = true,
   showBadge = true,
+  transparentBackground = false,
   accessibilityLabel,
 }) {
   const requestedReaction = reaction || reacao || OLD_EXPRESSIONS[expression] || expression || 'ociosa'
@@ -369,9 +370,9 @@ export default function LiaAvatar({
       {showRing && face.ring && size >= 48 && (
         <AnimatedView style={[{ position: 'absolute', width: size + 14, height: size + 14, borderRadius: (size + 14) / 2, borderWidth: 4, borderColor: ringColor }, ringStyle]} />
       )}
-      <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: COLORS.background }}>
+      <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: transparentBackground ? 'transparent' : COLORS.background }}>
         <AnimatedView style={[{ width: size, height: size, position: 'absolute' }, bodyStyle]}>
-          <SvgPortrait part="body" reaction={currentReaction} skin={skin} hair={hair} reduceMotion={reduceMotion} />
+          <SvgPortrait part="body" reaction={currentReaction} skin={skin} hair={hair} reduceMotion={reduceMotion} transparentBackground={transparentBackground} />
           {previousReaction && (
             <AnimatedView style={[{ position: 'absolute', width: size, height: size, left: 0, top: 0 }, previousFaceStyle]} pointerEvents="none">
               <SvgPortrait part="head" reaction={previousReaction} skin={skin} hair={hair} reduceMotion={reduceMotion} />

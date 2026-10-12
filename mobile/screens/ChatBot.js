@@ -6,12 +6,13 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import LiaAvatar from '../components/LiaAvatar'
 import { perguntarAIA } from '../services/chatService'
+import { Brand } from '../constants/brandTheme'
 
 // Respostas locais curtas para exibir quando a IA estiver indisponível.
 const BASE_RESPOSTAS = [
   {
     palavras: ['sos', 'botão', 'botao', 'acionar', 'emergência', 'emergencia'],
-    texto: 'Para pedir socorro, segure o botão SOS da tela inicial por 3 segundos. Seus contatos de emergência recebem uma mensagem no WhatsApp com sua localização em tempo real.\n\nSe estiver em perigo imediato, ligue 190.',
+    texto: 'Para pedir socorro, segure o botão SOS da tela inicial por 3 segundos. Seus contatos de emergência recebem uma mensagem no WhatsApp com sua localização.\n\nSe estiver em perigo imediato, ligue 190.',
   },
   {
     palavras: ['contato', 'contatos', 'cadastrar', 'adicionar'],
@@ -237,13 +238,13 @@ export default function ChatBot({ navigation }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F5EFE6' },
+  container: { flex: 1, backgroundColor: Brand.canvas },
 
   cabecalho: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#1B3A6B',
+    backgroundColor: Brand.rose,
     paddingTop: 54,
     paddingBottom: 16,
     paddingHorizontal: 16,
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
   },
   cabecalhoTextos: { flex: 1 },
   cabecalhoNome: { color: '#FFF', fontSize: 19, fontWeight: '700' },
-  cabecalhoStatus: { color: '#D5E5F0', fontSize: 12, marginTop: 1 },
+  cabecalhoStatus: { color: '#F9DEE6', fontSize: 12, marginTop: 1 },
 
   listaConteudo: { padding: 16, gap: 12 },
   linha: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '100%' },
@@ -272,14 +273,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E8E0D8',
+    borderColor: Brand.line,
   },
 
   balao: { maxWidth: '78%', paddingVertical: 12, paddingHorizontal: 15, borderRadius: 18 },
-  balaoBot: { backgroundColor: '#FFF', borderBottomLeftRadius: 4 },
-  balaoUsuaria: { backgroundColor: '#C4687A', borderBottomRightRadius: 4 },
+  balaoBot: { backgroundColor: Brand.blueSoft, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#DDEAF2' },
+  balaoUsuaria: { backgroundColor: Brand.rose, borderBottomRightRadius: 4 },
   balaoDigitando: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
-  textoBalao: { fontSize: 15, color: '#1B3A6B', lineHeight: 21 },
+  textoBalao: { fontSize: 15, color: Brand.ink, lineHeight: 21 },
   textoBalaoUsuaria: { color: '#FFF' },
   textoDigitando: { fontSize: 13, color: '#5A8FAF' },
 
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
   sugestao: {
     backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#E8E0D8',
+    borderColor: Brand.line,
     borderRadius: 20,
     paddingVertical: 9,
     paddingHorizontal: 14,
@@ -301,25 +302,25 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: '#FFF',
     borderTopWidth: 1,
-    borderTopColor: '#E8E0D8',
+    borderTopColor: Brand.line,
   },
   campo: {
     flex: 1,
     maxHeight: 110,
     minHeight: 44,
-    backgroundColor: '#F5EFE6',
+    backgroundColor: Brand.surfaceSoft,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
     fontSize: 15,
-    color: '#1B3A6B',
+    color: Brand.ink,
   },
   botaoEnviar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#C4687A',
+    backgroundColor: Brand.rose,
     alignItems: 'center',
     justifyContent: 'center',
   },

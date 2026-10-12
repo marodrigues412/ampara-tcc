@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   brand: {
     fontSize: 36,
     fontWeight: '700',
-    color: Brand.roseDeep,
+    color: Brand.rose,
   },
 
   card: {
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   },
   backRow: { alignItems: 'center' },
   backText: { color: '#999', fontSize: 13, textAlign: 'center' },
-  backLink: { color: Brand.roseDeep, fontWeight: '600' },
+  backLink: { color: Brand.rose, fontWeight: '600' },
 
   navyFill: { flex: 1, minHeight: 60 },
 })
