@@ -60,7 +60,7 @@ function Tabs() {
     >
       <Tab.Screen name="Início" component={Home} />
       <Tab.Screen name="Dashboard" component={Dashboard} />
-      <Tab.Screen name="Assistente" component={ChatBot} />
+      <Tab.Screen name="Assistente" component={ChatBot} options={{ tabBarLabel: 'Lia' }} />
       <Tab.Screen name="Perfil" component={Profile} />
     </Tab.Navigator>
   )
