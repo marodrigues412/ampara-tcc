@@ -102,9 +102,9 @@ export default function LoginScreen({ onLogin }) {
               disabled={provedorCarregando !== null}
             >
               {provedorCarregando === 'google'
-                ? <ActivityIndicator size="small" color={Brand.roseDeep} />
+                ? <ActivityIndicator size="small" color={Brand.rose} />
                 : <>
-                    <Ionicons name="logo-google" size={18} color={Brand.roseDeep} />
+                    <Ionicons name="logo-google" size={18} color={Brand.rose} />
                     <Text style={styles.provedorTextoGoogle}>Google</Text>
                   </>}
             </TouchableOpacity>
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   brand: {
     fontSize: 36,
     fontWeight: '700',
-    color: Brand.roseDeep,
+    color: Brand.rose,
   },
 
   card: {
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   divisorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  divisorLinha: { flex: 1, height: 1, backgroundColor: '#E8E0D8' },
+  divisorLinha: { flex: 1, height: 1, backgroundColor: Brand.line },
   divisorTexto: { color: '#999', fontSize: 12 },
   provedorBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 48, borderRadius: 8, marginBottom: 10 },
   provedorGoogle: { backgroundColor: 'transparent', borderBottomWidth: 1, borderColor: Brand.line },
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
 
   registerRow: { alignItems: 'center', marginTop: 10 },
   registerText: { color: '#999', fontSize: 13, textAlign: 'center' },
-  registerLink: { color: Brand.roseDeep, fontWeight: '600' },
+  registerLink: { color: Brand.rose, fontWeight: '600' },
 
   navyFill: { flex: 1, minHeight: 60 },
 })

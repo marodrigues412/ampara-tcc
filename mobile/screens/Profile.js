@@ -38,7 +38,7 @@ export default function Profile({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#C4687A" />
+        <ActivityIndicator size="large" color={Brand.rose} />
       </View>
     )
   }
@@ -64,7 +64,7 @@ export default function Profile({ navigation }) {
         {/* ── Dados da conta ── */}
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
-            <Ionicons name="person-outline" size={18} color={Brand.roseDeep} />
+            <Ionicons name="person-outline" size={18} color={Brand.rose} />
             <View style={styles.infoTextCol}>
               <Text style={styles.infoLabel}>Nome</Text>
               <Text style={styles.infoValue}>{profile?.nome || 'Não informado'}</Text>
@@ -72,7 +72,7 @@ export default function Profile({ navigation }) {
           </View>
           <View style={styles.infoDivider} />
           <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={18} color={Brand.roseDeep} />
+            <Ionicons name="mail-outline" size={18} color={Brand.rose} />
             <View style={styles.infoTextCol}>
               <Text style={styles.infoLabel}>E-mail</Text>
               <Text style={styles.infoValue}>{user?.email}</Text>
@@ -80,7 +80,7 @@ export default function Profile({ navigation }) {
           </View>
           <View style={styles.infoDivider} />
           <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={18} color={Brand.roseDeep} />
+            <Ionicons name="call-outline" size={18} color={Brand.rose} />
             <View style={styles.infoTextCol}>
               <Text style={styles.infoLabel}>Telefone</Text>
               <Text style={styles.infoValue}>{profile?.telefone || 'Não informado'}</Text>
@@ -99,7 +99,7 @@ export default function Profile({ navigation }) {
               style={styles.menuItem}
               onPress={() => navigation.navigate(item.screen)}
             >
-              <Ionicons name={item.icon} size={22} color={Brand.roseDeep} />
+              <Ionicons name={item.icon} size={22} color={Brand.rose} />
               <Text style={styles.menuLabel}>{item.label}</Text>
               <Ionicons name="chevron-forward" size={18} color="#B99AA5" />
             </TouchableOpacity>
@@ -108,7 +108,7 @@ export default function Profile({ navigation }) {
         ))}
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color={Brand.roseDeep} />
+          <Ionicons name="log-out-outline" size={20} color={Brand.rose} />
           <Text style={styles.logoutText}>Sair da conta</Text>
         </TouchableOpacity>
 
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
   },
-  avatarText: { color: Brand.roseDeep, fontSize: 34, fontWeight: '800' },
+  avatarText: { color: Brand.rose, fontSize: 34, fontWeight: '800' },
   nome: { fontSize: 22, fontWeight: '700', color: '#FFF', marginBottom: 4 },
   emailText: { fontSize: 13, color: 'rgba(255,255,255,0.85)' },
 
@@ -188,5 +188,5 @@ const styles = StyleSheet.create({
     paddingVertical: 17,
     marginTop: 10,
   },
-  logoutText: { color: Brand.roseDeep, fontWeight: '700', fontSize: 16 },
+  logoutText: { color: Brand.rose, fontWeight: '700', fontSize: 16 },
 })

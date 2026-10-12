@@ -11,6 +11,7 @@ import {
 import { Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
+import { Brand } from '../constants/brandTheme'
 
 export default function MyReports({ navigation }) {
   const [reports, setReports] = useState([])
@@ -102,7 +103,7 @@ export default function MyReports({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1B3A6B" />
+        <ActivityIndicator size="large" color={Brand.blue} />
       </View>
     )
   }
@@ -111,7 +112,7 @@ export default function MyReports({ navigation }) {
     <View style={styles.container}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
+          <Ionicons name="chevron-back" size={20} color={Brand.blue} />
           <Text style={styles.backText}>Voltar</Text>
         </TouchableOpacity>
         <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
@@ -140,7 +141,7 @@ export default function MyReports({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFE6',
+    backgroundColor: Brand.canvas,
     padding: 20
   },
   backButton: {
@@ -152,13 +153,13 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 16,
-    color: '#1B3A6B',
+    color: Brand.blue,
     fontWeight: '600'
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1B3A6B',
+    color: Brand.blue,
     marginTop: 10,
   },
   subtitle: {
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40
   },
   reportCard: {
-    backgroundColor: '#FDEAEC',
+    backgroundColor: Brand.surfaceRose,
     padding: 18,
     borderRadius: 20,
     marginBottom: 12,
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
   reportType: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#C4687A'
+    color: Brand.rose
   },
   reportLocal: {
     fontSize: 14,

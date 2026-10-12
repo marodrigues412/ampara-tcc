@@ -15,11 +15,13 @@ import {
   Platform,
   Switch,
   Linking,
-  Image
+  Image,
+  AccessibilityInfo,
 } from 'react-native'
 
 import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
+import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import { buscarOcorrencias, buscarMapaCalor, buscarResumoCrimes } from '../services/crimesService'
@@ -30,6 +32,7 @@ import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { Brand } from '../constants/brandTheme'
 import LiaAvatar from '../components/LiaAvatar'
+import LiaHelpModal from '../components/LiaHelpModal'
 
 import { dispararAlerta } from '../services/alertService'
 import { camadasDifusas, DENSIDADE_VERMELHO } from '../utils/mapaCalor'
@@ -56,6 +59,8 @@ const { Circle, Marker } = nativeMaps || {}
 
 const SHOW_PRESENTATION_MODE = false
 const LIVE_HEART_RATE_MS = 10_000
+const SOS_HOLD_MS = 3_000
+const SOS_HOLD_SECONDS = SOS_HOLD_MS / 1_000
 
 const criarGeoJSONMapa = (crimes, ocorrencias) => ({
   type: 'FeatureCollection',
@@ -247,6 +252,7 @@ export default function Home({ navigation }) {
 
   // --- Estados de Interface e Mapa ---
   const [modalVisible, setModalVisible] = useState(false)
+  const [helpInfo, setHelpInfo] = useState(null)
   // { roubo: 3475, furto: 12738, ... } no raio de RAIO_INICIAL_KM em volta da usuária.
   const [resumoCrimes, setResumoCrimes] = useState({})
   const [occurrenceData, setOccurrenceData] = useState([])
@@ -306,10 +312,13 @@ export default function Home({ navigation }) {
   const [countdown, setCountdown] = useState(30)
   const [alertaDisparado, setAlertaDisparado] = useState(false);
   const timerRef = useRef(null);
+  const sosHoldTimerRef = useRef(null);
+  const sosHoldIntervalRef = useRef(null);
   const lastAlertSentRef = useRef(null);
   const cancelCooldownRef = useRef(null);
   const [sustainedHighRisk, setSustainedHighRisk] = useState(false);
   const [sosHolding, setSosHolding] = useState(false);
+  const [sosHoldCountdown, setSosHoldCountdown] = useState(SOS_HOLD_SECONDS)
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
   const [sosFeedbackData, setSosFeedbackData] = useState({ status: 'enviando', mensagem: '', enviados: [], falhas: [], endereco: '', detalhe: '' });
   const [simpleCheckVisible, setSimpleCheckVisible] = useState(false);
@@ -473,6 +482,16 @@ export default function Home({ navigation }) {
     await updateActivityStatus(user.id, value, "academia")
   }
 
+  const showMonitoringInfo = () => setHelpInfo({
+    title: 'Monitoramento',
+    message: 'Com o monitoramento ativo, o Ampara acompanha os sinais disponíveis no celular e no relógio para identificar situações que merecem uma checagem. Isso não substitui ajuda de emergência. O SOS pode ser acionado manualmente a qualquer momento.',
+  })
+
+  const showActivityInfo = () => setHelpInfo({
+    title: 'Modo atividade',
+    message: 'Ative só enquanto estiver se exercitando. O Ampara considera esse contexto ao interpretar movimentos e calcular o risco, para não tratar o exercício como um movimento incomum. O monitoramento e o SOS continuam ativos. Desative ao terminar.',
+  })
+
   function toggleMonitoramento(value) {
     setMonitoramentoAtivo(value)
     if (!value) {
@@ -588,6 +607,44 @@ export default function Home({ navigation }) {
       detalhe: resultado.enviado ? '' : resultado.detalhe,
     });
   }
+
+  const clearSosHoldTimers = () => {
+    if (sosHoldTimerRef.current) clearTimeout(sosHoldTimerRef.current)
+    if (sosHoldIntervalRef.current) clearInterval(sosHoldIntervalRef.current)
+    sosHoldTimerRef.current = null
+    sosHoldIntervalRef.current = null
+  }
+
+  const beginSosHold = () => {
+    if (sosHoldTimerRef.current) return
+    setSosHolding(true)
+    setSosHoldCountdown(SOS_HOLD_SECONDS)
+    AccessibilityInfo.announceForAccessibility('Segure por três segundos para enviar um alerta SOS.')
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
+
+    sosHoldIntervalRef.current = setInterval(() => {
+      setSosHoldCountdown((seconds) => Math.max(0, seconds - 1))
+    }, 1_000)
+    sosHoldTimerRef.current = setTimeout(() => {
+      clearSosHoldTimers()
+      setSosHolding(false)
+      setSosHoldCountdown(0)
+      AccessibilityInfo.announceForAccessibility('Alerta SOS acionado. Enviando para sua rede de apoio.')
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {})
+      void executarEnvioDeSocorro()
+    }, SOS_HOLD_MS)
+  }
+
+  const cancelSosHold = () => {
+    if (sosHoldTimerRef.current) clearSosHoldTimers()
+    setSosHolding(false)
+    setSosHoldCountdown(SOS_HOLD_SECONDS)
+  }
+
+  useEffect(() => () => {
+    if (sosHoldTimerRef.current) clearTimeout(sosHoldTimerRef.current)
+    if (sosHoldIntervalRef.current) clearInterval(sosHoldIntervalRef.current)
+  }, [])
 
   const handleUserIsSafe = () => {
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -921,6 +978,9 @@ export default function Home({ navigation }) {
             <View style={styles.topModeHeading}>
               <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={17} color={monitoramentoAtivo ? Brand.green : Brand.muted} />
               <Text style={styles.topModeTitle}>Monitoramento</Text>
+              <TouchableOpacity onPress={showMonitoringInfo} hitSlop={8} accessibilityRole="button" accessibilityLabel="O que é monitoramento?">
+                <Ionicons name="help-circle-outline" size={16} color={Brand.blue} />
+              </TouchableOpacity>
             </View>
             <View style={styles.topModeControlRow}>
               <Text style={[styles.topModeSubtitle, !monitoramentoAtivo && styles.monitoringStatusOff]} numberOfLines={1}>
@@ -938,8 +998,11 @@ export default function Home({ navigation }) {
           <View style={styles.topModeDivider} />
           <View style={styles.topModeCell}>
             <View style={styles.topModeHeading}>
-              <Ionicons name="fitness-outline" size={17} color={activityMode ? Brand.roseDeep : Brand.muted} />
+              <Ionicons name="fitness-outline" size={17} color={activityMode ? Brand.rose : Brand.muted} />
               <Text style={styles.topModeTitle}>Atividade</Text>
+              <TouchableOpacity onPress={showActivityInfo} hitSlop={8} accessibilityRole="button" accessibilityLabel="O que é modo atividade?">
+                <Ionicons name="help-circle-outline" size={16} color={Brand.blue} />
+              </TouchableOpacity>
             </View>
             <View style={styles.topModeControlRow}>
               <Text style={styles.topModeSubtitle} numberOfLines={1}>
@@ -966,7 +1029,7 @@ export default function Home({ navigation }) {
                 accessibilityRole="button"
                 accessibilityLabel={`Conversar com a Lia. Estado atual: ${monitoramentoAtivo ? displayLevel : 'monitoramento pausado'}`}
               >
-                <LiaAvatar size={68} reaction={liaReaction} />
+                <LiaAvatar size={104} reaction={liaReaction} showRing={false} transparentBackground />
               </TouchableOpacity>
               <View style={styles.riskContent}>
                 <Text style={styles.riskLabel}>Risco atual</Text>
@@ -1012,7 +1075,7 @@ export default function Home({ navigation }) {
               accessibilityRole="tab"
               accessibilityState={{ selected: homeSection === item.id }}
             >
-              <Ionicons name={item.icon} size={17} color={homeSection === item.id ? Brand.roseDeep : Brand.muted} />
+              <Ionicons name={item.icon} size={17} color={homeSection === item.id ? Brand.rose : Brand.muted} />
               <Text style={[styles.homeSectionTabText, homeSection === item.id && styles.homeSectionTabTextActive]}>{item.label}</Text>
             </TouchableOpacity>
           ))}
@@ -1026,7 +1089,7 @@ export default function Home({ navigation }) {
               <Ionicons
                 name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
                 size={23}
-                color={heartRateIsCurrent ? Brand.roseDeep : '#9A8C93'}
+                color={heartRateIsCurrent ? Brand.rose : '#9A8C93'}
               />
               <Text style={styles.heartRateLabel}>FREQUÊNCIA CARDÍACA</Text>
               <View style={styles.heartRateValueRow}>
@@ -1051,7 +1114,7 @@ export default function Home({ navigation }) {
               accessibilityLabel="Conexão com smartwatch"
             >
               <View style={styles.smartwatchIconWrap}>
-                <Ionicons name="watch-outline" size={22} color={smartwatchConnected ? Brand.green : Brand.roseDeep} />
+                <Ionicons name="watch-outline" size={22} color={smartwatchConnected ? Brand.green : Brand.rose} />
               </View>
               <View style={styles.smartwatchConnectionTexts}>
                 <Text style={styles.smartwatchConnectionTitle}>
@@ -1060,12 +1123,12 @@ export default function Home({ navigation }) {
                 <Text style={styles.smartwatchConnectionSubtitle}>{smartwatchConnectionText}</Text>
               </View>
               {smartwatch.isBusy ? (
-                <ActivityIndicator size="small" color={Brand.roseDeep} />
+                <ActivityIndicator size="small" color={Brand.rose} />
               ) : (
                 <Ionicons
                   name={smartwatchConnected ? 'checkmark-circle' : 'link-outline'}
                   size={23}
-                  color={smartwatchConnected ? Brand.green : Brand.roseDeep}
+                  color={smartwatchConnected ? Brand.green : Brand.rose}
                 />
               )}
             </TouchableOpacity>
@@ -1099,8 +1162,8 @@ export default function Home({ navigation }) {
           </>
         )}
         <View style={styles.forceRow}>
-          <Ionicons name="phone-portrait-outline" size={18} color={isHighRisk ? Brand.roseDeep : Brand.muted} />
-          <Text style={[styles.forceValue, { color: isHighRisk ? Brand.roseDeep : Brand.ink }]}>{magnitude}G</Text>
+          <Ionicons name="phone-portrait-outline" size={18} color={isHighRisk ? Brand.rose : Brand.muted} />
+          <Text style={[styles.forceValue, { color: isHighRisk ? Brand.rose : Brand.ink }]}>{magnitude}G</Text>
           <Text style={styles.forceLabel}>Acelerômetro do celular{motionRisk.phonePoints > 0 ? ` · +${motionRisk.phonePoints}` : ''}</Text>
           {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
         </View>
@@ -1188,12 +1251,12 @@ export default function Home({ navigation }) {
                   <MapLibreLayer
                     id="ampara-safety-radius-fill"
                     type="fill"
-                    paint={{ 'fill-color': '#C4687A', 'fill-opacity': 0.10 }}
+                    paint={{ 'fill-color': Brand.rose, 'fill-opacity': 0.10 }}
                   />
                   <MapLibreLayer
                     id="ampara-safety-radius-outline"
                     type="line"
-                    paint={{ 'line-color': '#C4687A', 'line-width': 1.5 }}
+                    paint={{ 'line-color': Brand.rose, 'line-width': 1.5 }}
                   />
                 </MapLibreGeoJSONSource>
                 {/* Crimes viram mancha de calor: mil alfinetes sobrepostos não dizem onde
@@ -1241,7 +1304,7 @@ export default function Home({ navigation }) {
                     filter={['==', ['get', 'kind'], 'occurrence']}
                     paint={{
                       'circle-radius': 6,
-                      'circle-color': '#C4687A',
+                      'circle-color': Brand.rose,
                       'circle-stroke-color': '#FFFFFF',
                       'circle-stroke-width': 2,
                     }}
@@ -1287,7 +1350,7 @@ export default function Home({ navigation }) {
                       center={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
                       radius={3000}
                       fillColor="rgba(196, 104, 122, 0.10)"
-                      strokeColor="#C4687A"
+                      strokeColor={Brand.rose}
                       strokeWidth={1.5}
                     />
                   )}
@@ -1312,7 +1375,7 @@ export default function Home({ navigation }) {
                     <Marker
                       key={`occurrence-${occurrence.id}`}
                       coordinate={{ latitude: Number(occurrence.lat), longitude: Number(occurrence.lon) }}
-                      pinColor="#C4687A"
+                      pinColor={Brand.rose}
                       title={occurrence.tipo}
                       description={occurrence.descricao}
                     />
@@ -1323,7 +1386,7 @@ export default function Home({ navigation }) {
               <View style={styles.mapLegend}>
                 <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#5A8FAF' }]} /><Text style={styles.legendText}>Você</Text></View>
                 <View style={styles.legendItem}><View style={[styles.legendDot, styles.legendCalor]} /><Text style={styles.legendText}>Concentração SSP</Text></View>
-                <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C4687A' }]} /><Text style={styles.legendText}>Ampara</Text></View>
+                <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: Brand.rose }]} /><Text style={styles.legendText}>Ampara</Text></View>
               </View>
 
               {mapMoved && (
@@ -1339,13 +1402,13 @@ export default function Home({ navigation }) {
         </View>
 
         {/* ── CRIME STRIP ── */}
-        <View style={[styles.crimeStrip, { borderLeftColor: totalFiltrado > 0 ? '#C4687A' : '#2E8B57' }]}>
+        <View style={[styles.crimeStrip, { borderLeftColor: totalFiltrado > 0 ? Brand.rose : '#2E8B57' }]}>
           <Ionicons
             name={totalFiltrado > 0 ? 'warning-outline' : 'checkmark-circle-outline'}
             size={16}
-            color={totalFiltrado > 0 ? '#C4687A' : '#2E8B57'}
+            color={totalFiltrado > 0 ? Brand.rose : '#2E8B57'}
           />
-          <Text style={[styles.crimeStripText, { color: totalFiltrado > 0 ? '#C4687A' : '#2E8B57' }]}>
+          <Text style={[styles.crimeStripText, { color: totalFiltrado > 0 ? Brand.rose : '#2E8B57' }]}>
             {totalFiltrado > 0
               ? `${totalFiltrado.toLocaleString('pt-BR')} ${rotuloFiltro} num raio de ${RAIO_INICIAL_KM} km${anoFiltro ? ` em ${anoFiltro}` : ''}`
               : `Nenhum registro${tiposSelecionados.length > 0 ? ` de ${rotuloFiltro}` : ''} por perto${anoFiltro ? ` em ${anoFiltro}` : ''}`}
@@ -1433,21 +1496,42 @@ export default function Home({ navigation }) {
 
       </ScrollView>
 
-      <View style={styles.floatingContainer} pointerEvents="box-none">
+      <View style={[styles.floatingContainer, sosHolding && styles.floatingContainerHolding]} pointerEvents="box-none">
         <Pressable
           style={[styles.fabHelp, sosHolding && styles.fabHelpHolding]}
-          onLongPress={executarEnvioDeSocorro}
-          onPressIn={() => setSosHolding(true)}
-          onPressOut={() => setSosHolding(false)}
-          delayLongPress={3000}
+          onPressIn={beginSosHold}
+          onPressOut={cancelSosHold}
+          accessibilityRole="button"
+          accessibilityLabel="Segure por três segundos para enviar um alerta SOS"
+          accessibilityHint="O alerta será enviado à sua rede de apoio com sua localização."
         >
           <View style={styles.quickActionContent}>
             <Ionicons name="alert-circle" size={18} color="#FFF" />
             <Text style={styles.fabText}>SOS</Text>
           </View>
-          {sosHolding && <Text style={styles.fabHoldHint}>segure...</Text>}
+          <Text style={styles.fabHoldHint}>{sosHolding ? 'continue segurando' : 'segure 3 s'}</Text>
         </Pressable>
       </View>
+
+      {sosHolding && (
+        <View style={styles.sosHoldOverlay} pointerEvents="none">
+          <View style={styles.sosHoldCenter}>
+            <View style={styles.sosHoldCircle}>
+              <Text style={styles.sosHoldCount}>{sosHoldCountdown}</Text>
+              <Text style={styles.sosHoldSeconds}>seg</Text>
+            </View>
+            <Text style={styles.sosHoldTitle}>Continue segurando SOS</Text>
+            <Text style={styles.sosHoldMessage}>Seu alerta será enviado à rede de apoio</Text>
+          </View>
+        </View>
+      )}
+
+      <LiaHelpModal
+        visible={Boolean(helpInfo)}
+        title={helpInfo?.title}
+        message={helpInfo?.message}
+        onClose={() => setHelpInfo(null)}
+      />
 
       {/* MODAL FEEDBACK SOS */}
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
@@ -1557,7 +1641,7 @@ export default function Home({ navigation }) {
                 <View style={styles.inputRow}>
                   <TextInput style={styles.inputFlex} placeholder="Buscar endereço..." value={occEndereco} onChangeText={searchAddress} />
                   <TouchableOpacity style={styles.gpsBtn} onPress={handleUseCurrentLocation}>
-                    {loadingGPS ? <ActivityIndicator size="small" color="#1B3A6B" /> : <Ionicons name="locate" size={18} color="#1B3A6B" />}
+                    {loadingGPS ? <ActivityIndicator size="small" color={Brand.blue} /> : <Ionicons name="locate" size={18} color={Brand.blue} />}
                   </TouchableOpacity>
                 </View>
 
@@ -1634,7 +1718,7 @@ export default function Home({ navigation }) {
                 <Text style={styles.btnSafeText}>Sim, estou bem</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.btnPrimary, { marginTop: 10, backgroundColor: '#C4687A' }]}
+                style={[styles.btnPrimary, { marginTop: 10, backgroundColor: Brand.rose }]}
                 onPress={() => { setSimpleCheckVisible(false); executarEnvioDeSocorro(); }}
               >
                 <Text style={styles.btnPrimaryText}>Preciso de ajuda</Text>
@@ -1648,7 +1732,7 @@ export default function Home({ navigation }) {
       <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: alertType === 'critico' ? '#C4687A' : '#D4A017' }]} />
+            <View style={[styles.modalStrip, { backgroundColor: alertType === 'critico' ? Brand.rose : '#D4A017' }]} />
             <View style={styles.modalInner}>
               <View style={{ alignItems: 'center', marginBottom: 8 }}>
                 <LiaAvatar size={72} reaction={alertType === 'critico' ? 'critico' : 'checagem'} />
@@ -1663,8 +1747,8 @@ export default function Home({ navigation }) {
               </Text>
 
               <View style={{alignItems: 'center', marginVertical: 10}}>
-                <View style={[styles.timerCircle, { borderColor: alertType === 'critico' ? '#C4687A' : '#D4A017' }]}>
-                  <Text style={[styles.timerCountText, { color: alertType === 'critico' ? '#C4687A' : '#D4A017' }]}>{countdown}</Text>
+                <View style={[styles.timerCircle, { borderColor: alertType === 'critico' ? Brand.rose : '#D4A017' }]}>
+                  <Text style={[styles.timerCountText, { color: alertType === 'critico' ? Brand.rose : '#D4A017' }]}>{countdown}</Text>
                   <Text style={styles.timerSecondsText}>seg</Text>
                 </View>
               </View>
@@ -1706,7 +1790,7 @@ export default function Home({ navigation }) {
 
           <View style={styles.watchAlertContent}>
             <View style={styles.watchAlertIcon}>
-              <Ionicons name="heart-dis" size={38} color="#C4475D" />
+              <Ionicons name="heart-dis" size={38} color={Brand.rose} />
             </View>
             <Text style={styles.watchAlertEyebrow}>ATENÇÃO AO MONITORAMENTO</Text>
             <Text style={styles.watchAlertTitle}>O Ampara não está recebendo seus batimentos</Text>
@@ -1742,7 +1826,7 @@ const styles = StyleSheet.create({
   headerContainer: { paddingTop: 52, paddingHorizontal: 22, paddingBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerLogo: { width: 42, height: 36 },
-  header: { fontSize: 29, color: Brand.roseDeep, fontWeight: '700' },
+  header: { fontSize: 29, color: Brand.rose, fontWeight: '700' },
 
   topModesRow: { minHeight: 70, marginHorizontal: 22, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: Brand.line },
   topModeCell: { flex: 1, minWidth: 0, paddingVertical: 7, paddingHorizontal: 4 },
@@ -1753,23 +1837,23 @@ const styles = StyleSheet.create({
   topModeDivider: { width: 1, height: 42, backgroundColor: Brand.line, marginHorizontal: 8 },
   monitoringStatusOff: { color: Brand.muted },
 
-  riskSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
-  riskPanel: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 24, backgroundColor: '#FFF', borderWidth: 1, borderColor: Brand.line },
-  riskPanelTop: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  riskLiaButton: { width: 74, height: 74, alignItems: 'center', justifyContent: 'center' },
+  riskSection: { marginTop: 12, marginBottom: 6, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 14, backgroundColor: Brand.surfaceRose, borderTopLeftRadius: 28, borderBottomRightRadius: 28 },
+  riskPanel: { paddingHorizontal: 0, paddingVertical: 4, backgroundColor: 'transparent' },
+  riskPanelTop: { minHeight: 124, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  riskLiaButton: { width: 108, height: 116, alignItems: 'center', justifyContent: 'center' },
   riskContent: { flex: 1, minWidth: 0, justifyContent: 'center', gap: 1 },
-  riskRow: { minHeight: 38, flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'baseline' },
-  riskSummary: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  riskLabel: { fontSize: 11, color: Brand.roseDeep, fontWeight: '700', textTransform: 'uppercase' },
-  riskBadgeText: { color: Brand.roseDeep, fontWeight: '700', fontSize: 13 },
+  riskRow: { minHeight: 48, flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'baseline' },
+  riskSummary: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  riskLabel: { fontSize: 13, color: Brand.rose, fontWeight: '700', textTransform: 'uppercase' },
+  riskBadgeText: { color: Brand.rose, fontWeight: '700', fontSize: 14 },
   riskCompactRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center' },
-  gaugeScoreBig: { fontSize: 38, fontWeight: '800', lineHeight: 42 },
-  gaugeScoreMax: { fontSize: 16, fontWeight: '500', color: Brand.muted },
+  gaugeScoreBig: { fontSize: 52, fontWeight: '800', lineHeight: 56 },
+  gaugeScoreMax: { fontSize: 18, fontWeight: '500', color: Brand.muted },
   gaugeDesc: { fontSize: 11, lineHeight: 15, color: Brand.muted },
   timeFactorRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   timeFactorText: { flexShrink: 1, color: Brand.muted, fontSize: 11, lineHeight: 15, fontWeight: '600' },
   safeRiskText: { color: Brand.green },
-  scoreTrack: { height: 5, overflow: 'hidden', marginTop: 10, borderRadius: 4, backgroundColor: 'rgba(118,103,112,0.16)' },
+  scoreTrack: { height: 6, overflow: 'hidden', marginTop: 12, borderRadius: 4, backgroundColor: 'rgba(118,103,112,0.16)' },
   scoreFill: { height: '100%', borderRadius: 4 },
 
   safeStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 12, backgroundColor: Brand.mint },
@@ -1779,14 +1863,14 @@ const styles = StyleSheet.create({
   homeSectionTab: { minWidth: 112, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 13, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   homeSectionTabActive: { borderBottomColor: Brand.rose },
   homeSectionTabText: { color: Brand.muted, fontSize: 13, fontWeight: '600' },
-  homeSectionTabTextActive: { color: Brand.roseDeep },
+  homeSectionTabTextActive: { color: Brand.rose },
   mapSectionTitle: { marginHorizontal: 22, marginTop: 20, marginBottom: 14, color: Brand.ink, fontSize: 19, fontWeight: '700' },
   sensorAvailabilityNote: { marginHorizontal: 22, paddingVertical: 14, color: Brand.muted, fontSize: 12, lineHeight: 18, borderBottomWidth: 1, borderBottomColor: Brand.line },
 
   heartRatePanel: { minHeight: 132, marginHorizontal: 22, marginTop: 2, paddingVertical: 12, paddingHorizontal: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: Brand.line },
   heartRateLabel: { marginTop: 6, color: Brand.muted, fontSize: 11, fontWeight: '700' },
   heartRateValueRow: { minHeight: 58, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
-  heartRateValue: { color: Brand.roseDeep, fontSize: 46, lineHeight: 56, fontWeight: '800' },
+  heartRateValue: { color: Brand.rose, fontSize: 46, lineHeight: 56, fontWeight: '800' },
   heartRateValueUnavailable: { color: Brand.muted },
   heartRateUnit: { marginLeft: 6, color: Brand.muted, fontSize: 18, fontWeight: '600' },
   heartRateDetail: { minHeight: 18, color: Brand.green, fontSize: 12, fontWeight: '600', textAlign: 'center' },
@@ -1808,7 +1892,7 @@ const styles = StyleSheet.create({
   watchAlertClose: { width: 42, height: 42, borderRadius: 21, backgroundColor: Brand.surfaceRose, alignItems: 'center', justifyContent: 'center' },
   watchAlertContent: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 460, width: '100%', alignSelf: 'center' },
   watchAlertIcon: { width: 76, height: 76, borderRadius: 38, backgroundColor: Brand.surfaceRose, alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
-  watchAlertEyebrow: { color: Brand.roseDeep, fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
+  watchAlertEyebrow: { color: Brand.rose, fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
   watchAlertTitle: { color: Brand.ink, fontSize: 26, lineHeight: 32, fontWeight: '800', textAlign: 'center' },
   watchAlertBody: { color: Brand.muted, fontSize: 16, lineHeight: 23, textAlign: 'center', marginTop: 14 },
   watchAlertSteps: { width: '100%', marginTop: 28, padding: 18, backgroundColor: Brand.surface, borderRadius: 20, borderWidth: 1, borderColor: Brand.line, gap: 10 },
@@ -1817,15 +1901,15 @@ const styles = StyleSheet.create({
   watchAlertButton: { width: '100%', minHeight: 54, marginTop: 24, backgroundColor: Brand.rose, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   watchAlertButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 
-  separator: { height: 1, backgroundColor: '#E8E0D8', marginHorizontal: 22 },
+  separator: { height: 1, backgroundColor: Brand.line, marginHorizontal: 22 },
 
   filtroBloco: { marginHorizontal: 20, marginBottom: 14 },
   filtroCabecalho: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   filtroTitulo: { fontSize: 11, color: '#5A8FAF', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 },
-  filtroLimpar: { fontSize: 12, color: '#C4687A', fontWeight: '700', marginBottom: 8 },
+  filtroLimpar: { fontSize: 12, color: Brand.rose, fontWeight: '700', marginBottom: 8 },
   filtroRow: { gap: 8, paddingRight: 20 },
-  filtroChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: '#E8E0D8', backgroundColor: '#FFF' },
-  filtroChipAtivo: { backgroundColor: '#1B3A6B', borderColor: '#1B3A6B' },
+  filtroChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: Brand.line, backgroundColor: '#FFF' },
+  filtroChipAtivo: { backgroundColor: Brand.blue, borderColor: Brand.blue },
   filtroChipVazio: { opacity: 0.45 },
   filtroTexto: { fontSize: 13, color: '#5A8FAF', fontWeight: '600' },
   filtroContagem: { fontSize: 11, color: '#9AA0A6', fontWeight: '700' },
@@ -1833,7 +1917,7 @@ const styles = StyleSheet.create({
 
   mapContainer: { height: 300, borderTopLeftRadius: 24, borderTopRightRadius: 12, borderBottomRightRadius: 24, borderBottomLeftRadius: 12, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
   map: { flex: 1 },
-  recenterButton: { position: 'absolute', bottom: 44, left: 12, backgroundColor: '#1B3A6B', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20 },
+  recenterButton: { position: 'absolute', bottom: 44, left: 12, backgroundColor: Brand.blue, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20 },
   mapLegend: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
@@ -1848,43 +1932,51 @@ const styles = StyleSheet.create({
   forceRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 22, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Brand.line },
   forceValue: { fontSize: 22, fontWeight: '700' },
   forceLabel: { fontSize: 13, color: '#AAA', flex: 1 },
-  forcePill: { backgroundColor: '#FDEAEC', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
-  forcePillText: { color: '#C4687A', fontSize: 11, fontWeight: '700' },
+  forcePill: { backgroundColor: Brand.surfaceRose, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
+  forcePillText: { color: Brand.rose, fontSize: 11, fontWeight: '700' },
   watchMotionRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 22, paddingVertical: 8 },
-  watchMotionValue: { minWidth: 82, color: '#1B3A6B', fontSize: 14, fontWeight: '700' },
+  watchMotionValue: { minWidth: 82, color: Brand.blue, fontSize: 14, fontWeight: '700' },
   watchMotionTexts: { flex: 1 },
   watchMotionTitle: { color: '#526170', fontSize: 12, fontWeight: '700' },
   watchMotionDetail: { color: '#737B83', fontSize: 10, marginTop: 2 },
 
   floatingContainer: { position: 'absolute', bottom: 30, right: 20, alignItems: 'flex-end', zIndex: 10 },
+  floatingContainerHolding: { zIndex: 30 },
   quickActionContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  fabHelp: { backgroundColor: '#E8622A', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, elevation: 8, alignItems: 'center' },
-  fabHelpHolding: { backgroundColor: '#B84C14', transform: [{ scale: 1.08 }] },
-  fabHoldHint: { color: '#FFD8B0', fontSize: 10, fontWeight: '600', marginTop: 2 },
-  fabText: { color: '#FFF', fontWeight: '600', fontSize: 13 },
+  fabHelp: { minWidth: 112, minHeight: 58, backgroundColor: Brand.danger, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 30, elevation: 8, alignItems: 'center', justifyContent: 'center' },
+  fabHelpHolding: { backgroundColor: '#9F2B40', transform: [{ scale: 1.22 }] },
+  fabHoldHint: { color: '#FFF1F4', fontSize: 10, fontWeight: '600', marginTop: 2 },
+  fabText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  sosHoldOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 20, backgroundColor: 'rgba(38, 25, 31, 0.78)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 },
+  sosHoldCenter: { alignItems: 'center', gap: 10 },
+  sosHoldCircle: { width: 174, height: 174, borderRadius: 87, borderWidth: 5, borderColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
+  sosHoldCount: { color: '#FFF', fontSize: 64, lineHeight: 72, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  sosHoldSeconds: { color: '#F9DEE6', fontSize: 15, fontWeight: '700' },
+  sosHoldTitle: { color: '#FFF', fontSize: 20, fontWeight: '700', textAlign: 'center' },
+  sosHoldMessage: { color: '#F9DEE6', fontSize: 14, textAlign: 'center' },
 
   overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   cardModal: { backgroundColor: '#FFF', borderRadius: 28, overflow: 'hidden', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12 },
-  modalStrip: { height: 6, backgroundColor: '#C4687A', width: '100%' },
+  modalStrip: { height: 6, backgroundColor: Brand.rose, width: '100%' },
   modalInner: { padding: 25 },
-  cardTitle: { fontSize: 22, fontWeight: '700', color: '#1B3A6B', marginBottom: 5, textAlign: 'center' },
-  cardTitleCritical: { fontSize: 22, fontWeight: '700', color: '#C4687A', marginBottom: 5, textAlign: 'center' },
+  cardTitle: { fontSize: 22, fontWeight: '700', color: Brand.blue, marginBottom: 5, textAlign: 'center' },
+  cardTitleCritical: { fontSize: 22, fontWeight: '700', color: Brand.rose, marginBottom: 5, textAlign: 'center' },
   cardSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10, lineHeight: 20 },
 
-  btnPrimary: { backgroundColor: '#1B3A6B', paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
+  btnPrimary: { backgroundColor: Brand.blue, paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
   btnPrimaryText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
-  btnCancelText: { textAlign: 'center', color: '#C4687A', marginTop: 15, fontWeight: '600', fontSize: 15 },
-  btnHelpGuide: { marginTop: 12, paddingVertical: 14, borderRadius: 30, alignItems: 'center', backgroundColor: '#F5EFE6' },
-  btnHelpGuideText: { color: '#1B3A6B', fontWeight: '700', fontSize: 14 },
+  btnCancelText: { textAlign: 'center', color: Brand.rose, marginTop: 15, fontWeight: '600', fontSize: 15 },
+  btnHelpGuide: { marginTop: 12, paddingVertical: 14, borderRadius: 30, alignItems: 'center', backgroundColor: Brand.canvas },
+  btnHelpGuideText: { color: Brand.blue, fontWeight: '700', fontSize: 14 },
   btnSafe: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 30, alignItems: 'center' },
   btnSafeText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
 
-  feedbackBox: { backgroundColor: '#F5EFE6', padding: 15, borderRadius: 15, marginBottom: 25, borderWidth: 1, borderColor: '#E8E0D8' },
+  feedbackBox: { backgroundColor: Brand.canvas, padding: 15, borderRadius: 15, marginBottom: 25, borderWidth: 1, borderColor: Brand.line },
   feedbackLabel: { fontSize: 12, fontWeight: 'bold', color: '#5A8FAF', marginBottom: 5 },
-  feedbackAddressText: { fontSize: 16, color: '#C4687A', fontWeight: 'bold', marginBottom: 5 },
+  feedbackAddressText: { fontSize: 16, color: Brand.rose, fontWeight: 'bold', marginBottom: 5 },
   feedbackText: { fontSize: 14, color: '#333', fontStyle: 'italic' },
   sosFailDetail: { fontSize: 11, color: '#999', textAlign: 'center', marginTop: -12, marginBottom: 16 },
-  feedbackContact: { fontSize: 15, color: '#1B3A6B', fontWeight: '600', marginTop: 3 },
+  feedbackContact: { fontSize: 15, color: Brand.blue, fontWeight: '600', marginTop: 3 },
 
   overlayBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   cardModalBottom: { backgroundColor: '#FFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '90%', overflow: 'hidden', elevation: 20 },
@@ -1892,28 +1984,28 @@ const styles = StyleSheet.create({
   btnOrange: { backgroundColor: '#E8622A', paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
 
   occScrollContent: { flexGrow: 1, padding: 22, paddingTop: 0 },
-  occLabel: { color: '#1B3A6B', fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
+  occLabel: { color: Brand.blue, fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
   inputRow: { flexDirection: 'row', gap: 10 },
   inputFlex: { flex: 1, borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9' },
   input: { borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9', marginTop: 5 },
-  gpsBtn: { backgroundColor: '#F5EFE6', width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#D8D0CC' },
+  gpsBtn: { backgroundColor: Brand.canvas, width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#D8D0CC' },
   typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 5 },
   typeButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#D8D0CC', backgroundColor: '#FFF' },
-  typeSelected: { backgroundColor: '#1B3A6B', borderColor: '#1B3A6B' },
+  typeSelected: { backgroundColor: Brand.blue, borderColor: Brand.blue },
   typeText: { color: '#555', fontSize: 13, fontWeight: '500' },
   typeTextSelected: { color: '#FFF', fontWeight: 'bold' },
   suggestionsBox: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, marginTop: 5, maxHeight: 150 },
-  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#F5EFE6' },
+  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: Brand.line },
   suggestionText: { fontSize: 13, color: '#333' },
 
-  timerCircle: { width: 90, height: 90, borderRadius: 45, borderWidth: 4, borderColor: '#C4687A', justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
-  timerCountText: { fontSize: 32, fontWeight: 'bold', color: '#C4687A' },
+  timerCircle: { width: 90, height: 90, borderRadius: 45, borderWidth: 4, borderColor: Brand.rose, justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
+  timerCountText: { fontSize: 32, fontWeight: 'bold', color: Brand.rose },
   timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' },
   alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
 
   demoPanel: { marginHorizontal: 20, marginTop: 16, marginBottom: 8, backgroundColor: '#EEF6FC', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#B8D6E8' },
   demoPanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  demoPanelTitle: { fontSize: 13, fontWeight: '700', color: '#1B3A6B' },
+  demoPanelTitle: { fontSize: 13, fontWeight: '700', color: Brand.blue },
   demoSectionLabel: { fontSize: 11, color: '#5A8FAF', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 },
   demoBtnRow: { flexDirection: 'row', gap: 8 },
   demoBtn: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 10, alignItems: 'center', backgroundColor: '#FFF', gap: 2 },
