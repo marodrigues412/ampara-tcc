@@ -29,6 +29,7 @@ import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { Brand } from '../constants/brandTheme'
+import LiaAvatar from '../components/LiaAvatar'
 
 import { dispararAlerta } from '../services/alertService'
 import { camadasDifusas, DENSIDADE_VERMELHO } from '../utils/mapaCalor'
@@ -875,6 +876,15 @@ export default function Home({ navigation }) {
   const alternarTipo = (id) =>
     setTiposSelecionados((atual) => atual.includes(id) ? atual.filter((t) => t !== id) : [...atual, id])
   const riskAccent = !monitoramentoAtivo ? '#9A8C93' : displayLevel === 'Crítico' ? Brand.danger : displayLevel === 'Moderado' ? Brand.amber : Brand.green
+  const liaReaction = !monitoramentoAtivo
+    ? 'ociosa'
+    : insideSafeZone
+      ? 'seguro'
+      : displayLevel === 'Crítico'
+        ? 'critico'
+        : displayLevel === 'Moderado'
+          ? 'checagem'
+          : 'trajeto'
 
   const simularNivel = (score) => {
     setDemoEnvLabel(null)
@@ -948,38 +958,47 @@ export default function Home({ navigation }) {
 
         {/* ── RISCO ── */}
         <View style={styles.riskSection}>
-          <View style={styles.riskRow}>
-            <Text style={styles.riskLabel}>Risco atual</Text>
-            <View style={styles.riskSummary}>
-              <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
-                {displayScore}<Text style={styles.gaugeScoreMax}>/10</Text>
-              </Text>
-              <Text style={[styles.riskBadgeText, { color: riskAccent }]}>
-                {monitoramentoAtivo ? displayLevel : 'Pausado'}
-              </Text>
+          <View style={styles.riskPanel}>
+            <View style={styles.riskPanelTop}>
+              <TouchableOpacity
+                style={styles.riskLiaButton}
+                onPress={() => navigation.navigate('ChatBot')}
+                accessibilityRole="button"
+                accessibilityLabel={`Conversar com a Lia. Estado atual: ${monitoramentoAtivo ? displayLevel : 'monitoramento pausado'}`}
+              >
+                <LiaAvatar size={68} reaction={liaReaction} />
+              </TouchableOpacity>
+              <View style={styles.riskContent}>
+                <Text style={styles.riskLabel}>Risco atual</Text>
+                <View style={styles.riskRow}>
+                  <View style={styles.riskSummary}>
+                    <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
+                      {displayScore}<Text style={styles.gaugeScoreMax}>/10</Text>
+                    </Text>
+                    <Text style={[styles.riskBadgeText, { color: riskAccent }]}>
+                      {monitoramentoAtivo ? displayLevel : 'Pausado'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.riskCompactRow}>
+                  {monitoramentoAtivo ? (
+                    <View style={styles.timeFactorRow}>
+                      <Ionicons name={insideSafeZone ? 'home-outline' : 'time-outline'} size={13} color={insideSafeZone ? Brand.green : Brand.blue} />
+                      <Text style={[styles.timeFactorText, insideSafeZone && styles.safeRiskText]} numberOfLines={2}>
+                        {insideSafeZone ? 'Dentro de um local seguro' : getTimeLabel()}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.gaugeDesc}>Alertas automáticos pausados</Text>
+                  )}
+                </View>
+              </View>
+            </View>
+            <View style={styles.scoreTrack}>
+              <View style={[styles.scoreFill, { width: `${Math.min(Math.max(Number(displayScore), 0), 10) * 10}%`, backgroundColor: riskAccent }]} />
             </View>
           </View>
-          <View style={styles.riskCompactRow}>
-            {monitoramentoAtivo ? (
-              <View style={styles.timeFactorRow}>
-                <Ionicons name="time-outline" size={12} color={Brand.blue} />
-                <Text style={styles.timeFactorText} numberOfLines={1}>{getTimeLabel()}</Text>
-              </View>
-            ) : (
-              <Text style={styles.gaugeDesc}>Alertas automáticos pausados</Text>
-            )}
-          </View>
-          <View style={styles.scoreTrack}>
-            <View style={[styles.scoreFill, { width: `${Math.min(Math.max(Number(displayScore), 0), 10) * 10}%`, backgroundColor: riskAccent }]} />
-          </View>
         </View>
-
-        {insideSafeZone && (
-          <View style={styles.safeStrip}>
-            <Ionicons name="checkmark-circle" size={16} color="#2E8B57" />
-            <Text style={styles.safeStripText}>Você está em um perímetro seguro cadastrado</Text>
-          </View>
-        )}
 
         <View style={styles.homeSectionTabs} accessibilityRole="tablist">
           {[
@@ -1604,7 +1623,9 @@ export default function Home({ navigation }) {
           <View style={styles.cardModal}>
             <View style={[styles.modalStrip, { backgroundColor: '#2E8B57' }]} />
             <View style={styles.modalInner}>
-              <Ionicons name="heart-outline" size={36} color="#2E8B57" style={{ alignSelf: 'center', marginBottom: 10 }} />
+              <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                <LiaAvatar size={72} reaction="checagem" />
+              </View>
               <Text style={[styles.cardTitleCritical, { color: '#2E8B57' }]}>Tudo bem?</Text>
               <Text style={styles.cardSubtitle}>
                 O Ampara está monitorando você. Confirme que está segura.
@@ -1629,6 +1650,9 @@ export default function Home({ navigation }) {
           <View style={styles.cardModal}>
             <View style={[styles.modalStrip, { backgroundColor: alertType === 'critico' ? '#C4687A' : '#D4A017' }]} />
             <View style={styles.modalInner}>
+              <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                <LiaAvatar size={72} reaction={alertType === 'critico' ? 'critico' : 'checagem'} />
+              </View>
               <Text style={styles.cardTitleCritical}>
                 {alertType === 'critico' ? 'Alerta Crítico' : 'Confirma bem-estar?'}
               </Text>
@@ -1729,18 +1753,23 @@ const styles = StyleSheet.create({
   topModeDivider: { width: 1, height: 42, backgroundColor: Brand.line, marginHorizontal: 8 },
   monitoringStatusOff: { color: Brand.muted },
 
-  riskSection: { paddingHorizontal: 22, paddingTop: 5, paddingBottom: 20, marginHorizontal: 0, marginTop: 0, marginBottom: 0 },
-  riskRow: { minHeight: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  riskSummary: { flexDirection: 'row', alignItems: 'baseline', gap: 9 },
-  riskLabel: { fontSize: 12, color: Brand.roseDeep, fontWeight: '700', textTransform: 'uppercase' },
-  riskBadgeText: { color: Brand.roseDeep, fontWeight: '700', fontSize: 12 },
-  riskCompactRow: { minHeight: 17, flexDirection: 'row', alignItems: 'center' },
-  gaugeScoreBig: { fontSize: 32, fontWeight: '800', lineHeight: 36 },
-  gaugeScoreMax: { fontSize: 14, fontWeight: '500', color: Brand.muted },
-  gaugeDesc: { fontSize: 10, lineHeight: 13, color: Brand.muted },
-  timeFactorRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  timeFactorText: { fontSize: 10, color: Brand.muted, fontWeight: '600' },
-  scoreTrack: { height: 3, overflow: 'hidden', marginTop: 2, borderRadius: 3, backgroundColor: 'rgba(118,103,112,0.16)' },
+  riskSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
+  riskPanel: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 24, backgroundColor: '#FFF', borderWidth: 1, borderColor: Brand.line },
+  riskPanelTop: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  riskLiaButton: { width: 74, height: 74, alignItems: 'center', justifyContent: 'center' },
+  riskContent: { flex: 1, minWidth: 0, justifyContent: 'center', gap: 1 },
+  riskRow: { minHeight: 38, flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'baseline' },
+  riskSummary: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
+  riskLabel: { fontSize: 11, color: Brand.roseDeep, fontWeight: '700', textTransform: 'uppercase' },
+  riskBadgeText: { color: Brand.roseDeep, fontWeight: '700', fontSize: 13 },
+  riskCompactRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center' },
+  gaugeScoreBig: { fontSize: 38, fontWeight: '800', lineHeight: 42 },
+  gaugeScoreMax: { fontSize: 16, fontWeight: '500', color: Brand.muted },
+  gaugeDesc: { fontSize: 11, lineHeight: 15, color: Brand.muted },
+  timeFactorRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  timeFactorText: { flexShrink: 1, color: Brand.muted, fontSize: 11, lineHeight: 15, fontWeight: '600' },
+  safeRiskText: { color: Brand.green },
+  scoreTrack: { height: 5, overflow: 'hidden', marginTop: 10, borderRadius: 4, backgroundColor: 'rgba(118,103,112,0.16)' },
   scoreFill: { height: '100%', borderRadius: 4 },
 
   safeStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 22, paddingVertical: 12, backgroundColor: Brand.mint },
