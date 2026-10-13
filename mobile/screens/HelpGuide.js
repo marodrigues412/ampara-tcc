@@ -9,11 +9,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { Brand } from '../constants/brandTheme'
 
 const secoes = [
   {
     titulo: 'Faça agora',
-    cor: '#C4687A',
+    cor: Brand.rose,
     corFundo: '#FFF0F0',
     itens: [
       'Respire fundo. Manter a calma ajuda a tomar decisões melhores.',
@@ -24,7 +25,7 @@ const secoes = [
   },
   {
     titulo: 'Vá para um local seguro',
-    cor: '#1B3A6B',
+    cor: Brand.blue,
     corFundo: '#EFF6FF',
     itens: [
       'Farmácias, supermercados e lojas abertas são bons pontos de apoio.',
@@ -75,7 +76,7 @@ export default function HelpGuide({ navigation }) {
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
+            <Ionicons name="chevron-back" size={20} color={Brand.blue} />
             <Text style={styles.backText}>Voltar</Text>
           </TouchableOpacity>
           <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
@@ -112,7 +113,7 @@ export default function HelpGuide({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFE6'
+    backgroundColor: Brand.canvas
   },
   content: {
     padding: 20,
@@ -126,13 +127,13 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 16,
-    color: '#1B3A6B',
+    color: Brand.blue,
     fontWeight: '600'
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#C4687A',
+    color: Brand.rose,
     marginTop: 8,
     marginBottom: 6,
   },
@@ -173,12 +174,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#D4E9F7',
+    backgroundColor: Brand.blueSoft,
     borderRadius: 18
   },
   rodapeTexto: {
     fontSize: 15,
-    color: '#1B3A6B',
+    color: Brand.blue,
     fontWeight: '600',
     textAlign: 'center'
   }

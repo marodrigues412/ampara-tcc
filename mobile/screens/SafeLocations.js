@@ -16,6 +16,7 @@ import * as Location from 'expo-location'
 import MapView, { Marker, Circle } from 'react-native-maps'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
+import { Brand } from '../constants/brandTheme'
 
 export default function SafeLocations({ navigation }) {
   const [locations, setLocations] = useState([])
@@ -346,7 +347,7 @@ export default function SafeLocations({ navigation }) {
         <View style={styles.divider} />
 
         <TouchableOpacity onPress={() => handleDelete(item.id)}>
-          <Ionicons name="trash-outline" size={22} color="#C4687A" />
+          <Ionicons name="trash-outline" size={22} color={Brand.rose} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -356,7 +357,7 @@ export default function SafeLocations({ navigation }) {
     <View style={styles.container}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 6 }}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
+          <Ionicons name="chevron-back" size={20} color={Brand.blue} />
           <Text style={styles.back}>Voltar</Text>
         </TouchableOpacity>
         <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
@@ -383,7 +384,7 @@ export default function SafeLocations({ navigation }) {
                 longitude: currentLocation.longitude
               }}
               title="Você"
-              pinColor="#1B3A6B"
+              pinColor={Brand.blue}
             />
           )}
 
@@ -404,7 +405,7 @@ export default function SafeLocations({ navigation }) {
                   longitude: Number(loc.longitude)
                 }}
                 radius={80}
-                strokeColor="#1B3A6B"
+                strokeColor={Brand.blue}
                 fillColor="rgba(107, 43, 56, 0.14)"
               />
             </React.Fragment>
@@ -412,7 +413,7 @@ export default function SafeLocations({ navigation }) {
         </MapView>
 
         <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}>
-          <Ionicons name="locate" size={22} color="#1B3A6B" />
+          <Ionicons name="locate" size={22} color={Brand.blue} />
         </TouchableOpacity>
       </View>
 
@@ -425,7 +426,7 @@ export default function SafeLocations({ navigation }) {
 
       <TouchableOpacity style={styles.secondaryButton} onPress={openManualMode}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <Ionicons name="create-outline" size={18} color="#1B3A6B" />
+          <Ionicons name="create-outline" size={18} color={Brand.blue} />
           <Text style={styles.secondaryText}>Inserir manualmente</Text>
         </View>
       </TouchableOpacity>
@@ -538,20 +539,20 @@ export default function SafeLocations({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFE6',
+    backgroundColor: Brand.canvas,
     padding: 20
   },
 
   back: {
     fontSize: 16,
-    color: '#1B3A6B',
+    color: Brand.blue,
     fontWeight: '600',
   },
 
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1B3A6B',
+    color: Brand.blue,
     marginTop: 8,
   },
 
@@ -593,7 +594,7 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    backgroundColor: '#C4687A',
+    backgroundColor: Brand.rose,
     padding: 15,
     borderRadius: 14,
     marginBottom: 10
@@ -607,14 +608,14 @@ const styles = StyleSheet.create({
 
   secondaryButton: {
     borderWidth: 1,
-    borderColor: '#C4687A',
+    borderColor: Brand.rose,
     padding: 15,
     borderRadius: 14,
     marginBottom: 18
   },
 
   secondaryText: {
-    color: '#C4687A',
+    color: Brand.rose,
     textAlign: 'center',
     fontWeight: '600'
   },
@@ -624,7 +625,7 @@ const styles = StyleSheet.create({
   },
 
   locationCard: {
-    backgroundColor: '#D4E9F7',
+    backgroundColor: Brand.blueSoft,
     padding: 16,
     borderRadius: 18,
     marginBottom: 12,
@@ -646,7 +647,7 @@ const styles = StyleSheet.create({
 
   locationType: {
     fontSize: 15,
-    color: '#1B3A6B',
+    color: Brand.blue,
     marginTop: 2
   },
 
@@ -700,7 +701,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: '#1B3A6B',
+    color: Brand.blue,
     fontSize: 15,
     fontWeight: '600',
     marginTop: 14,
@@ -716,7 +717,7 @@ const styles = StyleSheet.create({
   },
 
   gpsAddressBox: {
-    backgroundColor: '#F5EFE6',
+    backgroundColor: Brand.canvas,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
@@ -763,8 +764,8 @@ const styles = StyleSheet.create({
   },
 
   typeSelected: {
-    backgroundColor: '#1B3A6B',
-    borderColor: '#1B3A6B'
+    backgroundColor: Brand.blue,
+    borderColor: Brand.blue
   },
 
   typeText: {
@@ -777,7 +778,7 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    backgroundColor: '#C4687A',
+    backgroundColor: Brand.rose,
     padding: 15,
     borderRadius: 14,
     marginTop: 22,
