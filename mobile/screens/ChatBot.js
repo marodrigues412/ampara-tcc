@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react'
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  FlatList, KeyboardAvoidingView, Platform, Image, ActivityIndicator
+  FlatList, Keyboard, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import LiaAvatar from '../components/LiaAvatar'
+import { perguntarAIA } from '../services/chatService'
+import { Brand } from '../constants/brandTheme'
 
-// Respostas fixas enquanto a IA não está conectada. A troca acontece em responder():
-// basta substituir a busca local por uma chamada ao serviço, mantendo o mesmo formato.
+// Respostas locais curtas para exibir quando a IA estiver indisponível.
 const BASE_RESPOSTAS = [
   {
     palavras: ['sos', 'botão', 'botao', 'acionar', 'emergência', 'emergencia'],
-    texto: 'Para pedir socorro, segure o botão SOS da tela inicial por 3 segundos. Seus contatos de emergência recebem uma mensagem no WhatsApp com sua localização em tempo real.\n\nSe estiver em perigo imediato, ligue 190.',
+    texto: 'Para pedir socorro, segure o botão SOS da tela inicial por 3 segundos. Seus contatos de emergência recebem uma mensagem no WhatsApp com sua localização.\n\nSe estiver em perigo imediato, ligue 190.',
   },
   {
     palavras: ['contato', 'contatos', 'cadastrar', 'adicionar'],
@@ -51,7 +53,7 @@ const SUGESTOES = [
 const MENSAGEM_INICIAL = {
   id: 'inicial',
   autor: 'bot',
-  texto: 'Oi! Eu sou a Ampara, sua assistente de segurança.\n\nPosso tirar dúvidas sobre o aplicativo e dar orientações de segurança pessoal. O que você quer saber?',
+  texto: 'Oi! Eu sou a Lia, assistente do Ampara.\n\nPosso tirar dúvidas sobre o aplicativo e dar orientações de segurança pessoal. O que você quer saber?',
 }
 
 const semAcento = (texto) =>
@@ -69,17 +71,27 @@ export default function ChatBot({ navigation }) {
   const [mensagens, setMensagens] = useState([MENSAGEM_INICIAL])
   const [texto, setTexto] = useState('')
   const [digitando, setDigitando] = useState(false)
+  const [tecladoVisivel, setTecladoVisivel] = useState(false)
   const listaRef = useRef(null)
-  const timeoutRef = useRef(null)
+  const reacaoLia = digitando ? 'pensando' : texto.trim() ? 'ouvindo' : mensagens.length === 1 ? 'oi' : 'ociosa'
 
-  // Limpa o temporizador da resposta se a tela fechar antes de ela chegar.
-  useEffect(() => () => clearTimeout(timeoutRef.current), [])
+  useEffect(() => {
+    const eventoMostrar = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const eventoOcultar = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const mostrar = Keyboard.addListener(eventoMostrar, () => setTecladoVisivel(true))
+    const ocultar = Keyboard.addListener(eventoOcultar, () => setTecladoVisivel(false))
+
+    return () => {
+      mostrar.remove()
+      ocultar.remove()
+    }
+  }, [])
 
   useEffect(() => {
     listaRef.current?.scrollToEnd({ animated: true })
   }, [mensagens, digitando])
 
-  const enviar = (pergunta) => {
+  const enviar = async (pergunta) => {
     const conteudo = (pergunta ?? texto).trim()
     if (!conteudo || digitando) return
 
@@ -90,15 +102,24 @@ export default function ChatBot({ navigation }) {
     setTexto('')
     setDigitando(true)
 
-    // A pausa é proposital: resposta instantânea passa a sensação de texto pronto, e
-    // some com o indicador de "digitando" antes de ele ser percebido.
-    timeoutRef.current = setTimeout(() => {
+    try {
+      const resposta = await perguntarAIA(conteudo)
       setMensagens((atual) => [
         ...atual,
-        { id: `b${Date.now()}`, autor: 'bot', texto: responder(conteudo) },
+        { id: `b${Date.now()}`, autor: 'bot', texto: resposta },
       ])
+    } catch {
+      setMensagens((atual) => [
+        ...atual,
+        {
+          id: `b${Date.now()}`,
+          autor: 'bot',
+          texto: `Não consegui acessar a IA da Mauá agora. Tente novamente mais tarde.\n\n${responder(conteudo)}`,
+        },
+      ])
+    } finally {
       setDigitando(false)
-    }, 700)
+    }
   }
 
   const renderMensagem = ({ item }) => {
@@ -107,11 +128,7 @@ export default function ChatBot({ navigation }) {
       <View style={[styles.linha, daUsuaria && styles.linhaUsuaria]}>
         {!daUsuaria && (
           <View style={styles.avatarBot}>
-            <Image
-              source={require('../assets/images/maos-ampara-rosa.png')}
-              style={styles.avatarImagem}
-              resizeMode="contain"
-            />
+            <LiaAvatar size={34} reaction={item.id === 'inicial' ? 'oi' : 'ociosa'} showRing={false} showBadge={false} />
           </View>
         )}
         <View style={[styles.balao, daUsuaria ? styles.balaoUsuaria : styles.balaoBot]}>
@@ -134,15 +151,11 @@ export default function ChatBot({ navigation }) {
           </TouchableOpacity>
         )}
         <View style={styles.avatarCabecalho}>
-          <Image
-            source={require('../assets/images/maos-ampara-rosa.png')}
-            style={styles.avatarImagem}
-            resizeMode="contain"
-          />
+          <LiaAvatar size={50} reaction={reacaoLia} />
         </View>
         <View style={styles.cabecalhoTextos}>
-          <Text style={styles.cabecalhoNome}>Ampara</Text>
-          <Text style={styles.cabecalhoStatus}>Assistente de segurança</Text>
+          <Text style={styles.cabecalhoNome}>Lia</Text>
+          <Text style={styles.cabecalhoStatus}>Assistente virtual do Ampara</Text>
         </View>
       </View>
 
@@ -158,15 +171,13 @@ export default function ChatBot({ navigation }) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listaConteudo}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           ListFooterComponent={
             digitando ? (
               <View style={styles.linha}>
                 <View style={styles.avatarBot}>
-                  <Image
-                    source={require('../assets/images/maos-ampara-rosa.png')}
-                    style={styles.avatarImagem}
-                    resizeMode="contain"
-                  />
+                  <LiaAvatar size={34} reaction="pensando" showRing={false} showBadge={false} />
                 </View>
                 <View style={[styles.balao, styles.balaoBot, styles.balaoDigitando]}>
                   <ActivityIndicator size="small" color="#5A8FAF" />
@@ -200,7 +211,19 @@ export default function ChatBot({ navigation }) {
             returnKeyType="send"
             multiline
           />
+          {tecladoVisivel && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Fechar teclado"
+              style={styles.botaoTeclado}
+              onPress={() => Keyboard.dismiss()}
+            >
+              <Ionicons name="chevron-down" size={22} color="#5A8FAF" />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Enviar mensagem"
             style={[styles.botaoEnviar, (!texto.trim() || digitando) && styles.botaoEnviarInativo]}
             onPress={() => enviar()}
             disabled={!texto.trim() || digitando}
@@ -215,50 +238,49 @@ export default function ChatBot({ navigation }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F5EFE6' },
+  container: { flex: 1, backgroundColor: Brand.canvas },
 
   cabecalho: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#1B3A6B',
+    backgroundColor: Brand.rose,
     paddingTop: 54,
     paddingBottom: 16,
     paddingHorizontal: 16,
   },
   voltar: { padding: 4 },
   avatarCabecalho: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarImagem: { width: '70%', height: '70%' },
   cabecalhoTextos: { flex: 1 },
-  cabecalhoNome: { color: '#FFF', fontSize: 17, fontWeight: '700' },
-  cabecalhoStatus: { color: '#8EB4D0', fontSize: 12, marginTop: 1 },
+  cabecalhoNome: { color: '#FFF', fontSize: 19, fontWeight: '700' },
+  cabecalhoStatus: { color: '#F9DEE6', fontSize: 12, marginTop: 1 },
 
   listaConteudo: { padding: 16, gap: 12 },
   linha: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '100%' },
   linhaUsuaria: { justifyContent: 'flex-end' },
   avatarBot: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E8E0D8',
+    borderColor: Brand.line,
   },
 
   balao: { maxWidth: '78%', paddingVertical: 12, paddingHorizontal: 15, borderRadius: 18 },
-  balaoBot: { backgroundColor: '#FFF', borderBottomLeftRadius: 4 },
-  balaoUsuaria: { backgroundColor: '#C4687A', borderBottomRightRadius: 4 },
+  balaoBot: { backgroundColor: Brand.blueSoft, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#DDEAF2' },
+  balaoUsuaria: { backgroundColor: Brand.rose, borderBottomRightRadius: 4 },
   balaoDigitando: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
-  textoBalao: { fontSize: 15, color: '#1B3A6B', lineHeight: 21 },
+  textoBalao: { fontSize: 15, color: Brand.ink, lineHeight: 21 },
   textoBalaoUsuaria: { color: '#FFF' },
   textoDigitando: { fontSize: 13, color: '#5A8FAF' },
 
@@ -266,7 +288,7 @@ const styles = StyleSheet.create({
   sugestao: {
     backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#E8E0D8',
+    borderColor: Brand.line,
     borderRadius: 20,
     paddingVertical: 9,
     paddingHorizontal: 14,
@@ -280,25 +302,31 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: '#FFF',
     borderTopWidth: 1,
-    borderTopColor: '#E8E0D8',
+    borderTopColor: Brand.line,
   },
   campo: {
     flex: 1,
     maxHeight: 110,
     minHeight: 44,
-    backgroundColor: '#F5EFE6',
+    backgroundColor: Brand.surfaceSoft,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
     fontSize: 15,
-    color: '#1B3A6B',
+    color: Brand.ink,
   },
   botaoEnviar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#C4687A',
+    backgroundColor: Brand.rose,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botaoTeclado: {
+    width: 40,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

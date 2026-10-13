@@ -31,6 +31,7 @@ import { getRecentLocationHistory, getLocationHistoryBetween, getSafeLocations }
 import { getRecentAlerts } from '../services/alertService'
 import { getRecentActivityPeriods } from '../services/activityService'
 import { Brand } from '../constants/brandTheme'
+import LiaHelpModal from '../components/LiaHelpModal'
 
 const screenWidth = Dimensions.get('window').width
 const CHART_WIDTH = screenWidth - 80
@@ -130,7 +131,7 @@ function HBar({ label, score, maxScore, color }) {
   return (
     <View style={{ marginBottom: 14 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-        <Text style={{ fontSize: 13, color: '#1B3A6B', fontWeight: '600' }}>{label}</Text>
+        <Text style={{ fontSize: 13, color: Brand.blue, fontWeight: '600' }}>{label}</Text>
         <Text style={{ fontSize: 13, fontWeight: '700', color }}>{score}</Text>
       </View>
       <View style={{ height: 8, backgroundColor: 'rgba(27,58,107,0.08)', borderRadius: 4 }}>
@@ -144,6 +145,22 @@ function EmptyState({ text }) {
   return (
     <View style={{ paddingVertical: 10 }}>
       <Text style={{ fontSize: 13, color: '#999', textAlign: 'center' }}>{text}</Text>
+    </View>
+  )
+}
+
+function InfoHeading({ title, explanation, style, onExplain }) {
+  return (
+    <View style={[styles.infoHeading, style]}>
+      <Text style={styles.cardTitle}>{title}</Text>
+      <Pressable
+        onPress={() => onExplain(title, explanation)}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={`Saiba o que significa ${title}`}
+      >
+        <Ionicons name="help-circle-outline" size={18} color={Brand.blue} />
+      </Pressable>
     </View>
   )
 }
@@ -180,6 +197,7 @@ function TrendBadge({ trend }) {
 export default function Dashboard() {
   const insets = useSafeAreaInsets()
   const [loading, setLoading] = useState(true)
+  const [helpInfo, setHelpInfo] = useState(null)
   const [periodDays, setPeriodDays] = useState(7)
   const [reportSection, setReportSection] = useState('resumo')
 
@@ -191,17 +209,9 @@ export default function Dashboard() {
   const [safeLocations, setSafeLocations] = useState([])
   const [activityPeriods, setActivityPeriods] = useState([])
   const [emergencyContacts, setEmergencyContacts] = useState([])
+  const showHelpInfo = (title, message) => setHelpInfo({ title, message })
 
-  // useFocusEffect (não useEffect simples) porque as telas ficam montadas em segundo plano
-  // na tab navigation: sem isso, disparar um SOS ou mudar um local seguro em outra aba não
-  // aparecia aqui até o app reiniciar — o Dashboard só recarregava no primeiro mount.
-  useFocusEffect(
-    React.useCallback(() => {
-      loadDashboardData(periodDays)
-    }, [periodDays])
-  )
-
-  async function loadDashboardData(days) {
+  const loadDashboardData = React.useCallback(async (days) => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
@@ -229,7 +239,16 @@ export default function Dashboard() {
     setActivityPeriods(activity)
     setEmergencyContacts(contactsResult.data || [])
     setLoading(false)
-  }
+  }, [])
+
+  // useFocusEffect (não useEffect simples) porque as telas ficam montadas em segundo plano
+  // na tab navigation: sem isso, disparar um SOS ou mudar um local seguro em outra aba não
+  // aparecia aqui até o app reiniciar — o Dashboard só recarregava no primeiro mount.
+  useFocusEffect(
+    React.useCallback(() => {
+      loadDashboardData(periodDays)
+    }, [periodDays, loadDashboardData])
+  )
 
   const metrics = calculateWeeklyMetrics(dailyScores)
   const dynamicRGB = getScoreRGB(metrics.averageScore)
@@ -285,7 +304,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#1B3A6B" />
+        <ActivityIndicator size="large" color={Brand.blue} />
       </SafeAreaView>
     )
   }
@@ -317,7 +336,7 @@ export default function Dashboard() {
               accessibilityRole="tab"
               accessibilityState={{ selected: reportSection === item.id }}
             >
-              <Ionicons name={item.icon} size={17} color={reportSection === item.id ? Brand.roseDeep : Brand.muted} />
+              <Ionicons name={item.icon} size={17} color={reportSection === item.id ? Brand.rose : Brand.muted} />
               <Text style={[styles.reportTabText, reportSection === item.id && styles.reportTabTextActive]}>{item.label}</Text>
             </Pressable>
           ))}
@@ -327,7 +346,12 @@ export default function Dashboard() {
         {/* Gauge + stats */}
         <View style={styles.section}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={styles.cardTitle}>Índice de Segurança Semanal</Text>
+            <InfoHeading
+              title="Índice de Segurança"
+              explanation="Resumo dos registros de segurança feitos pelo app no período selecionado. A escala vai de 0 a 10 e depende dos dados disponíveis; é um indicador contextual, não uma previsão nem uma garantia de segurança."
+              onExplain={showHelpInfo}
+              style={styles.scoreHeading}
+            />
             <TrendBadge trend={trend} />
           </View>
           {dailyScores.length === 0 ? (
@@ -349,7 +373,7 @@ export default function Dashboard() {
 
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: '#1B3A6B' }]}>{Math.round(metrics.averageScore / 10)}</Text>
+                  <Text style={[styles.statValue, { color: Brand.blue }]}>{Math.round(metrics.averageScore / 10)}</Text>
                   <Text style={styles.statLabel}>Média</Text>
                 </View>
                 <View style={styles.statDivider} />
@@ -369,7 +393,11 @@ export default function Dashboard() {
 
         {/* Line chart */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Variação de Segurança</Text>
+          <InfoHeading
+            title="Variação de Segurança"
+            explanation="Cada ponto representa a média diária do índice calculado a partir dos registros do app. Dias com poucos registros podem não representar toda a sua rotina."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Pontuação diária de segurança</Text>
           {dailyScores.length === 0 ? (
             <EmptyState text="Sem pontos de localização registrados ainda." />
@@ -405,7 +433,11 @@ export default function Dashboard() {
         {reportSection === 'rotina' && <>
         {/* Period bars */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Segurança por Período</Text>
+          <InfoHeading
+            title="Segurança por Período"
+            explanation="Compara a média do índice nos horários do dia, usando os registros de localização disponíveis. Não indica que um horário ou lugar seja objetivamente seguro; é um resumo do seu histórico no app."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Índice de segurança por período do dia</Text>
           {hourlyScores.length === 0 ? (
             <EmptyState text="Sem dados suficientes ainda." />
@@ -418,7 +450,11 @@ export default function Dashboard() {
 
         {/* Mapa de risco */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Mapa de Risco por Localização</Text>
+          <InfoHeading
+            title="Segurança por Localização"
+            explanation="As áreas coloridas agrupam registros de localização e mostram a média do índice calculado nesses pontos. A visualização depende do monitoramento e dos dados disponíveis; não é um mapa oficial de criminalidade nem uma previsão de risco."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Toque e arraste pra explorar · áreas coloridas pelo índice de segurança médio</Text>
           {!mapRegion ? (
             <EmptyState text="Sem pontos de localização registrados ainda." />
@@ -470,7 +506,11 @@ export default function Dashboard() {
 
         {/* Locais seguros */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Locais Seguros</Text>
+          <InfoHeading
+            title="Locais Seguros"
+            explanation="Mostra a proporção dos pontos de localização registrados dentro dos locais que você cadastrou como seguros. O cadastro é pessoal e não significa que o local tenha segurança garantida."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Tempo monitorado dentro dos seus locais seguros cadastrados</Text>
           {safeZoneRatio == null ? (
             <EmptyState text="Cadastre locais seguros para acompanhar esta métrica." />
@@ -481,7 +521,11 @@ export default function Dashboard() {
 
         {/* Atividade física x risco */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Atividade Física x Risco</Text>
+          <InfoHeading
+            title="Atividade Física x Segurança"
+            explanation="Compara a média do índice durante e fora dos períodos em que o modo Atividade estava ligado. É uma associação baseada nos registros disponíveis, não significa que a atividade física cause mudança no risco."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Índice de segurança médio dentro e fora do modo atividade</Text>
           {!activityRisk ? (
             <EmptyState text="Sem dados de atividade suficientes ainda." />
@@ -495,7 +539,11 @@ export default function Dashboard() {
 
         {/* Padrão de deslocamento */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Padrão de Deslocamento</Text>
+          <InfoHeading
+            title="Padrão de Deslocamento"
+            explanation="Classifica os pontos monitorados como parado, caminhando ou em veículo a partir da velocidade estimada pelo GPS. Pode haver imprecisão quando o sinal estiver fraco ou as amostras forem escassas."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Como você se moveu no período</Text>
           {!movement ? (
             <EmptyState text="Dados de velocidade não disponíveis ainda." />
@@ -517,17 +565,25 @@ export default function Dashboard() {
         {reportSection === 'alertas' && <>
         {/* Alerts count */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Alertas Enviados</Text>
+          <InfoHeading
+            title="Alertas Enviados"
+            explanation="Quantidade de alertas registrados no app durante o período selecionado. Confira o histórico para ver os detalhes e os contatos notificados."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Total no período selecionado</Text>
           <View style={{ alignItems: 'center', paddingVertical: 6 }}>
-            <Text style={[styles.statValue, { fontSize: 40, color: alertCount > 0 ? '#C4687A' : '#2E8B57' }]}>{alertCount}</Text>
+            <Text style={[styles.statValue, { fontSize: 40, color: alertCount > 0 ? Brand.rose : '#2E8B57' }]}>{alertCount}</Text>
             <Text style={styles.statLabel}>{alertCount === 1 ? 'alerta enviado' : 'alertas enviados'}</Text>
           </View>
         </View>
 
         {/* Histórico de alertas */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Histórico de Alertas</Text>
+          <InfoHeading
+            title="Histórico de Alertas"
+            explanation="Lista os alertas registrados no período e, quando disponível, os contatos associados ao envio."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Últimos disparos e quem foi notificado</Text>
           {recentAlerts.length === 0 ? (
             <EmptyState text="Nenhum alerta enviado no período." />
@@ -550,7 +606,11 @@ export default function Dashboard() {
 
         {/* Contatos mais acionados */}
         <View style={styles.section}>
-          <Text style={styles.cardTitle}>Contatos Mais Acionados</Text>
+          <InfoHeading
+            title="Contatos Mais Acionados"
+            explanation="Ordena os contatos pela quantidade de alertas associados a eles no período selecionado."
+            onExplain={showHelpInfo}
+          />
           <Text style={styles.cardSubtitle}>Quem mais recebeu seus alertas no período</Text>
           {contactsRanking.length === 0 ? (
             <EmptyState text="Nenhum contato acionado no período." />
@@ -561,7 +621,7 @@ export default function Dashboard() {
                 label={c.nome}
                 score={c.count}
                 maxScore={contactsRanking[0].count}
-                color="#C4687A"
+                color={Brand.rose}
               />
             ))
           )}
@@ -569,6 +629,12 @@ export default function Dashboard() {
         </>}
 
       </ScrollView>
+      <LiaHelpModal
+        visible={Boolean(helpInfo)}
+        title={helpInfo?.title}
+        message={helpInfo?.message}
+        onClose={() => setHelpInfo(null)}
+      />
     </SafeAreaView>
   )
 }
@@ -590,7 +656,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  headerTitle: { fontSize: 26, fontWeight: 'bold', color: Brand.roseDeep },
+  headerTitle: { fontSize: 26, fontWeight: 'bold', color: Brand.rose },
 
   periodSelector: {
     flexDirection: 'row',
@@ -603,15 +669,17 @@ const styles = StyleSheet.create({
   periodOption: { flex: 1, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', alignItems: 'center' },
   periodOptionActive: { backgroundColor: 'transparent', borderBottomColor: Brand.rose },
   periodOptionText: { fontSize: 13, fontWeight: '600', color: Brand.muted },
-  periodOptionTextActive: { color: Brand.roseDeep },
+  periodOptionTextActive: { color: Brand.rose },
 
   reportTabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Brand.line },
   reportTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   reportTabActive: { borderBottomColor: Brand.rose },
   reportTabText: { color: Brand.muted, fontSize: 12, fontWeight: '600' },
-  reportTabTextActive: { color: Brand.roseDeep },
+  reportTabTextActive: { color: Brand.rose },
 
   trendBadge: { fontSize: 12, fontWeight: '700' },
+  infoHeading: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
+  scoreHeading: { flex: 1, alignSelf: 'auto' },
 
   section: {
     backgroundColor: 'transparent',
@@ -656,6 +724,6 @@ const styles = StyleSheet.create({
 
   alertRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(27,58,107,0.07)' },
   alertDate: { fontSize: 11, color: '#5A8FAF', fontWeight: '700', marginBottom: 2 },
-  alertMessage: { fontSize: 13, color: '#1B3A6B' },
+  alertMessage: { fontSize: 13, color: Brand.blue },
   alertRecipients: { fontSize: 11, color: '#999', marginTop: 2 },
 })

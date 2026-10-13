@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
+import { Brand } from '../constants/brandTheme'
 
 export default function EditProfile({ navigation }) {
   const [user, setUser] = useState(null)
@@ -73,8 +74,8 @@ export default function EditProfile({ navigation }) {
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="chevron-back" size={20} color="#1B3A6B" />
-          <Text style={{ fontSize: 16, color: '#1B3A6B', fontWeight: '600' }}>Voltar</Text>
+          <Ionicons name="chevron-back" size={20} color={Brand.blue} />
+          <Text style={{ fontSize: 16, color: Brand.blue, fontWeight: '600' }}>Voltar</Text>
         </TouchableOpacity>
         <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
       </View>
@@ -125,7 +126,7 @@ export default function EditProfile({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EFE6'
+    backgroundColor: Brand.canvas
   },
 
   content: {
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1B3A6B',
+    color: Brand.blue,
     marginBottom: 20
   },
 
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 20,
     elevation: 2,
-    shadowColor: '#1B3A6B',
+    shadowColor: Brand.blue,
     shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 8,
@@ -178,7 +179,7 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    backgroundColor: '#C4687A',
+    backgroundColor: Brand.rose,
     padding: 15,
     borderRadius: 12,
     alignItems: 'center'

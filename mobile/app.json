@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F5EFE6",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/maos-ampara-azul.png"
       },
       "package": "com.ampara",
@@ -43,7 +43,7 @@
           "image": "./assets/images/maos-ampara-azul.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#F5EFE6"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "expo-font",

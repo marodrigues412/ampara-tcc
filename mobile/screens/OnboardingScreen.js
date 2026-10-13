@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   // Slide 1 — boas-vindas
   bigLogo: { width, flex: 1 },
   welcomeBottom: { paddingBottom: 36, paddingLeft: 32 },
-  welcomeLabel: { fontSize: 18, color: Brand.roseDeep, fontWeight: '600' },
+  welcomeLabel: { fontSize: 18, color: Brand.rose, fontWeight: '600' },
   welcomeBrand: { fontSize: 56, fontWeight: '600', color: Brand.ink, lineHeight: 64 },
 
   // Slide 2 — fullBg
