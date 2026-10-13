@@ -60,7 +60,6 @@ const { Circle, Marker } = nativeMaps || {}
 const SHOW_PRESENTATION_MODE = false
 const LIVE_HEART_RATE_MS = 10_000
 const SOS_HOLD_MS = 3_000
-const SOS_HOLD_SECONDS = SOS_HOLD_MS / 1_000
 
 const criarGeoJSONMapa = (crimes, ocorrencias) => ({
   type: 'FeatureCollection',
@@ -318,7 +317,12 @@ export default function Home({ navigation }) {
   const cancelCooldownRef = useRef(null);
   const [sustainedHighRisk, setSustainedHighRisk] = useState(false);
   const [sosHolding, setSosHolding] = useState(false);
-  const [sosHoldCountdown, setSosHoldCountdown] = useState(SOS_HOLD_SECONDS)
+  // Guardado em milissegundos e calculado a partir do instante em que o toque começou, não
+  // decrementado de um em um: a conta "menos um segundo por tique" erra sempre que o
+  // aparelho atrasa um tique, e a Home atrasa — ela redesenha o mapa de calor enquanto a
+  // usuária segura o botão. O número ficava parado em 3 e pulava direto para o envio.
+  const sosHoldFimRef = useRef(null)
+  const [sosHoldRestanteMs, setSosHoldRestanteMs] = useState(SOS_HOLD_MS)
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
   const [sosFeedbackData, setSosFeedbackData] = useState({ status: 'enviando', mensagem: '', enviados: [], falhas: [], endereco: '', detalhe: '' });
   const [simpleCheckVisible, setSimpleCheckVisible] = useState(false);
@@ -618,17 +622,25 @@ export default function Home({ navigation }) {
   const beginSosHold = () => {
     if (sosHoldTimerRef.current) return
     setSosHolding(true)
-    setSosHoldCountdown(SOS_HOLD_SECONDS)
+    sosHoldFimRef.current = Date.now() + SOS_HOLD_MS
+    setSosHoldRestanteMs(SOS_HOLD_MS)
     AccessibilityInfo.announceForAccessibility('Segure por três segundos para enviar um alerta SOS.')
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
 
+    // 100 ms, e não 1 s: a barra de progresso precisa andar de forma contínua. Mesmo com o
+    // número mudando só três vezes, o movimento mostra que a contagem está correndo.
     sosHoldIntervalRef.current = setInterval(() => {
-      setSosHoldCountdown((seconds) => Math.max(0, seconds - 1))
-    }, 1_000)
+      const restante = Math.max(0, sosHoldFimRef.current - Date.now())
+      setSosHoldRestanteMs(restante)
+      // Vibra a cada segundo cheio que falta, para a usuária acompanhar sem olhar a tela.
+      if (restante > 0 && restante % 1_000 > 900) {
+        void Haptics.selectionAsync().catch(() => {})
+      }
+    }, 100)
     sosHoldTimerRef.current = setTimeout(() => {
       clearSosHoldTimers()
       setSosHolding(false)
-      setSosHoldCountdown(0)
+      setSosHoldRestanteMs(0)
       AccessibilityInfo.announceForAccessibility('Alerta SOS acionado. Enviando para sua rede de apoio.')
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {})
       void executarEnvioDeSocorro()
@@ -638,7 +650,8 @@ export default function Home({ navigation }) {
   const cancelSosHold = () => {
     if (sosHoldTimerRef.current) clearSosHoldTimers()
     setSosHolding(false)
-    setSosHoldCountdown(SOS_HOLD_SECONDS)
+    sosHoldFimRef.current = null
+    setSosHoldRestanteMs(SOS_HOLD_MS)
   }
 
   useEffect(() => () => {
@@ -1517,8 +1530,16 @@ export default function Home({ navigation }) {
         <View style={styles.sosHoldOverlay} pointerEvents="none">
           <View style={styles.sosHoldCenter}>
             <View style={styles.sosHoldCircle}>
-              <Text style={styles.sosHoldCount}>{sosHoldCountdown}</Text>
+              <Text style={styles.sosHoldCount}>{Math.ceil(sosHoldRestanteMs / 1_000)}</Text>
               <Text style={styles.sosHoldSeconds}>seg</Text>
+            </View>
+            <View style={styles.sosHoldTrilha}>
+              <View
+                style={[
+                  styles.sosHoldProgresso,
+                  { width: `${Math.min(100, 100 - (sosHoldRestanteMs / SOS_HOLD_MS) * 100)}%` },
+                ]}
+              />
             </View>
             <Text style={styles.sosHoldTitle}>Continue segurando SOS</Text>
             <Text style={styles.sosHoldMessage}>Seu alerta será enviado à rede de apoio</Text>
@@ -1952,6 +1973,8 @@ const styles = StyleSheet.create({
   sosHoldCircle: { width: 174, height: 174, borderRadius: 87, borderWidth: 5, borderColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
   sosHoldCount: { color: '#FFF', fontSize: 64, lineHeight: 72, fontWeight: '800', fontVariant: ['tabular-nums'] },
   sosHoldSeconds: { color: '#F9DEE6', fontSize: 15, fontWeight: '700' },
+  sosHoldTrilha: { width: 174, height: 6, borderRadius: 3, backgroundColor: 'rgba(255, 255, 255, 0.28)', overflow: 'hidden', marginTop: 6 },
+  sosHoldProgresso: { height: '100%', borderRadius: 3, backgroundColor: '#FFF' },
   sosHoldTitle: { color: '#FFF', fontSize: 20, fontWeight: '700', textAlign: 'center' },
   sosHoldMessage: { color: '#F9DEE6', fontSize: 14, textAlign: 'center' },
 
