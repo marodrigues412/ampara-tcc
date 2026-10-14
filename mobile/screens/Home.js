@@ -24,9 +24,11 @@ import * as Location from 'expo-location'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRiskDetection } from '../hooks/useRiskDetection'
-import { buscarOcorrencias, buscarMapaCalor, buscarResumoCrimes } from '../services/crimesService'
+import { buscarOcorrencias, buscarMapaCalor, buscarResumoCrimes, buscarPeriodoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
+import { listarHorariosAtividade } from "../services/activityScheduleService"
+import { horarioAtivoAgora, descreverProximoHorario } from "../utils/activitySchedule"
 import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
@@ -38,11 +40,12 @@ import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
 
 import { dispararAlerta } from '../services/alertService'
-import { camadasDifusas, DENSIDADE_VERMELHO } from '../utils/mapaCalor'
+import { camadasDifusas, DENSIDADE_VERMELHO, FRACAO_DO_ANO } from '../utils/mapaCalor'
 import { distanceKm } from '../utils/geo'
 
-// Raio da primeira busca, antes de o mapa informar a área que está mostrando.
-const RAIO_INICIAL_KM = 3
+// Raio do entorno da usuária: é o círculo rosa do mapa, a área cujos crimes entram no
+// score e a primeira busca do calor, antes de o mapa informar a área que está mostrando.
+const RAIO_INICIAL_KM = 1
 // Teto do raio: o Supabase devolve no máximo 1.000 registros por consulta, então pedir
 // uma área muito maior só espalharia os mesmos pontos e deixaria o calor sem sentido.
 const RAIO_MAXIMO_KM = 12
@@ -139,8 +142,9 @@ const FILTROS_CRIME = [
   { id: 'transito', rotulo: 'Trânsito', combina: (t) => t.includes('TRANSITO') || t.includes('CULPOSA') },
 ]
 
-// null = todos os anos. A base da SSP cobre 2022 em diante.
-const ANOS_DISPONIVEIS = [null, 2026, 2025, 2024, 2023, 2022]
+// De quanto em quanto tempo a Home confere se começou ou acabou um horário programado
+// de atividade. Meio minuto basta: ninguém percebe o modo ligar 30 s depois das 8h.
+const CHECAGEM_HORARIO_MS = 30_000
 
 
 const semAcento = (texto) => String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
@@ -303,6 +307,16 @@ export default function Home({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false)
   const [helpInfo, setHelpInfo] = useState(null)
   // { roubo: 3475, furto: 12738, ... } no raio de RAIO_INICIAL_KM em volta da usuária.
+  // Falso até chegar a primeira contagem: antes disso o score não tem o peso dos crimes e
+  // mostrar "0/10 Baixo" daria uma falsa sensação de segurança.
+  const [resumoPronto, setResumoPronto] = useState(false)
+  const [calorCarregando, setCalorCarregando] = useState(true)
+  const [periodoCrimes, setPeriodoCrimes] = useState(null)
+  const [horariosAtividade, setHorariosAtividade] = useState([])
+  // Lembra se fomos nós que ligamos o modo atividade pelo horário: só nesse caso ele é
+  // desligado sozinho no fim. Se a usuária ligou na mão, ela decide quando desligar.
+  const ligadoPeloHorarioRef = useRef(false)
+  const dentroDoHorarioRef = useRef(false)
   const [occurrenceData, setOccurrenceData] = useState([])
   const [region, setRegion] = useState(null)
   const [userRegion, setUserRegion] = useState(null)
@@ -317,7 +331,6 @@ export default function Home({ navigation }) {
   // Roubo e furto respondem por mais de 90% das ocorrências e são o que afeta quem anda
   // na rua. Abrir com os dois mantém a mancha de calor legível em vez de cobrir tudo.
   const [tiposSelecionados, setTiposSelecionados] = useState(['roubo', 'furto'])
-  const [anoFiltro, setAnoFiltro] = useState(2026)
   const [homeSection, setHomeSection] = useState('mapa')
   const cameraRef = useRef(null)
 
@@ -387,6 +400,7 @@ export default function Home({ navigation }) {
     loadActivity();
     loadSafeLocations();
     loadUserData();
+    buscarPeriodoCrimes().then(setPeriodoCrimes);
 
     const safeLocationsChannel = supabase
       .channel('public:safe_locations')
@@ -411,8 +425,29 @@ export default function Home({ navigation }) {
     React.useCallback(() => {
       loadSafeLocations();
       loadActivity();
+      loadHorariosAtividade();
     }, [])
   );
+
+  // Liga o modo atividade no começo de um horário programado e desliga no fim. Age só
+  // na virada (entrou/saiu do horário), e não a cada checagem: assim, se a usuária
+  // desligar na mão no meio do treino, o app não liga de novo meio minuto depois.
+  useEffect(() => {
+    const conferir = () => {
+      const dentro = Boolean(horarioAtivoAgora(horariosAtividade, new Date()))
+      if (dentro === dentroDoHorarioRef.current) return
+      dentroDoHorarioRef.current = dentro
+      if (dentro && !activityMode) {
+        toggleActivity(true)
+        ligadoPeloHorarioRef.current = true
+      } else if (!dentro && activityMode && ligadoPeloHorarioRef.current) {
+        toggleActivity(false)
+      }
+    }
+    conferir()
+    const intervalo = setInterval(conferir, CHECAGEM_HORARIO_MS)
+    return () => clearInterval(intervalo)
+  }, [horariosAtividade, activityMode])
 
   // Grava histórico de localização (já throttled a 50m/5min no hook) para alimentar os dashboards
   useEffect(() => {
@@ -522,6 +557,12 @@ export default function Home({ navigation }) {
     if (data) setActivityMode(data.ativo)
   }
 
+  async function loadHorariosAtividade() {
+    const user = (await supabase.auth.getUser()).data.user
+    if (!user) return
+    setHorariosAtividade(await listarHorariosAtividade(user.id))
+  }
+
   async function loadSafeLocations() {
     try {
       const user = (await supabase.auth.getUser()).data.user;
@@ -536,6 +577,10 @@ export default function Home({ navigation }) {
 
 
   async function toggleActivity(value) {
+    // Qualquer mudança tira o controle do horário: quem desligou não quer que o app
+    // religue, e quem ligou fora do horário não quer que ele desligue sozinho. Quando a
+    // chamada vem do próprio horário, ele marca de novo logo em seguida.
+    ligadoPeloHorarioRef.current = false
     setActivityMode(value)
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
@@ -581,9 +626,10 @@ export default function Home({ navigation }) {
     // vinha truncada em 1.000, então qualquer região urbana batia no teto e somava os
     // mesmos 4 pontos. Os limites são os mesmos que pintam o mapa de calor, para a cor
     // que a usuária vê e o score contarem a mesma história.
+    // Os limites são por ano; FRACAO_DO_ANO os ajusta para os 6 meses que a base soma.
     const densidadeCrimes = totalCrimesEntorno / (Math.PI * RAIO_INICIAL_KM ** 2)
-    if (densidadeCrimes > 700) { score += 4; }
-    else if (densidadeCrimes > 250) { score += 2; }
+    if (densidadeCrimes > 700 * FRACAO_DO_ANO) { score += 4; }
+    else if (densidadeCrimes > 250 * FRACAO_DO_ANO) { score += 2; }
 
     // Fator horário
     const hora = new Date().getHours()
@@ -813,8 +859,9 @@ export default function Home({ navigation }) {
   // Crimes oficiais (SSP) já chegam do serviço ordenados do mais próximo ao mais distante.
   // A busca acompanha a área visível do mapa, não a posição da usuária: sem isso, arrastar
   // o mapa mostrava região em branco, como se não houvesse ocorrência por lá.
-  // Grade do mapa de calor: acompanha a área visível e os filtros de tipo e ano.
+  // Grade do mapa de calor: acompanha a área visível e o filtro de tipo.
   useEffect(() => {
+    let cancelado = false
     async function carregarCalor() {
       const alvo = areaVisivel ?? (location && {
         latitude: location.coords.latitude,
@@ -827,9 +874,13 @@ export default function Home({ navigation }) {
       // O teto vale depois da margem — pedir 21 km levava a consulta a 6 s na primeira
       // leitura, perto do limite de 8 s que o banco impõe.
       const raioBusca = Math.min(alvo.raioKm * MARGEM_BUSCA, RAIO_MAXIMO_KM)
+      setCalorCarregando(true)
       const { celulas, celulaGraus: tamanho } = await buscarMapaCalor(
-        alvo.latitude, alvo.longitude, raioBusca, anoFiltro, tiposSelecionados,
+        alvo.latitude, alvo.longitude, raioBusca, tiposSelecionados,
       )
+      // Uma resposta antiga não pode apagar o aviso de uma busca mais nova ainda em curso.
+      if (cancelado) return
+      setCalorCarregando(false)
       // Em falha, celulas vem nulo e o mapa mantém o que já estava desenhado: apagar o
       // calor por causa de uma consulta lenta é pior do que mostrar dado de um segundo atrás.
       if (celulas) {
@@ -838,7 +889,8 @@ export default function Home({ navigation }) {
       }
     }
     carregarCalor()
-  }, [areaVisivel, location, anoFiltro, tiposSelecionados])
+    return () => { cancelado = true }
+  }, [areaVisivel, location, tiposSelecionados])
 
   // Contagem por tipo no entorno da usuária, para o score, os números dos filtros e a
   // faixa de status. Fica presa à posição dela, e não à área visível: o risco é de onde
@@ -847,12 +899,14 @@ export default function Home({ navigation }) {
     async function carregarResumo() {
       if (!location) return
       const resumo = await buscarResumoCrimes(
-        location.coords.latitude, location.coords.longitude, RAIO_INICIAL_KM, anoFiltro,
+        location.coords.latitude, location.coords.longitude, RAIO_INICIAL_KM,
       )
       if (resumo) setResumoCrimes(resumo)
+      // Mesmo em falha: o score segue sem o peso dos crimes, em vez de ficar carregando.
+      setResumoPronto(true)
     }
     carregarResumo()
-  }, [location, anoFiltro])
+  }, [location])
 
   // Relatos da comunidade — mesma ordenação por proximidade vinda do serviço.
   useEffect(() => {
@@ -1016,6 +1070,11 @@ export default function Home({ navigation }) {
   }
 
   const displayScore = monitoramentoAtivo ? riskScore : 0
+  const calculandoScore = monitoramentoAtivo && !resumoPronto
+  const horarioAgora = horarioAtivoAgora(horariosAtividade, new Date())
+  const textoAtividade = activityMode
+    ? (horarioAgora ? `Até ${horarioAgora.hora_fim.slice(0, 5)}` : 'Exercício ativo')
+    : (descreverProximoHorario(horariosAtividade, new Date()) ?? 'Para exercícios')
   const displayLevel = displayScore > 8 ? 'Crítico' : displayScore >= 5 ? 'Moderado' : 'Baixo'
   // O filtro vale para o mapa e para a faixa de status. O score continua olhando todos os
   // tipos: esconder um deles no mapa não torna a região mais segura.
@@ -1060,7 +1119,7 @@ export default function Home({ navigation }) {
     }] : [],
   }), [location])
   const safetyRadius = useMemo(
-    () => location ? criarGeoJSONRaio(location.coords.latitude, location.coords.longitude, 3000) : null,
+    () => location ? criarGeoJSONRaio(location.coords.latitude, location.coords.longitude, RAIO_INICIAL_KM * 1000) : null,
     [location],
   )
   const rotuloFiltro = tiposSelecionados.length === 0
@@ -1136,13 +1195,16 @@ export default function Home({ navigation }) {
             <View style={styles.topModeHeading}>
               <Ionicons name="fitness-outline" size={17} color={activityMode ? Brand.rose : Brand.muted} />
               <Text style={styles.topModeTitle}>Atividade</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('ActivitySchedules')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Programar horários de atividade">
+                <Ionicons name="alarm-outline" size={16} color={Brand.blue} />
+              </TouchableOpacity>
               <TouchableOpacity onPress={showActivityInfo} hitSlop={8} accessibilityRole="button" accessibilityLabel="O que é modo atividade?">
                 <Ionicons name="help-circle-outline" size={16} color={Brand.blue} />
               </TouchableOpacity>
             </View>
             <View style={styles.topModeControlRow}>
               <Text style={styles.topModeSubtitle} numberOfLines={1}>
-                {activityMode ? 'Exercício ativo' : 'Para exercícios'}
+                {textoAtividade}
               </Text>
               <Switch
                 value={activityMode}
@@ -1170,14 +1232,21 @@ export default function Home({ navigation }) {
               <View style={styles.riskContent}>
                 <Text style={styles.riskLabel}>Risco atual</Text>
                 <View style={styles.riskRow}>
-                  <View style={styles.riskSummary}>
-                    <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
-                      {displayScore}<Text style={styles.gaugeScoreMax}>/10</Text>
-                    </Text>
-                    <Text style={[styles.riskBadgeText, { color: riskAccent }]}>
-                      {monitoramentoAtivo ? displayLevel : 'Pausado'}
-                    </Text>
-                  </View>
+                  {calculandoScore ? (
+                    <View style={styles.carregandoLinha} accessibilityLiveRegion="polite">
+                      <ActivityIndicator size="small" color={Brand.rose} />
+                      <Text style={styles.carregandoTexto}>Calculando score…</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.riskSummary}>
+                      <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
+                        {displayScore}<Text style={styles.gaugeScoreMax}>/10</Text>
+                      </Text>
+                      <Text style={[styles.riskBadgeText, { color: riskAccent }]}>
+                        {monitoramentoAtivo ? displayLevel : 'Pausado'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <View style={styles.riskCompactRow}>
                   {monitoramentoAtivo ? (
@@ -1194,7 +1263,7 @@ export default function Home({ navigation }) {
               </View>
             </View>
             <View style={styles.scoreTrack}>
-              <View style={[styles.scoreFill, { width: `${Math.min(Math.max(Number(displayScore), 0), 10) * 10}%`, backgroundColor: riskAccent }]} />
+              <View style={[styles.scoreFill, { width: `${calculandoScore ? 0 : Math.min(Math.max(Number(displayScore), 0), 10) * 10}%`, backgroundColor: riskAccent }]} />
             </View>
           </View>
         </View>
@@ -1373,23 +1442,12 @@ export default function Home({ navigation }) {
             })}
           </ScrollView>
 
-          <Text style={[styles.filtroTitulo, { marginTop: 14 }]}>Ano</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtroRow}>
-            {ANOS_DISPONIVEIS.map((ano) => {
-              const ativo = anoFiltro === ano
-              return (
-                <TouchableOpacity
-                  key={ano ?? 'todos'}
-                  style={[styles.filtroChip, ativo && styles.filtroChipAtivo]}
-                  onPress={() => setAnoFiltro(ano)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: ativo }}
-                >
-                  <Text style={[styles.filtroTexto, ativo && styles.filtroTextoAtivo]}>{ano ?? 'Todos'}</Text>
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
+          <View style={styles.periodoLinha}>
+            <Ionicons name="calendar-outline" size={14} color={Brand.muted} />
+            <Text style={styles.periodoTexto}>
+              Últimos 6 meses de dados da SSP{periodoCrimes ? ` (${periodoCrimes})` : ''}
+            </Text>
+          </View>
         </View>
 
         {/* ── MAPA ── */}
@@ -1445,21 +1503,22 @@ export default function Home({ navigation }) {
                       // Raio curto de propósito: as ocorrências são geocodificadas em
                       // endereços, então manchas pequenas acompanham o traçado das ruas.
                       // Raio grande engorda tudo e cobre o quarteirão inteiro.
-                      'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 11, 14, 15, 34, 18, 70],
-                      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 0.4, 18, 0.7],
-                      // Opacidade baixa para os nomes das ruas continuarem legíveis.
-                      'heatmap-opacity': 0.45,
+                      'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 11, 20, 15, 45, 18, 90],
+                      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 0.6, 18, 1],
+                      // Forte o bastante para ler a intensidade; o vermelho no máximo fica
+                      // em 0,7 para os nomes das ruas continuarem aparecendo por baixo.
+                      'heatmap-opacity': 0.85,
                       // Verde, amarelo, laranja, vermelho: a sequência é lida como
                       // intensidade sem precisar de legenda.
                       'heatmap-color': [
                         'interpolate', ['linear'], ['heatmap-density'],
                         0, 'rgba(76, 175, 80, 0)',
-                        0.15, 'rgba(76, 175, 80, 0.20)',
-                        0.35, 'rgba(174, 213, 129, 0.30)',
-                        0.5, 'rgba(255, 235, 59, 0.38)',
-                        0.65, 'rgba(255, 183, 77, 0.45)',
-                        0.8, 'rgba(255, 152, 0, 0.52)',
-                        1, 'rgba(211, 47, 47, 0.62)',
+                        0.1, 'rgba(56, 165, 70, 0.45)',
+                        0.3, 'rgba(120, 190, 80, 0.50)',
+                        0.5, 'rgba(255, 235, 59, 0.52)',
+                        0.65, 'rgba(255, 183, 77, 0.56)',
+                        0.8, 'rgba(255, 120, 0, 0.64)',
+                        1, 'rgba(230, 30, 30, 0.72)',
                       ],
                     }}
                   />
@@ -1517,7 +1576,7 @@ export default function Home({ navigation }) {
                   {location && (
                     <Circle
                       center={{ latitude: location.coords.latitude, longitude: location.coords.longitude }}
-                      radius={3000}
+                      radius={RAIO_INICIAL_KM * 1000}
                       fillColor="rgba(196, 104, 122, 0.10)"
                       strokeColor={Brand.rose}
                       strokeWidth={1.5}
@@ -1558,6 +1617,13 @@ export default function Home({ navigation }) {
                 <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: Brand.rose }]} /><Text style={styles.legendText}>Ampara</Text></View>
               </View>
 
+              {calorCarregando && (
+                <View style={styles.mapaCarregando} pointerEvents="none" accessibilityLiveRegion="polite">
+                  <ActivityIndicator size="small" color={Brand.rose} />
+                  <Text style={styles.mapaCarregandoTexto}>Carregando mapa…</Text>
+                </View>
+              )}
+
               {mapMoved && (
                 <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}>
                   <Ionicons name="locate" size={16} color="#FFF" />
@@ -1566,7 +1632,14 @@ export default function Home({ navigation }) {
               )}
             </>
           ) : (
-            <Text style={{ padding: 20 }}>{errorMsg || 'Carregando mapa...'}</Text>
+            errorMsg ? (
+              <Text style={{ padding: 20 }}>{errorMsg}</Text>
+            ) : (
+              <View style={styles.mapaSemLocalizacao}>
+                <ActivityIndicator size="large" color={Brand.rose} />
+                <Text style={styles.carregandoTexto}>Carregando mapa…</Text>
+              </View>
+            )
           )}
         </View>
 
@@ -1579,8 +1652,8 @@ export default function Home({ navigation }) {
           />
           <Text style={[styles.crimeStripText, { color: totalFiltrado > 0 ? Brand.rose : '#2E8B57' }]}>
             {totalFiltrado > 0
-              ? `${totalFiltrado.toLocaleString('pt-BR')} ${rotuloFiltro} num raio de ${RAIO_INICIAL_KM} km${anoFiltro ? ` em ${anoFiltro}` : ''}`
-              : `Nenhum registro${tiposSelecionados.length > 0 ? ` de ${rotuloFiltro}` : ''} por perto${anoFiltro ? ` em ${anoFiltro}` : ''}`}
+              ? `${totalFiltrado.toLocaleString('pt-BR')} ${rotuloFiltro} num raio de ${RAIO_INICIAL_KM} km nos últimos 6 meses`
+              : `Nenhum registro${tiposSelecionados.length > 0 ? ` de ${rotuloFiltro}` : ''} por perto nos últimos 6 meses`}
           </Text>
         </View>
         </>}
@@ -2103,6 +2176,13 @@ const styles = StyleSheet.create({
   filtroContagem: { fontSize: 11, color: '#9AA0A6', fontWeight: '700' },
   filtroTextoAtivo: { color: '#FFF' },
 
+  carregandoLinha: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  carregandoTexto: { color: Brand.muted, fontSize: 13, fontWeight: '600' },
+  periodoLinha: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
+  periodoTexto: { color: Brand.muted, fontSize: 12 },
+  mapaCarregando: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 16, paddingVertical: 7, paddingHorizontal: 12 },
+  mapaCarregandoTexto: { color: Brand.ink, fontSize: 12, fontWeight: '600' },
+  mapaSemLocalizacao: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   mapContainer: { height: 300, borderTopLeftRadius: 24, borderTopRightRadius: 12, borderBottomRightRadius: 24, borderBottomLeftRadius: 12, overflow: 'hidden', marginHorizontal: 20, marginBottom: 16 },
   map: { flex: 1 },
   recenterButton: { position: 'absolute', bottom: 44, left: 12, backgroundColor: Brand.blue, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20 },
