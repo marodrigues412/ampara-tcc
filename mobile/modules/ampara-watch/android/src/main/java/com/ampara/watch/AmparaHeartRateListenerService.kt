@@ -16,6 +16,15 @@ class AmparaHeartRateListenerService : WearableListenerService() {
       }
       return
     }
+    if (messageEvent.path == HEART_RATE_STATUS_PATH) {
+      try {
+        val data = JSONObject(String(messageEvent.data, Charsets.UTF_8))
+        saveHeartRateStatus(data.optInt("status", 0), data.optLong("timestamp", 0L))
+      } catch (_: Exception) {
+        // Ignore malformed sensor-status messages.
+      }
+      return
+    }
     if (messageEvent.path == MOTION_PATH) {
       try {
         val data = JSONObject(String(messageEvent.data, Charsets.UTF_8))
@@ -80,22 +89,42 @@ class AmparaHeartRateListenerService : WearableListenerService() {
     getSharedPreferences(PREFS, MODE_PRIVATE).edit()
       .putInt("bpm", bpm)
       .putLong("timestamp", timestamp)
+      .putInt(HEART_RATE_STATUS, 1)
+      .putLong(HEART_RATE_STATUS_TIMESTAMP, timestamp)
       .apply()
     sendBroadcast(Intent(ACTION_HEART_RATE).setPackage(packageName)
       .putExtra("bpm", bpm)
       .putExtra("timestamp", timestamp))
   }
 
+  private fun saveHeartRateStatus(status: Int, timestamp: Long) {
+    val now = System.currentTimeMillis()
+    if (status !in VALID_HEART_RATE_STATUSES || timestamp <= 0 || timestamp > now + 10_000 || now - timestamp > HEART_RATE_STATUS_MAX_AGE_MS) return
+    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+      .putInt(HEART_RATE_STATUS, status)
+      .putLong(HEART_RATE_STATUS_TIMESTAMP, timestamp)
+      .apply()
+    sendBroadcast(Intent(ACTION_HEART_RATE_STATUS).setPackage(packageName)
+      .putExtra("status", status)
+      .putExtra("timestamp", timestamp))
+  }
+
   companion object {
     const val HEART_RATE_PATH = "/ampara/heart-rate"
+    const val HEART_RATE_STATUS_PATH = "/ampara/heart-rate-status"
     const val MONITOR_STATUS_PATH = "/ampara/monitor-status"
     const val MOTION_PATH = "/ampara/watch-motion"
     const val ACTION_HEART_RATE = "com.ampara.watch.HEART_RATE"
+    const val ACTION_HEART_RATE_STATUS = "com.ampara.watch.HEART_RATE_STATUS"
     const val ACTION_MONITOR_STATUS = "com.ampara.watch.MONITOR_STATUS"
     const val ACTION_WATCH_MOTION = "com.ampara.watch.MOTION"
     const val PREFS = "ampara_watch_heart_rate"
     const val MONITORING_ACTIVE = "monitoring_active"
     const val MONITOR_STATUS_RECEIVED_AT = "monitor_status_received_at"
+    const val HEART_RATE_STATUS = "heart_rate_status"
+    const val HEART_RATE_STATUS_TIMESTAMP = "heart_rate_status_timestamp"
+    const val HEART_RATE_STATUS_MAX_AGE_MS = 30_000L
+    val VALID_HEART_RATE_STATUSES = setOf(-999, -10, -8, -3, -2, 0)
     const val MOTION_PEAK = "motion_peak"
     const val MOTION_RMS = "motion_rms"
     const val MOTION_JERK = "motion_jerk"

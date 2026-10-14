@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -27,6 +28,9 @@ import org.json.JSONObject
 class HeartRateService : Service() {
   private var healthService: HealthTrackingService? = null
   private var tracker: HealthTracker? = null
+  private var wakeLock: PowerManager.WakeLock? = null
+  private var reconnectAttempt = 0
+  private var stopping = false
   private var sensorManager: SensorManager? = null
   private var motionSensor: Sensor? = null
   private var motionSensorRegistered = false
@@ -41,6 +45,12 @@ class HeartRateService : Service() {
   private var motionPeak = 0.0
   private var motionJerkPeak = 0.0
   private val flushHandler = Handler(Looper.getMainLooper())
+  private val reconnectTask = object : Runnable {
+    override fun run() {
+      if (stopping || healthService != null) return
+      connectSensor()
+    }
+  }
   private val flushTask = object : Runnable {
     override fun run() {
       tracker?.let {
@@ -61,10 +71,16 @@ class HeartRateService : Service() {
   override fun onCreate() {
     super.onCreate()
     startForeground(NOTIFICATION_ID, createNotification())
+    val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+    wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:heart-rate").apply {
+      setReferenceCounted(false)
+      acquire()
+    }
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent?.action == ACTION_STOP) {
+      stopping = true
       stopTracking()
       stopSelf()
       return START_NOT_STICKY
@@ -74,14 +90,17 @@ class HeartRateService : Service() {
   }
 
   private fun connectSensor() {
-    if (healthService != null) return
-    healthService = HealthTrackingService(object : ConnectionListener {
+    if (stopping || healthService != null) return
+    val service = HealthTrackingService(object : ConnectionListener {
       override fun onConnectionSuccess() {
+        if (stopping) return
         try {
           val capability = healthService?.trackingCapability
           if (capability?.supportHealthTrackerTypes?.contains(HealthTrackerType.HEART_RATE_CONTINUOUS) != true) {
             sendMonitorStatus(false)
             updateNotification("Sensor contínuo indisponível")
+            healthService?.disconnectService()
+            healthService = null
             return
           }
           tracker = healthService?.getHealthTracker(HealthTrackerType.HEART_RATE_CONTINUOUS)?.also {
@@ -90,8 +109,10 @@ class HeartRateService : Service() {
           if (tracker == null) {
             sendMonitorStatus(false)
             updateNotification("Não foi possível iniciar o sensor")
+            scheduleReconnect()
             return
           }
+          reconnectAttempt = 0
           startMotionTracking()
           sendMonitorStatus(true)
           flushHandler.removeCallbacks(flushTask)
@@ -105,19 +126,26 @@ class HeartRateService : Service() {
       }
 
       override fun onConnectionEnded() {
+        if (stopping) return
         stopMotionTracking()
         tracker?.unsetEventListener()
         tracker = null
         healthService = null
         sendMonitorStatus(false)
         updateNotification("Reconectando ao sensor")
+        scheduleReconnect()
       }
 
       override fun onConnectionFailed(exception: HealthTrackerException) {
+        if (stopping) return
         sendMonitorStatus(false)
-        updateNotification("Abra o Samsung Health Monitor")
+        healthService = null
+        updateNotification("Falha no sensor · tentando novamente")
+        scheduleReconnect()
       }
-    }, this).also { it.connectService() }
+    }, this)
+    healthService = service
+    service.connectService()
   }
 
   private val motionListener = object : SensorEventListener {
@@ -228,13 +256,15 @@ class HeartRateService : Service() {
 
   private val trackerListener = object : HealthTracker.TrackerEventListener {
     override fun onDataReceived(data: List<DataPoint>) {
-      data.forEach { point ->
-        val bpm = point.getValue(ValueKey.HeartRateSet.HEART_RATE) ?: 0
-        val timestamp = point.timestamp
-        if (bpm in 25..240 && timestamp > 0) {
-          sendBroadcast(Intent(ACTION_HEART_RATE).setPackage(packageName).putExtra("bpm", bpm))
-          sendToPhone(bpm, timestamp)
-        }
+      val point = data.maxByOrNull { it.timestamp } ?: return
+      val bpm = point.getValue(ValueKey.HeartRateSet.HEART_RATE) ?: 0
+      val status = point.getValue(ValueKey.HeartRateSet.HEART_RATE_STATUS) ?: 0
+      val timestamp = point.timestamp
+      if (status == HEART_RATE_SUCCESS && bpm in 25..240 && timestamp > 0) {
+        sendBroadcast(Intent(ACTION_HEART_RATE).setPackage(packageName).putExtra("bpm", bpm))
+        sendToPhone(bpm, timestamp)
+      } else if (timestamp > 0) {
+        sendHeartRateStatus(status, timestamp)
       }
     }
 
@@ -242,18 +272,19 @@ class HeartRateService : Service() {
 
     override fun onError(error: HealthTracker.TrackerError) {
       stopTracking()
-      val message = if (error == HealthTracker.TrackerError.SDK_POLICY_ERROR) {
-        "Ative o modo de desenvolvedor do Sensor Service"
-      } else {
-        "Permita sensores corporais no relogio"
-      }
-      updateNotification(message)
+      updateNotification("Leitura interrompida · tentando novamente")
+      scheduleReconnect()
     }
   }
 
   private fun sendToPhone(bpm: Int, timestamp: Long) {
     val payload = JSONObject().put("bpm", bpm).put("timestamp", timestamp).toString().toByteArray(Charsets.UTF_8)
     sendToNearbyNodes(HEART_RATE_PATH, payload)
+  }
+
+  private fun sendHeartRateStatus(status: Int, timestamp: Long) {
+    val payload = JSONObject().put("status", status).put("timestamp", timestamp).toString().toByteArray(Charsets.UTF_8)
+    sendToNearbyNodes(HEART_RATE_STATUS_PATH, payload)
   }
 
   private fun sendMonitorStatus(active: Boolean) {
@@ -307,8 +338,23 @@ class HeartRateService : Service() {
     healthService = null
   }
 
+  private fun scheduleReconnect() {
+    if (stopping) return
+    flushHandler.removeCallbacks(reconnectTask)
+    val delay = minOf(
+      RECONNECT_BASE_DELAY_MS * (1L shl reconnectAttempt.coerceAtMost(MAX_RECONNECT_SHIFT)),
+      RECONNECT_MAX_DELAY_MS,
+    )
+    reconnectAttempt += 1
+    flushHandler.postDelayed(reconnectTask, delay)
+  }
+
   override fun onDestroy() {
+    stopping = true
+    flushHandler.removeCallbacks(reconnectTask)
     stopTracking()
+    wakeLock?.let { if (it.isHeld) it.release() }
+    wakeLock = null
     super.onDestroy()
   }
 
@@ -319,11 +365,16 @@ class HeartRateService : Service() {
     const val ACTION_STOP = "com.ampara.watch.STOP"
     const val ACTION_HEART_RATE = "com.ampara.watch.HEART_RATE"
     const val HEART_RATE_PATH = "/ampara/heart-rate"
+    const val HEART_RATE_STATUS_PATH = "/ampara/heart-rate-status"
+    const val HEART_RATE_SUCCESS = 1
     const val MONITOR_STATUS_PATH = "/ampara/monitor-status"
     const val MOTION_PATH = "/ampara/watch-motion"
     private const val CHANNEL_ID = "ampara-heart-rate"
     private const val NOTIFICATION_ID = 57
     private const val FLUSH_INTERVAL_MS = 5_000L
+    private const val RECONNECT_BASE_DELAY_MS = 5_000L
+    private const val RECONNECT_MAX_DELAY_MS = 60_000L
+    private const val MAX_RECONNECT_SHIFT = 4
     private const val STATUS_HEARTBEAT_MS = 30_000L
     private const val MOTION_WINDOW_MS = 1_000L
     private const val GRAVITY_FILTER_ALPHA = 0.8f

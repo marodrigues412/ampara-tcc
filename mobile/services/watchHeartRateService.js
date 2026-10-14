@@ -92,6 +92,19 @@ export async function getDirectWatchMonitoringStatus() {
   }
 }
 
+export async function getDirectWatchHeartRateStatus() {
+  if (Platform.OS !== 'android') return null
+  try {
+    const result = await getWatchHeartRateModule()?.getHeartRateStatus()
+    const status = Number(result?.status)
+    const timestamp = Number(result?.timestamp)
+    if (!Number.isFinite(status) || !Number.isFinite(timestamp) || timestamp <= 0) return null
+    return { status, time: new Date(timestamp).toISOString() }
+  } catch {
+    return null
+  }
+}
+
 export function subscribeToDirectWatchHeartRate(listener) {
   try {
     const emitter = getEmitter()
@@ -126,6 +139,22 @@ export function subscribeToDirectWatchMonitoringStatus(listener) {
     if (!emitter) return () => {}
     const subscription = emitter.addListener('onMonitorStatus', event => {
       listener(event?.active ? 'active' : 'inactive')
+    })
+    return () => subscription.remove()
+  } catch {
+    return () => {}
+  }
+}
+
+export function subscribeToDirectWatchHeartRateStatus(listener) {
+  try {
+    const emitter = getEmitter()
+    if (!emitter) return () => {}
+    const subscription = emitter.addListener('onHeartRateStatus', event => {
+      const status = Number(event?.status)
+      const timestamp = Number(event?.timestamp)
+      if (!Number.isFinite(status) || !Number.isFinite(timestamp) || timestamp <= 0) return
+      listener({ status, time: new Date(timestamp).toISOString() })
     })
     return () => subscription.remove()
   } catch {

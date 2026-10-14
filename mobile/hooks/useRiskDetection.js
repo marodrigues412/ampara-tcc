@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Accelerometer, Pedometer } from 'expo-sensors';
 import * as Location from 'expo-location';
 import { calculateSecurityScore } from '../utils/scoreCalculator'; // Importação do util
 import crimeData from '../data/crimes_mock.json';
+import { appendPhoneMotionSample, summarizePhoneMotionWindow } from '../utils/motionWindowFeatures';
 
 export const useRiskDetection = ({ insideSafeZone = false, activityMode = false } = {}) => {
   const [data, setData] = useState({ x: 0, y: 0, z: 0 });
+  const [phoneMotionWindow, setPhoneMotionWindow] = useState(null)
+  const phoneMotionSamplesRef = useRef([])
   const [stepCount, setStepCount] = useState(0);
   const [location, setLocation] = useState(null);
+  const [gpsSpeedDeltaMps, setGpsSpeedDeltaMps] = useState(null)
+  const previousGpsSpeedRef = useRef(null)
   const [riskStatus, setRiskStatus] = useState({ isHighRisk: false, magnitude: 0 });
   const [errorMsg, setErrorMsg] = useState(null);
   const [nearbyCrimes, setNearbyCrimes] = useState(0);
@@ -50,6 +55,9 @@ export const useRiskDetection = ({ insideSafeZone = false, activityMode = false 
       setData(accData);
       const { x, y, z } = accData;
       const mag = Math.sqrt(x**2 + y**2 + z**2);
+      const sampleTime = Date.now()
+      phoneMotionSamplesRef.current = appendPhoneMotionSample(phoneMotionSamplesRef.current, mag, sampleTime)
+      setPhoneMotionWindow(summarizePhoneMotionWindow(phoneMotionSamplesRef.current))
       
       // CALCULA O SCORE EM TEMPO REAL BASEADO NOS SENSORES E NA CONTAGEM DE CRIMES
       const result = calculateSecurityScore({
@@ -81,18 +89,26 @@ export const useRiskDetection = ({ insideSafeZone = false, activityMode = false 
   // juntos, o GPS seria re-inscrito a cada passo e o throttle nunca funcionaria.
   useEffect(() => {
     let locationSub;
+    const updateLocation = loc => {
+      const speed = Number(loc.coords.speed)
+      const validSpeed = Number.isFinite(speed) && speed >= 0 ? speed : null
+      if (validSpeed !== null && previousGpsSpeedRef.current !== null) {
+        setGpsSpeedDeltaMps(validSpeed - previousGpsSpeedRef.current)
+      }
+      if (validSpeed !== null) previousGpsSpeedRef.current = validSpeed
+      setLocation(loc)
+      checkCrimeRisk(loc.coords.latitude, loc.coords.longitude)
+    }
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         let loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc);
-        checkCrimeRisk(loc.coords.latitude, loc.coords.longitude);
+        updateLocation(loc)
 
         locationSub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Balanced, distanceInterval: 50, timeInterval: 5 * 60 * 1000 },
           (newLoc) => {
-            setLocation(newLoc);
-            checkCrimeRisk(newLoc.coords.latitude, newLoc.coords.longitude);
+            updateLocation(newLoc)
           }
         );
       }
@@ -106,6 +122,8 @@ export const useRiskDetection = ({ insideSafeZone = false, activityMode = false 
   // RETORNA TAMBÉM O SCORE E A COR PARA O DASHBOARD
   return { 
     data, 
+    phoneMotionWindow,
+    gpsSpeedDeltaMps,
     location, 
     riskStatus, 
     errorMsg, 

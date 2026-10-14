@@ -32,6 +32,7 @@ import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
 import { calculateExperimentalRiskScore, EXPERIMENTAL_RISK_SCORE_VERSION, getExperimentalRiskLevel } from '../services/experimentalRiskScore'
+import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
 import { Brand } from '../constants/brandTheme'
 import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
@@ -62,6 +63,27 @@ const { Circle, Marker } = nativeMaps || {}
 const SHOW_PRESENTATION_MODE = false
 const LIVE_HEART_RATE_MS = 10_000
 const SOS_HOLD_MS = 3_000
+const HEART_RATE_STATUS_MAX_AGE_MS = 30_000
+
+const getHeartRateSignalMessage = (sensorStatus) => {
+  if (!sensorStatus || Date.now() - Date.parse(sensorStatus.time) > HEART_RATE_STATUS_MAX_AGE_MS) return null
+  switch (sensorStatus.status) {
+    case -10:
+      return 'Sinal fraco ou movimento excessivo. Ajuste o relógio no pulso e aguarde alguns segundos.'
+    case -8:
+      return 'O sinal do sensor oscilou. Confira o encaixe do relógio no pulso e aguarde uma nova leitura.'
+    case -3:
+      return 'O relógio detectou que está fora do pulso. Recoloque-o para retomar as leituras.'
+    case -2:
+      return 'O relógio detectou movimento durante a medição. As leituras voltam quando o sinal estabilizar.'
+    case -999:
+      return 'Outro sensor está medindo neste momento. O monitoramento contínuo será retomado em seguida.'
+    case 0:
+      return 'O sensor está iniciando uma nova medição.'
+    default:
+      return null
+  }
+}
 
 const criarGeoJSONMapa = (crimes, ocorrencias) => ({
   type: 'FeatureCollection',
@@ -171,18 +193,24 @@ export default function Home({ navigation }) {
   const [watchAlertDismissed, setWatchAlertDismissed] = useState(false)
   const [heartRateFreshnessExpired, setHeartRateFreshnessExpired] = useState(true)
   const [riskContextScore, setRiskContextScore] = useState(null)
+  const [userId, setUserId] = useState(null)
+  const [resumoCrimes, setResumoCrimes] = useState({})
+  const totalCrimesEntorno = useMemo(
+    () => Object.values(resumoCrimes).reduce((soma, n) => soma + n, 0),
+    [resumoCrimes],
+  )
 
-  const { data, location, riskStatus, errorMsg, currentScore } = useRiskDetection({ insideSafeZone, activityMode })
-  const smartwatch = useSmartwatch()
+  const { data, location, riskStatus, errorMsg, currentScore, phoneMotionWindow, gpsSpeedDeltaMps } = useRiskDetection({ insideSafeZone, activityMode })
+  const smartwatch = useSmartwatch(userId)
   const motionRisk = useMemo(() => calculateMotionRiskScore({
     phoneMagnitudeG: riskStatus.magnitude,
     watchMotion: smartwatch.watchMotion,
     activityMode,
   }), [riskStatus.magnitude, smartwatch.watchMotion, activityMode])
+  const smartwatchConnected = smartwatch.directWatchStatus === 'connected'
   const watchMotionDetail = motionRisk.watchIsRecent
     ? `RMS ${smartwatch.watchMotion.rms.toFixed(1)} m/s²${motionRisk.watchPoints ? ` · relógio +${motionRisk.watchPoints}` : ' · sem elevação'}${motionRisk.corroborationPoints ? ' · conjunto +1' : ''}`
     : smartwatchConnected ? 'Sem leitura recente' : 'Desconectado'
-  const smartwatchConnected = smartwatch.directWatchStatus === 'connected'
   const heartRateIsCurrent = smartwatchConnected
     && smartwatch.measurement?.isDirect
     && smartwatch.measurement?.isRecent
@@ -191,8 +219,17 @@ export default function Home({ navigation }) {
     smartwatch.heartRateSamples,
     heartRateIsCurrent ? smartwatch.measurement : null,
   )
+  const watchMeasurement = smartwatch.measurement
+  const motionScoreAvailable = Boolean(phoneMotionWindow) || motionRisk.watchIsRecent
+  const experimentalMotionScore = motionScoreAvailable
+    ? Math.round((motionRisk.total / 6) * 100) / 10
+    : null
   const experimentalRiskScore = heartRateBaseline.available
-    ? calculateExperimentalRiskScore({ heartRateZScore: heartRateBaseline.zScore, contextScore: riskContextScore })
+    ? calculateExperimentalRiskScore({
+      heartRateZScore: heartRateBaseline.zScore,
+      contextScore: riskContextScore,
+      motionScore: experimentalMotionScore,
+    })
     : null
   const smartwatchWarning = ['disconnected', 'error', 'development_build_required'].includes(smartwatch.directWatchStatus)
     ? {
@@ -210,8 +247,11 @@ export default function Home({ navigation }) {
         }
       : smartwatchConnected && smartwatch.monitoringStatus === 'active' && !heartRateIsCurrent
         ? {
-            title: 'Sem batimentos recentes',
-            message: 'O relógio informa que o monitoramento está ativo, mas o celular ainda não recebeu uma leitura recente.',
+            title: getHeartRateSignalMessage(smartwatch.heartRateSensorStatus)
+              ? 'Sinal do sensor oscilando'
+              : 'Sem batimentos recentes',
+            message: getHeartRateSignalMessage(smartwatch.heartRateSensorStatus)
+              || 'O relógio informa que o monitoramento está ativo, mas o celular ainda não recebeu uma leitura recente.',
           }
         : smartwatchConnected && smartwatch.monitoringStatus === 'unknown' && !heartRateIsCurrent
           ? {
@@ -263,7 +303,6 @@ export default function Home({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false)
   const [helpInfo, setHelpInfo] = useState(null)
   // { roubo: 3475, furto: 12738, ... } no raio de RAIO_INICIAL_KM em volta da usuária.
-  const [resumoCrimes, setResumoCrimes] = useState({})
   const [occurrenceData, setOccurrenceData] = useState([])
   const [region, setRegion] = useState(null)
   const [userRegion, setUserRegion] = useState(null)
@@ -295,7 +334,6 @@ export default function Home({ navigation }) {
   const [isSaving, setIsSaving] = useState(false)
   const searchTimeout = useRef(null)
   const [userName, setUserName] = useState("Usuária");
-  const [userId, setUserId] = useState(null);
 
   const { magnitude, isHighRisk } = riskStatus
 
@@ -381,6 +419,14 @@ export default function Home({ navigation }) {
     if (!location || !userId) return
     saveLocationPoint(userId, location.coords.latitude, location.coords.longitude, location.coords.speed, currentScore)
   }, [location, userId])
+
+  const latestSavedRiskAtRef = useRef(0)
+  useEffect(() => {
+    latestSavedRiskAtRef.current = Math.max(
+      latestSavedRiskAtRef.current,
+      smartwatch.latestSavedHeartRateAt || 0,
+    )
+  }, [smartwatch.latestSavedHeartRateAt])
 
   // Grava um ponto extra fora do throttle de GPS quando zona segura ou modo atividade mudam —
   // esses eventos alteram o score (via useRiskDetection) mesmo sem a usuária ter se movido,
@@ -572,6 +618,75 @@ export default function Home({ navigation }) {
     else if (score >= 5) { setRiskLevel("Moderado") }
     else { setRiskLevel("Baixo") }
   }, [totalCrimesEntorno, activityMode, location, safeLocations, motionRisk.total])
+
+  useEffect(() => {
+    const measurement = watchMeasurement
+    const measuredAt = Date.parse(measurement?.time)
+    if (
+      !userId
+      || riskContextScore === null
+      || !smartwatch.heartRateHistoryReady
+      || !heartRateIsCurrent
+      || !measurement?.isDirect
+      || !Number.isFinite(measuredAt)
+      || measuredAt - latestSavedRiskAtRef.current < RISK_ASSESSMENT_SAMPLE_INTERVAL_MS
+    ) return
+
+    latestSavedRiskAtRef.current = measuredAt
+    saveRiskAssessment(userId, {
+      measuredAt: measurement.time,
+      bpm: measurement.bpm,
+      baselineMeanBpm: heartRateBaseline.meanBpm,
+      baselineStdDevBpm: heartRateBaseline.standardDeviationBpm,
+      bpmZScore: heartRateBaseline.zScore,
+      contextScore: riskContextScore,
+      experimentalScore: experimentalRiskScore,
+      hourOfDay: new Date(measuredAt).getHours(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',
+      nearbyCrimeCount: totalCrimesEntorno,
+      crimeDensityPerKm2: totalCrimesEntorno / (Math.PI * RAIO_INICIAL_KM ** 2),
+      insideSafeZone,
+      activityMode,
+      motionRiskScore: experimentalMotionScore,
+      phoneMotionRiskPoints: motionRisk.phonePoints,
+      watchMotionRiskPoints: motionRisk.watchPoints,
+      phoneMeanMagnitudeG: phoneMotionWindow?.meanMagnitudeG,
+      phoneMagnitudeStdDevG: phoneMotionWindow?.stdDevMagnitudeG,
+      phonePeakMagnitudeG: phoneMotionWindow?.peakMagnitudeG,
+      phoneJerkGPerSecond: phoneMotionWindow?.jerkGPerSecond,
+      phoneMotionSampleCount: phoneMotionWindow?.sampleCount,
+      gpsSpeedMps: Number.isFinite(location?.coords?.speed) ? location.coords.speed : null,
+      gpsSpeedDeltaMps,
+      watchMotionRmsMps2: motionRisk.watchIsRecent ? smartwatch.watchMotion.rms : null,
+      watchMotionPeakMps2: motionRisk.watchIsRecent ? smartwatch.watchMotion.peak : null,
+      watchMotionJerkMps3: motionRisk.watchIsRecent ? smartwatch.watchMotion.jerk : null,
+      modelVersion: EXPERIMENTAL_RISK_SCORE_VERSION,
+      source: measurement.source,
+    }).catch(error => {
+      console.warn('Não foi possível salvar a avaliação experimental:', error.message)
+    })
+  }, [
+    userId,
+    riskContextScore,
+    totalCrimesEntorno,
+    insideSafeZone,
+    activityMode,
+    smartwatch.heartRateHistoryReady,
+    watchMeasurement,
+    heartRateIsCurrent,
+    heartRateBaseline.meanBpm,
+    heartRateBaseline.standardDeviationBpm,
+    heartRateBaseline.zScore,
+    experimentalRiskScore,
+    experimentalMotionScore,
+    motionRisk.phonePoints,
+    motionRisk.watchPoints,
+    phoneMotionWindow,
+    location,
+    gpsSpeedDeltaMps,
+    motionRisk.watchIsRecent,
+    smartwatch.watchMotion,
+  ])
 
   // --- Função do Disparo de Socorro ---
   const executarEnvioDeSocorro = async () => {
@@ -909,10 +1024,6 @@ export default function Home({ navigation }) {
   const contagemPorTipo = useMemo(() => (
     FILTROS_CRIME.reduce((acc, filtro) => ({ ...acc, [filtro.id]: resumoCrimes[filtro.id] ?? 0 }), {})
   ), [resumoCrimes])
-  const totalCrimesEntorno = useMemo(
-    () => Object.values(resumoCrimes).reduce((soma, n) => soma + n, 0),
-    [resumoCrimes],
-  )
   // Quantos crimes dos tipos marcados existem no entorno — é o que a faixa de status diz.
   const totalFiltrado = useMemo(() => (
     tiposSelecionados.length === 0
@@ -1124,7 +1235,7 @@ export default function Home({ navigation }) {
                   <Text style={styles.experimentalScoreValue}>{experimentalRiskScore}/10</Text>
                   <Text style={styles.experimentalScoreLevel}>{getExperimentalRiskLevel(experimentalRiskScore)}</Text>
                   <Text style={styles.experimentalScoreDetail}>
-                    BPM {heartRateBaseline.zScore >= 0 ? '+' : ''}{heartRateBaseline.zScore.toFixed(1)} desvios · contexto {riskContextScore}/10
+                    BPM {heartRateBaseline.zScore >= 0 ? '+' : ''}{heartRateBaseline.zScore.toFixed(1)} desvios · contexto {riskContextScore}/10 · movimento {experimentalMotionScore == null ? '—' : `${experimentalMotionScore}/10`}
                   </Text>
                 </View>
               )}
