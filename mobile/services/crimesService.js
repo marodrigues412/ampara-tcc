@@ -11,12 +11,18 @@ const TEMPO_ESGOTADO = "57014";
 // cortado, o que é pior do que mostrar o que já estava desenhado.
 const RAIO_MINIMO_KM = 0.6;
 
-// Densidade por célula para o mapa de calor, somada no banco (data/mapa_calor.sql).
+// Código do PostgREST para "função não existe". Aparece num banco que ainda não tem as
+// funções *_recente; nesse caso o app cai na grade antiga, filtrando o ano atual.
+const FUNCAO_INEXISTENTE = "PGRST202";
+
+// Densidade por célula para o mapa de calor, somada no banco (view crime_grid_recente,
+// só com os últimos 6 meses).
 //
 // Buscar ocorrência por ocorrência custava de 1 a 4 segundos e vinha truncado em 1.000
 // registros — o que, numa visão de 12 km, mostrava uma fração do que existe. A grade
 // pré-calculada responde em menos de meio segundo e cobre a área inteira.
-export async function buscarMapaCalor(userLat, userLon, raioKm, ano = null, grupos = null) {
+// Considera só os últimos 6 meses da base: sem filtro de ano, a consulta lê menos linhas.
+export async function buscarMapaCalor(userLat, userLon, raioKm, grupos = null) {
   // O Supabase corta qualquer resposta em 1.000 linhas, inclusive de função. Se a célula
   // for fina demais para a área pedida, o calor volta truncado e some metade do mapa —
   // medimos 6.461 crimes no lugar de 66 mil numa visão de 6 km. Dimensionar a célula pela
@@ -24,23 +30,29 @@ export async function buscarMapaCalor(userLat, userLon, raioKm, ano = null, grup
   const ladoMetros = raioKm * 2 * 1000;
   const celulaGraus = Math.max(CELULA_MINIMA_GRAUS, ladoMetros / 28 / 111000);
 
-  const { data, error } = await supabase.rpc("crimes_mapa_calor", {
+  const parametros = {
     user_lat: userLat,
     user_lon: userLon,
     raio_km: raioKm,
-    ano_filtro: ano,
     grupos_filtro: grupos?.length ? grupos : null,
     celula_graus: celulaGraus,
-  });
+  };
+  let { data, error } = await supabase.rpc("crimes_mapa_calor_recente", parametros);
+  if (error?.code === FUNCAO_INEXISTENTE) {
+    ({ data, error } = await supabase.rpc("crimes_mapa_calor", {
+      ...parametros,
+      ano_filtro: new Date().getFullYear(),
+    }));
+  }
 
   if (error) {
     // Em vez de desistir, tenta de novo com metade da área: a consulta menor costuma
     // caber no tempo, e meio mapa colorido é melhor que mapa em branco. Uma tentativa
     // só — insistir empilharia consultas lentas e deixaria o app travado.
     if (error.code === TEMPO_ESGOTADO && raioKm > RAIO_MINIMO_KM) {
-      return buscarMapaCalor(userLat, userLon, raioKm / 2, ano, grupos);
+      return buscarMapaCalor(userLat, userLon, raioKm / 2, grupos);
     }
-    console.error("ERRO SUPABASE (crimes_mapa_calor):", error);
+    console.error("ERRO SUPABASE (crimes_mapa_calor_recente):", error);
     // Nulo, e não lista vazia: quem chama distingue "deu erro, mantenha o que tem" de
     // "esta região realmente não tem ocorrência".
     return { celulas: null, celulaGraus };
@@ -55,26 +67,41 @@ export async function buscarMapaCalor(userLat, userLon, raioKm, ano = null, grup
 // distância — 4,3 segundos para algo que é só uma soma, e ainda truncado em 1.000
 // registros, o que fazia o score enxergar no máximo mil ocorrências por mais densa que
 // fosse a região. Lendo da grade já somada, são 150 ms e o total é real.
-export async function buscarResumoCrimes(userLat, userLon, raioKm = 3, ano = null, jaTentou = false) {
-  const { data, error } = await supabase.rpc("crimes_resumo", {
-    user_lat: userLat,
-    user_lon: userLon,
-    raio_km: raioKm,
-    ano_filtro: ano,
-  });
+export async function buscarResumoCrimes(userLat, userLon, raioKm = 1, jaTentou = false) {
+  const parametros = { user_lat: userLat, user_lon: userLon, raio_km: raioKm };
+  let { data, error } = await supabase.rpc("crimes_resumo_recente", parametros);
+  if (error?.code === FUNCAO_INEXISTENTE) {
+    ({ data, error } = await supabase.rpc("crimes_resumo", {
+      ...parametros,
+      ano_filtro: new Date().getFullYear(),
+    }));
+  }
 
   if (error) {
     // A primeira chamada depois de um tempo parado leva alguns segundos enquanto a
     // conexão "acorda"; a seguinte costuma responder em menos de um. Por isso uma
     // tentativa extra resolve, em vez de deixar a tela sem score.
     if (error.code === TEMPO_ESGOTADO && !jaTentou) {
-      return buscarResumoCrimes(userLat, userLon, raioKm, ano, true);
+      return buscarResumoCrimes(userLat, userLon, raioKm, true);
     }
-    console.error("ERRO SUPABASE (crimes_resumo):", error);
+    console.error("ERRO SUPABASE (crimes_resumo_recente):", error);
     return null;
   }
 
   return Object.fromEntries((data || []).map((linha) => [linha.grupo, linha.total]));
+}
+
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+// Texto do período que a grade cobre, ex.: "mar–ago 2026" ou "nov 2025–abr 2026".
+// Nulo quando a função ainda não existe no banco: quem chama mostra só "últimos 6 meses".
+export async function buscarPeriodoCrimes() {
+  const { data, error } = await supabase.rpc("crimes_periodo_recente");
+  const p = data?.[0];
+  if (error || !p) return null;
+  const inicio = MESES[p.mes_inicial - 1];
+  const fim = `${MESES[p.mes_final - 1]} ${p.ano_final}`;
+  return p.ano_inicial === p.ano_final ? `${inicio}–${fim}` : `${inicio} ${p.ano_inicial}–${fim}`;
 }
 
 // Relatos da comunidade vêm pela função, não pela tabela: a RLS de occurrences só mostra
