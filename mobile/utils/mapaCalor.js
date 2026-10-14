@@ -16,25 +16,37 @@
 // mapa — sugerindo uma piora que não existe.
 //
 // Calibragem medida na grade de 2026 (roubo e furto, 109 mil células): a mediana fica em
-// 204 ocorrências por km², o percentil 90 em 818 e o 95 em 1.431.
+// 204 ocorrências por km² no ano, o percentil 90 em 818 e o 95 em 1.431.
+//
+// O mapa agora soma só os últimos 6 meses, que acumulam metade das ocorrências de um ano.
+// Os limites continuam escritos "por ano" e são multiplicados por esta fração; sem isso, o
+// mapa inteiro desceria uma faixa de cor sem que nada tivesse melhorado.
+export const FRACAO_DO_ANO = 0.5
+
 const ESCALA = [
-  { limite: 250, cor: '76, 175, 80', opacidade: 0.22 },
-  { limite: 700, cor: '255, 235, 59', opacidade: 0.28 },
-  { limite: 1500, cor: '255, 152, 0', opacidade: 0.34 },
-  { limite: Infinity, cor: '211, 47, 47', opacidade: 0.42 },
+  { limite: 250 * FRACAO_DO_ANO, cor: '56, 165, 70', opacidade: 0.40 },
+  { limite: 700 * FRACAO_DO_ANO, cor: '255, 235, 59', opacidade: 0.42 },
+  { limite: 1500 * FRACAO_DO_ANO, cor: '255, 152, 0', opacidade: 0.50 },
+  { limite: Infinity, cor: '230, 30, 30', opacidade: 0.62 },
 ]
 
 // Usado também pelo mapa do Android, para converter a contagem da célula no peso que a
 // camada nativa espera (0 a 1).
-export const DENSIDADE_VERMELHO = 1500
+export const DENSIDADE_VERMELHO = 1500 * FRACAO_DO_ANO
 
-// Círculo tem borda dura, e borda dura denuncia a grade. Desenhar três anéis
-// concêntricos com opacidade decrescente imita o esfumado da camada nativa do Android:
-// o de fora é largo e quase transparente, o de dentro é pequeno e mais forte.
+// Círculo tem borda dura, e borda dura denuncia a grade. Por isso cada célula vira quatro
+// anéis concêntricos e largos, todos fracos: onde só o anel de fora alcança, a cor quase
+// não aparece; no centro, os quatro se somam. Como os anéis passam bem da célula, os das
+// vizinhas se misturam e a mancha vira uma área contínua, sem contorno visível.
+//
+// A opacidade de cada anel é baixa porque, numa região densa, cada ponto do mapa fica
+// coberto por uns 30 anéis. Somados, dão perto de 65% no vermelho e 50% no verde: cor
+// forte o bastante para ler a intensidade, ainda com as ruas aparecendo por baixo.
 const CAMADAS = [
-  { escalaRaio: 1.8, escalaOpacidade: 0.30 },
-  { escalaRaio: 1.3, escalaOpacidade: 0.55 },
-  { escalaRaio: 1.0, escalaOpacidade: 1.0 },
+  { escalaRaio: 2.6, escalaOpacidade: 0.054 },
+  { escalaRaio: 2.0, escalaOpacidade: 0.054 },
+  { escalaRaio: 1.5, escalaOpacidade: 0.054 },
+  { escalaRaio: 1.0, escalaOpacidade: 0.054 },
 ]
 
 // raioBase vem de quem chama, porque o tamanho da célula muda com o zoom: a grade do
@@ -53,5 +65,5 @@ export function camadasDifusas(celula, areaCelulaKm2, raioBase) {
 export function corDaCelula(peso, areaCelulaKm2, escalaOpacidade = 1) {
   const densidade = peso / Math.max(areaCelulaKm2, 1e-6)
   const faixa = ESCALA.find((f) => densidade <= f.limite) ?? ESCALA[ESCALA.length - 1]
-  return `rgba(${faixa.cor}, ${(faixa.opacidade * escalaOpacidade).toFixed(3)})`
+  return `rgba(${faixa.cor}, ${(faixa.opacidade * escalaOpacidade).toFixed(4)})`
 }

@@ -9,6 +9,7 @@ import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
 import EmergencyContacts from './screens/EmergencyContacts'
 import SafeLocations from './screens/SafeLocations'
+import ActivitySchedules from './screens/ActivitySchedules'
 import MyReports from './screens/MyReports'
 import HelpGuide from './screens/HelpGuide'
 import ChatBot from './screens/ChatBot'
@@ -103,6 +104,7 @@ export default function App() {
           <Stack.Screen name="EditProfile" component={EditProfile} />
           <Stack.Screen name="EmergencyContacts" component={EmergencyContacts} />
           <Stack.Screen name="SafeLocations" component={SafeLocations} />
+          <Stack.Screen name="ActivitySchedules" component={ActivitySchedules} />
 
           <Stack.Screen name="MyReports" component={MyReports} />
           <Stack.Screen name="HelpGuide" component={HelpGuide} />
