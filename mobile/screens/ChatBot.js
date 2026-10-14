@@ -5,8 +5,13 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import LiaAvatar from '../components/LiaAvatar'
+import LiaHelpModal from '../components/LiaHelpModal'
 import { perguntarAIA } from '../services/chatService'
 import { Brand } from '../constants/brandTheme'
+
+// Aberto ao tocar na Lia do cabeçalho. O modelo é o mesmo configurado em
+// supabase/functions/ampara-chat (google/gemma-3-27b, via ia.maua.br).
+const SOBRE_A_IA = 'As respostas da Lia são geradas pela Barô, a IA do Instituto Mauá de Tecnologia (ia.maua.br). O Ampara usa o modelo Gemma 3 27B, do Google, que roda na infraestrutura do próprio Instituto, e não em um serviço externo.\n\nO nome Barô vem da Baroneza, a primeira locomotiva do Brasil, que inaugurou em 1854 a ferrovia do Barão de Mauá.\n\nA Lia tira dúvidas sobre o app e dá orientações gerais de segurança, mas pode errar e não substitui ajuda de emergência. Em perigo, ligue 190. Para violência contra a mulher, ligue 180.'
 
 // Respostas locais curtas para exibir quando a IA estiver indisponível.
 const BASE_RESPOSTAS = [
@@ -71,6 +76,7 @@ export default function ChatBot({ navigation }) {
   const [mensagens, setMensagens] = useState([MENSAGEM_INICIAL])
   const [texto, setTexto] = useState('')
   const [digitando, setDigitando] = useState(false)
+  const [sobreVisivel, setSobreVisivel] = useState(false)
   const [tecladoVisivel, setTecladoVisivel] = useState(false)
   const listaRef = useRef(null)
   const reacaoLia = digitando ? 'pensando' : texto.trim() ? 'ouvindo' : mensagens.length === 1 ? 'oi' : 'ociosa'
@@ -150,14 +156,31 @@ export default function ChatBot({ navigation }) {
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
         )}
-        <View style={styles.avatarCabecalho}>
-          <LiaAvatar size={50} reaction={reacaoLia} />
-        </View>
-        <View style={styles.cabecalhoTextos}>
-          <Text style={styles.cabecalhoNome}>Lia</Text>
-          <Text style={styles.cabecalhoStatus}>Assistente virtual do Ampara</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.cabecalhoLia}
+          onPress={() => setSobreVisivel(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Sobre a inteligência artificial da Lia"
+        >
+          <View style={styles.avatarCabecalho}>
+            <LiaAvatar size={50} reaction={reacaoLia} />
+          </View>
+          <View style={styles.cabecalhoTextos}>
+            <Text style={styles.cabecalhoNome}>Lia</Text>
+            <Text style={styles.cabecalhoStatus}>Assistente virtual do Ampara · IA da Mauá</Text>
+          </View>
+          <Ionicons name="information-circle-outline" size={20} color="#FFF" />
+        </TouchableOpacity>
       </View>
+
+      <LiaHelpModal
+        visible={sobreVisivel}
+        title="Sobre a IA da Lia"
+        message={SOBRE_A_IA}
+        image={require('../assets/images/baro-logo.png')}
+        imageLabel="Logo da Barô, a IA da Mauá"
+        onClose={() => setSobreVisivel(false)}
+      />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -258,6 +281,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cabecalhoLia: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   cabecalhoTextos: { flex: 1 },
   cabecalhoNome: { color: '#FFF', fontSize: 19, fontWeight: '700' },
   cabecalhoStatus: { color: '#F9DEE6', fontSize: 12, marginTop: 1 },
