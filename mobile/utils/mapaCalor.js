@@ -30,6 +30,10 @@ const ESCALA = [
   { limite: Infinity, cor: '230, 30, 30', opacidade: 0.62 },
 ]
 
+// Cores das faixas, sem transparência, para a barra da legenda: mostra a mesma escala que
+// pinta o mapa, do menor para o maior número de ocorrências.
+export const CORES_LEGENDA = ESCALA.map((faixa) => `rgb(${faixa.cor})`)
+
 // Usado também pelo mapa do Android, para converter a contagem da célula no peso que a
 // camada nativa espera (0 a 1).
 export const DENSIDADE_VERMELHO = 1500 * FRACAO_DO_ANO

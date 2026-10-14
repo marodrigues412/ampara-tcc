@@ -18,9 +18,7 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
-import { Text, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { Brand } from './constants/brandTheme'
+import AmparaTabBar from './components/AmparaTabBar'
 
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
@@ -29,35 +27,10 @@ const Stack = createNativeStackNavigator()
 function Tabs() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-
-        tabBarStyle: {
-          backgroundColor: Brand.surface,
-          borderTopWidth: 1,
-          borderTopColor: Brand.line,
-          height: 76,
-          paddingBottom: 9,
-          paddingTop: 8,
-        },
-
-        tabBarActiveTintColor: Brand.roseDeep,
-        tabBarInactiveTintColor: '#9A8C93',
-
-        tabBarShowLabel: true,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-
-        tabBarIcon: ({ focused, color }) => {
-          let iconName
-
-          if (route.name === 'Início') iconName = focused ? 'heart' : 'heart-outline'
-          else if (route.name === 'Dashboard') iconName = focused ? 'stats-chart' : 'stats-chart-outline'
-          else if (route.name === 'Assistente') iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'
-          else if (route.name === 'Perfil') iconName = focused ? 'person-circle' : 'person-circle-outline'
-
-          return <Ionicons name={iconName} size={22} color={color} />
-        },
-      })}
+      screenOptions={{ headerShown: false }}
+      // Barra própria no estilo "bolha": a aba selecionada sobe num círculo com o ícone
+      // azul do app. Os ícones de cada aba ficam definidos dentro do componente.
+      tabBar={(props) => <AmparaTabBar {...props} />}
     >
       <Tab.Screen name="Início" component={Home} />
       <Tab.Screen name="Dashboard" component={Dashboard} />

@@ -24,7 +24,7 @@ import * as Location from 'expo-location'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRiskDetection } from '../hooks/useRiskDetection'
-import { buscarOcorrencias, buscarMapaCalor, buscarResumoCrimes, buscarPeriodoCrimes } from '../services/crimesService'
+import { buscarMapaCalor, buscarResumoCrimes, buscarPeriodoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
 import { listarHorariosAtividade } from "../services/activityScheduleService"
@@ -38,9 +38,10 @@ import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../servi
 import { Brand } from '../constants/brandTheme'
 import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
+import SosHoldOverlay from '../components/SosHoldOverlay'
 
 import { dispararAlerta } from '../services/alertService'
-import { camadasDifusas, DENSIDADE_VERMELHO, FRACAO_DO_ANO } from '../utils/mapaCalor'
+import { camadasDifusas, CORES_LEGENDA, DENSIDADE_VERMELHO, FRACAO_DO_ANO } from '../utils/mapaCalor'
 import { distanceKm } from '../utils/geo'
 
 // Raio do entorno da usuária: é o círculo rosa do mapa, a área cujos crimes entram no
@@ -61,7 +62,7 @@ const MapLibreCamera = mapLibre?.Camera
 const MapLibreGeoJSONSource = mapLibre?.GeoJSONSource
 const MapLibreLayer = mapLibre?.Layer
 const MapView = nativeMaps?.default
-const { Circle, Marker } = nativeMaps || {}
+const { Circle } = nativeMaps || {}
 
 const SHOW_PRESENTATION_MODE = false
 const LIVE_HEART_RATE_MS = 10_000
@@ -87,22 +88,6 @@ const getHeartRateSignalMessage = (sensorStatus) => {
       return null
   }
 }
-
-const criarGeoJSONMapa = (crimes, ocorrencias) => ({
-  type: 'FeatureCollection',
-  features: [
-    ...crimes.map(crime => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [Number(crime.lon), Number(crime.lat)] },
-      properties: { kind: 'crime' },
-    })).filter(feature => feature.geometry.coordinates.every(Number.isFinite)),
-    ...ocorrencias.map(occ => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [Number(occ.lon), Number(occ.lat)] },
-      properties: { kind: 'occurrence' },
-    })).filter(feature => feature.geometry.coordinates.every(Number.isFinite)),
-  ],
-})
 
 const criarGeoJSONRaio = (latitude, longitude, radiusMeters) => {
   const latitudeRadians = latitude * Math.PI / 180
@@ -139,8 +124,15 @@ const FILTROS_CRIME = [
   // "culposo" é acidente, não agressão: homicídio culposo por acidente de trânsito
   // pertence ao grupo Trânsito, senão apareceria nos dois.
   { id: 'violencia', rotulo: 'Violência', combina: (t) => !t.includes('CULPOS') && (t.includes('HOMIC') || t.includes('ESTUPRO') || t.includes('LESAO')) },
-  { id: 'transito', rotulo: 'Trânsito', combina: (t) => t.includes('TRANSITO') || t.includes('CULPOSA') },
 ]
+
+// Grupos que o mapa mostra quando nenhum filtro está marcado. Ficam de fora:
+// - trânsito: são acidentes (lesão e homicídio culposos), não um risco de ser atacada na
+//   rua, e pintavam de vermelho as avenidas movimentadas;
+// - outros: 92% são tráfico, porte e apreensão de droga ou arma. Não têm vítima e o
+//   boletim nasce de uma ação policial, então a mancha mostraria onde a polícia atua, e
+//   não onde a usuária corre mais risco.
+const GRUPOS_NO_MAPA = ['roubo', 'furto', 'violencia']
 
 // De quanto em quanto tempo a Home confere se começou ou acabou um horário programado
 // de atividade. Meio minuto basta: ninguém percebe o modo ligar 30 s depois das 8h.
@@ -317,7 +309,6 @@ export default function Home({ navigation }) {
   // desligado sozinho no fim. Se a usuária ligou na mão, ela decide quando desligar.
   const ligadoPeloHorarioRef = useRef(false)
   const dentroDoHorarioRef = useRef(false)
-  const [occurrenceData, setOccurrenceData] = useState([])
   const [region, setRegion] = useState(null)
   const [userRegion, setUserRegion] = useState(null)
   const [mapMoved, setMapMoved] = useState(false)
@@ -373,17 +364,13 @@ export default function Home({ navigation }) {
   const [alertaDisparado, setAlertaDisparado] = useState(false);
   const timerRef = useRef(null);
   const sosHoldTimerRef = useRef(null);
-  const sosHoldIntervalRef = useRef(null);
   const lastAlertSentRef = useRef(null);
   const cancelCooldownRef = useRef(null);
   const [sustainedHighRisk, setSustainedHighRisk] = useState(false);
   const [sosHolding, setSosHolding] = useState(false);
-  // Guardado em milissegundos e calculado a partir do instante em que o toque começou, não
-  // decrementado de um em um: a conta "menos um segundo por tique" erra sempre que o
-  // aparelho atrasa um tique, e a Home atrasa — ela redesenha o mapa de calor enquanto a
-  // usuária segura o botão. O número ficava parado em 3 e pulava direto para o envio.
-  const sosHoldFimRef = useRef(null)
-  const [sosHoldRestanteMs, setSosHoldRestanteMs] = useState(SOS_HOLD_MS)
+  // Instante em que o alerta dispara. A contagem em si fica em SosHoldOverlay: se ela
+  // morasse aqui, cada tique de 100 ms redesenharia a Home inteira, mapa incluído.
+  const [sosHoldFim, setSosHoldFim] = useState(null)
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
   const [sosFeedbackData, setSosFeedbackData] = useState({ status: 'enviando', mensagem: '', enviados: [], falhas: [], endereco: '', detalhe: '' });
   const [simpleCheckVisible, setSimpleCheckVisible] = useState(false);
@@ -787,33 +774,20 @@ export default function Home({ navigation }) {
 
   const clearSosHoldTimers = () => {
     if (sosHoldTimerRef.current) clearTimeout(sosHoldTimerRef.current)
-    if (sosHoldIntervalRef.current) clearInterval(sosHoldIntervalRef.current)
     sosHoldTimerRef.current = null
-    sosHoldIntervalRef.current = null
   }
 
   const beginSosHold = () => {
     if (sosHoldTimerRef.current) return
     setSosHolding(true)
-    sosHoldFimRef.current = Date.now() + SOS_HOLD_MS
-    setSosHoldRestanteMs(SOS_HOLD_MS)
+    setSosHoldFim(Date.now() + SOS_HOLD_MS)
     AccessibilityInfo.announceForAccessibility('Segure por três segundos para enviar um alerta SOS.')
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
 
-    // 100 ms, e não 1 s: a barra de progresso precisa andar de forma contínua. Mesmo com o
-    // número mudando só três vezes, o movimento mostra que a contagem está correndo.
-    sosHoldIntervalRef.current = setInterval(() => {
-      const restante = Math.max(0, sosHoldFimRef.current - Date.now())
-      setSosHoldRestanteMs(restante)
-      // Vibra a cada segundo cheio que falta, para a usuária acompanhar sem olhar a tela.
-      if (restante > 0 && restante % 1_000 > 900) {
-        void Haptics.selectionAsync().catch(() => {})
-      }
-    }, 100)
     sosHoldTimerRef.current = setTimeout(() => {
       clearSosHoldTimers()
       setSosHolding(false)
-      setSosHoldRestanteMs(0)
+      setSosHoldFim(null)
       AccessibilityInfo.announceForAccessibility('Alerta SOS acionado. Enviando para sua rede de apoio.')
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {})
       void executarEnvioDeSocorro()
@@ -823,13 +797,11 @@ export default function Home({ navigation }) {
   const cancelSosHold = () => {
     if (sosHoldTimerRef.current) clearSosHoldTimers()
     setSosHolding(false)
-    sosHoldFimRef.current = null
-    setSosHoldRestanteMs(SOS_HOLD_MS)
+    setSosHoldFim(null)
   }
 
   useEffect(() => () => {
     if (sosHoldTimerRef.current) clearTimeout(sosHoldTimerRef.current)
-    if (sosHoldIntervalRef.current) clearInterval(sosHoldIntervalRef.current)
   }, [])
 
   const handleUserIsSafe = () => {
@@ -876,7 +848,8 @@ export default function Home({ navigation }) {
       const raioBusca = Math.min(alvo.raioKm * MARGEM_BUSCA, RAIO_MAXIMO_KM)
       setCalorCarregando(true)
       const { celulas, celulaGraus: tamanho } = await buscarMapaCalor(
-        alvo.latitude, alvo.longitude, raioBusca, tiposSelecionados,
+        alvo.latitude, alvo.longitude, raioBusca,
+        tiposSelecionados.length ? tiposSelecionados : GRUPOS_NO_MAPA,
       )
       // Uma resposta antiga não pode apagar o aviso de uma busca mais nova ainda em curso.
       if (cancelado) return
@@ -906,30 +879,6 @@ export default function Home({ navigation }) {
       setResumoPronto(true)
     }
     carregarResumo()
-  }, [location])
-
-  // Relatos da comunidade — mesma ordenação por proximidade vinda do serviço.
-  useEffect(() => {
-    async function carregarOcorrencias() {
-      if (!location) return
-      try {
-        const dados = await buscarOcorrencias(location.coords.latitude, location.coords.longitude, 3)
-
-        setOccurrenceData(dados.map((occ) => ({
-          id: 'occ_' + occ.id,
-          lat: occ.latitude,
-          lon: occ.longitude,
-          tipo: occ.tipo_crime || 'Ocorrência relatada',
-          descricao: occ.descricao || '',
-          horario: occ.horario || '',
-          address: occ.address || '',
-          distancia: occ.distancia_km
-        })))
-      } catch (error) {
-        console.error('❌ ERRO AO CARREGAR OCORRÊNCIAS:', error)
-      }
-    }
-    carregarOcorrencias()
   }, [location])
 
   const handleUseCurrentLocation = async () => {
@@ -1079,20 +1028,10 @@ export default function Home({ navigation }) {
   // O filtro vale para o mapa e para a faixa de status. O score continua olhando todos os
   // tipos: esconder um deles no mapa não torna a região mais segura.
   // Os números dos botões de filtro e o total do entorno vêm prontos do banco, agrupados
-  // pelos mesmos quatro tipos que o filtro oferece.
+  // pelos mesmos tipos que o filtro oferece.
   const contagemPorTipo = useMemo(() => (
     FILTROS_CRIME.reduce((acc, filtro) => ({ ...acc, [filtro.id]: resumoCrimes[filtro.id] ?? 0 }), {})
   ), [resumoCrimes])
-  // Quantos crimes dos tipos marcados existem no entorno — é o que a faixa de status diz.
-  const totalFiltrado = useMemo(() => (
-    tiposSelecionados.length === 0
-      ? totalCrimesEntorno
-      : tiposSelecionados.reduce((soma, id) => soma + (resumoCrimes[id] ?? 0), 0)
-  ), [resumoCrimes, tiposSelecionados, totalCrimesEntorno])
-  const mapFeatures = useMemo(
-    () => criarGeoJSONMapa([], occurrenceData),
-    [occurrenceData],
-  )
   // A grade do calor vem somada do banco e cobre a área inteira do mapa.
   const crimesGeoJSON = useMemo(() => ({
     type: 'FeatureCollection',
@@ -1105,6 +1044,25 @@ export default function Home({ navigation }) {
   // Área da célula em km². É o divisor que torna a cor comparável entre zooms e entre
   // regiões, já que a célula cresce quando o mapa se afasta.
   const areaCelulaKm2 = useMemo(() => (celulaGraus * 111) ** 2, [celulaGraus])
+  // Equivalente ao mapa de calor do Android: o Apple Maps não tem camada de calor, então a
+  // densidade vira círculos por célula da grade. São milhares de elementos; memorizados,
+  // o React reaproveita o mesmo desenho quando outro estado da Home muda (score, sensores,
+  // SOS) em vez de comparar todos de novo.
+  const circulosCalorIOS = useMemo(() => (Platform.OS !== 'ios' ? null : celulasCalor.flatMap((celula, indice) =>
+    // 0,85 do lado da célula, e não metade: círculos do tamanho exato da célula deixam
+    // vãos nos cantos da grade, e a mancha fica pontilhada. Com a sobreposição, as áreas
+    // vizinhas se fundem.
+    camadasDifusas({ ...celula, chave: `c${indice}` }, areaCelulaKm2, celulaGraus * 111000 * 0.85).map((camada) => (
+      <Circle
+        key={`calor-${camada.id}`}
+        center={{ latitude: Number(celula.lat), longitude: Number(celula.lon) }}
+        radius={camada.raio}
+        fillColor={camada.cor}
+        strokeColor="transparent"
+        strokeWidth={0}
+      />
+    ))
+  )), [celulasCalor, areaCelulaKm2, celulaGraus])
   // Contagem equivalente ao vermelho nesta célula: a camada do Android espera peso de 0 a 1.
   const pesoVermelho = useMemo(
     () => Math.max(DENSIDADE_VERMELHO * areaCelulaKm2, 1),
@@ -1122,9 +1080,6 @@ export default function Home({ navigation }) {
     () => location ? criarGeoJSONRaio(location.coords.latitude, location.coords.longitude, RAIO_INICIAL_KM * 1000) : null,
     [location],
   )
-  const rotuloFiltro = tiposSelecionados.length === 0
-    ? 'registros'
-    : tiposSelecionados.map((id) => FILTROS_CRIME.find((f) => f.id === id).rotulo.toLowerCase()).join(' + ')
   const alternarTipo = (id) =>
     setTiposSelecionados((atual) => atual.includes(id) ? atual.filter((t) => t !== id) : [...atual, id])
   const riskAccent = !monitoramentoAtivo ? '#9A8C93' : displayLevel === 'Crítico' ? Brand.danger : displayLevel === 'Moderado' ? Brand.amber : Brand.green
@@ -1445,7 +1400,7 @@ export default function Home({ navigation }) {
           <View style={styles.periodoLinha}>
             <Ionicons name="calendar-outline" size={14} color={Brand.muted} />
             <Text style={styles.periodoTexto}>
-              Últimos 6 meses de dados da SSP{periodoCrimes ? ` (${periodoCrimes})` : ''}
+              Ocorrências de crimes dos últimos 6 meses{periodoCrimes ? ` (${periodoCrimes})` : ''}
             </Text>
           </View>
         </View>
@@ -1523,21 +1478,6 @@ export default function Home({ navigation }) {
                     }}
                   />
                 </MapLibreGeoJSONSource>
-                {/* Relatos da comunidade seguem como pontos: são poucos e identificam um
-                    local específico, não uma área. */}
-                <MapLibreGeoJSONSource id="ampara-map-points" data={mapFeatures}>
-                  <MapLibreLayer
-                    id="ampara-map-points-layer"
-                    type="circle"
-                    filter={['==', ['get', 'kind'], 'occurrence']}
-                    paint={{
-                      'circle-radius': 6,
-                      'circle-color': Brand.rose,
-                      'circle-stroke-color': '#FFFFFF',
-                      'circle-stroke-width': 2,
-                    }}
-                  />
-                </MapLibreGeoJSONSource>
                 <MapLibreGeoJSONSource id="ampara-user-location" data={userLocationFeature}>
                   <MapLibreLayer
                     id="ampara-user-location-layer"
@@ -1582,39 +1522,22 @@ export default function Home({ navigation }) {
                       strokeWidth={1.5}
                     />
                   )}
-                  {/* Equivalente ao mapa de calor do Android: o Apple Maps não tem camada
-                      de calor, então a densidade vira um círculo por célula da grade. */}
-                  {celulasCalor.flatMap((celula, indice) =>
-                    // 0,85 do lado da célula, e não metade: círculos do tamanho exato da
-                    // célula deixam vãos nos cantos da grade, e a mancha fica pontilhada.
-                    // Com a sobreposição, as áreas vizinhas se fundem.
-                    camadasDifusas({ ...celula, chave: `c${indice}` }, areaCelulaKm2, celulaGraus * 111000 * 0.85).map((camada) => (
-                      <Circle
-                        key={`calor-${camada.id}`}
-                        center={{ latitude: Number(celula.lat), longitude: Number(celula.lon) }}
-                        radius={camada.raio}
-                        fillColor={camada.cor}
-                        strokeColor="transparent"
-                        strokeWidth={0}
-                      />
-                    ))
-                  )}
-                  {occurrenceData.map((occurrence) => (
-                    <Marker
-                      key={`occurrence-${occurrence.id}`}
-                      coordinate={{ latitude: Number(occurrence.lat), longitude: Number(occurrence.lon) }}
-                      pinColor={Brand.rose}
-                      title={occurrence.tipo}
-                      description={occurrence.descricao}
-                    />
-                  ))}
+                  {circulosCalorIOS}
                 </MapView>
               )}
 
               <View style={styles.mapLegend}>
                 <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#5A8FAF' }]} /><Text style={styles.legendText}>Você</Text></View>
-                <View style={styles.legendItem}><View style={[styles.legendDot, styles.legendCalor]} /><Text style={styles.legendText}>Concentração SSP</Text></View>
-                <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: Brand.rose }]} /><Text style={styles.legendText}>Ampara</Text></View>
+                {/* Barra com a escala do próprio mapa, como nas legendas de mapa de calor:
+                    um quadrado de cor só não dizia que o verde também é ocorrência. */}
+                <Text style={styles.legendText}>Ocorrências de crimes</Text>
+                <View style={styles.legendEscala} accessibilityLabel="Escala de cores: verde para menos ocorrências, vermelho para mais">
+                  {CORES_LEGENDA.map((cor) => <View key={cor} style={[styles.legendFaixa, { backgroundColor: cor }]} />)}
+                </View>
+                <View style={styles.legendExtremos}>
+                  <Text style={styles.legendExtremoTexto}>Menos</Text>
+                  <Text style={styles.legendExtremoTexto}>Mais</Text>
+                </View>
               </View>
 
               {calorCarregando && (
@@ -1641,20 +1564,6 @@ export default function Home({ navigation }) {
               </View>
             )
           )}
-        </View>
-
-        {/* ── CRIME STRIP ── */}
-        <View style={[styles.crimeStrip, { borderLeftColor: totalFiltrado > 0 ? Brand.rose : '#2E8B57' }]}>
-          <Ionicons
-            name={totalFiltrado > 0 ? 'warning-outline' : 'checkmark-circle-outline'}
-            size={16}
-            color={totalFiltrado > 0 ? Brand.rose : '#2E8B57'}
-          />
-          <Text style={[styles.crimeStripText, { color: totalFiltrado > 0 ? Brand.rose : '#2E8B57' }]}>
-            {totalFiltrado > 0
-              ? `${totalFiltrado.toLocaleString('pt-BR')} ${rotuloFiltro} num raio de ${RAIO_INICIAL_KM} km nos últimos 6 meses`
-              : `Nenhum registro${tiposSelecionados.length > 0 ? ` de ${rotuloFiltro}` : ''} por perto nos últimos 6 meses`}
-          </Text>
         </View>
         </>}
 
@@ -1755,26 +1664,7 @@ export default function Home({ navigation }) {
         </Pressable>
       </View>
 
-      {sosHolding && (
-        <View style={styles.sosHoldOverlay} pointerEvents="none">
-          <View style={styles.sosHoldCenter}>
-            <View style={styles.sosHoldCircle}>
-              <Text style={styles.sosHoldCount}>{Math.ceil(sosHoldRestanteMs / 1_000)}</Text>
-              <Text style={styles.sosHoldSeconds}>seg</Text>
-            </View>
-            <View style={styles.sosHoldTrilha}>
-              <View
-                style={[
-                  styles.sosHoldProgresso,
-                  { width: `${Math.min(100, 100 - (sosHoldRestanteMs / SOS_HOLD_MS) * 100)}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.sosHoldTitle}>Continue segurando SOS</Text>
-            <Text style={styles.sosHoldMessage}>Seu alerta será enviado à rede de apoio</Text>
-          </View>
-        </View>
-      )}
+      {sosHolding && sosHoldFim && <SosHoldOverlay fimMs={sosHoldFim} totalMs={SOS_HOLD_MS} />}
 
       <LiaHelpModal
         visible={Boolean(helpInfo)}
@@ -2189,13 +2079,13 @@ const styles = StyleSheet.create({
   mapLegend: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
-  // Quadrado, e não bolinha: representa uma área de concentração, não um ponto exato.
-  legendCalor: { borderRadius: 5, backgroundColor: 'rgba(255, 152, 0, 0.8)', borderWidth: 1, borderColor: 'rgba(211, 47, 47, 0.9)' },
+  legendEscala: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', marginTop: -2 },
+  legendFaixa: { flex: 1 },
+  legendExtremos: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -4 },
+  legendExtremoTexto: { fontSize: 10, color: Brand.muted },
   legendText: { fontSize: 11, color: '#333', fontWeight: '600' },
   recenterText: { color: '#FFF', fontWeight: '600', fontSize: 13 },
 
-  crimeStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 22, paddingVertical: 14, borderLeftWidth: 3 },
-  crimeStripText: { fontSize: 14, fontWeight: '500' },
 
   forceRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 22, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Brand.line },
   forceValue: { fontSize: 22, fontWeight: '700' },
@@ -2215,15 +2105,6 @@ const styles = StyleSheet.create({
   fabHelpHolding: { backgroundColor: '#9F2B40', transform: [{ scale: 1.22 }] },
   fabHoldHint: { color: '#FFF1F4', fontSize: 10, fontWeight: '600', marginTop: 2 },
   fabText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-  sosHoldOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 20, backgroundColor: 'rgba(38, 25, 31, 0.78)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 },
-  sosHoldCenter: { alignItems: 'center', gap: 10 },
-  sosHoldCircle: { width: 174, height: 174, borderRadius: 87, borderWidth: 5, borderColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
-  sosHoldCount: { color: '#FFF', fontSize: 64, lineHeight: 72, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  sosHoldSeconds: { color: '#F9DEE6', fontSize: 15, fontWeight: '700' },
-  sosHoldTrilha: { width: 174, height: 6, borderRadius: 3, backgroundColor: 'rgba(255, 255, 255, 0.28)', overflow: 'hidden', marginTop: 6 },
-  sosHoldProgresso: { height: '100%', borderRadius: 3, backgroundColor: '#FFF' },
-  sosHoldTitle: { color: '#FFF', fontSize: 20, fontWeight: '700', textAlign: 'center' },
-  sosHoldMessage: { color: '#F9DEE6', fontSize: 14, textAlign: 'center' },
 
   overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   cardModal: { backgroundColor: '#FFF', borderRadius: 28, overflow: 'hidden', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12 },
