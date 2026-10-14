@@ -15,7 +15,7 @@ class AmparaWatchModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("AmparaWatch")
-    Events("onHeartRate", "onMonitorStatus", "onWatchMotion")
+    Events("onHeartRate", "onMonitorStatus", "onHeartRateStatus", "onWatchMotion")
 
     OnStartObserving {
       val context = appContext.reactContext ?: return@OnStartObserving
@@ -35,6 +35,11 @@ class AmparaWatchModule : Module() {
               "active" to intent.getBooleanExtra("active", false),
               "receivedAt" to intent.getLongExtra("receivedAt", 0L),
             ))
+          } else if (intent.action == AmparaHeartRateListenerService.ACTION_HEART_RATE_STATUS) {
+            sendEvent("onHeartRateStatus", mapOf(
+              "status" to intent.getIntExtra("status", 0),
+              "timestamp" to intent.getLongExtra("timestamp", 0L),
+            ))
           } else if (intent.action == AmparaHeartRateListenerService.ACTION_WATCH_MOTION) {
             sendEvent("onWatchMotion", mapOf(
               "peak" to intent.getDoubleExtra("peak", 0.0),
@@ -53,6 +58,7 @@ class AmparaWatchModule : Module() {
         IntentFilter().apply {
           addAction(AmparaHeartRateListenerService.ACTION_HEART_RATE)
           addAction(AmparaHeartRateListenerService.ACTION_MONITOR_STATUS)
+          addAction(AmparaHeartRateListenerService.ACTION_HEART_RATE_STATUS)
           addAction(AmparaHeartRateListenerService.ACTION_WATCH_MOTION)
         },
         ContextCompat.RECEIVER_NOT_EXPORTED,
@@ -81,6 +87,14 @@ class AmparaWatchModule : Module() {
       mapOf(
         "active" to (prefs?.getBoolean(AmparaHeartRateListenerService.MONITORING_ACTIVE, false) ?: false),
         "receivedAt" to (prefs?.getLong(AmparaHeartRateListenerService.MONITOR_STATUS_RECEIVED_AT, 0L) ?: 0L),
+      )
+    }
+
+    AsyncFunction("getHeartRateStatus") {
+      val prefs = appContext.reactContext?.getSharedPreferences(AmparaHeartRateListenerService.PREFS, Context.MODE_PRIVATE)
+      mapOf(
+        "status" to (prefs?.getInt(AmparaHeartRateListenerService.HEART_RATE_STATUS, 0) ?: 0),
+        "timestamp" to (prefs?.getLong(AmparaHeartRateListenerService.HEART_RATE_STATUS_TIMESTAMP, 0L) ?: 0L),
       )
     }
 

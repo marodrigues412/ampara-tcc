@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
+  Platform,
 } from 'react-native'
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -15,7 +16,6 @@ import { useFocusEffect } from '@react-navigation/native'
 import { LineChart } from 'react-native-chart-kit'
 import { Svg, Path } from 'react-native-svg'
 import { Ionicons } from '@expo/vector-icons'
-import MapView, { Circle, Marker } from 'react-native-maps'
 import {
   calculateWeeklyMetrics,
   aggregateDailyScores,
@@ -29,9 +29,19 @@ import {
 import { supabase } from '../services/supabase'
 import { getRecentLocationHistory, getLocationHistoryBetween, getSafeLocations } from '../services/locationService'
 import { getRecentAlerts } from '../services/alertService'
+import { getDailyRiskAssessmentReport } from '../services/riskAssessmentService'
 import { getRecentActivityPeriods } from '../services/activityService'
 import { Brand } from '../constants/brandTheme'
 import LiaHelpModal from '../components/LiaHelpModal'
+
+const mapLibre = Platform.OS === 'ios' ? null : require('@maplibre/maplibre-react-native')
+const nativeMaps = Platform.OS === 'ios' ? require('react-native-maps') : null
+const MapLibreMap = mapLibre?.Map
+const MapLibreCamera = mapLibre?.Camera
+const MapLibreGeoJSONSource = mapLibre?.GeoJSONSource
+const MapLibreLayer = mapLibre?.Layer
+const MapView = nativeMaps?.default
+const { Circle, Marker } = nativeMaps || {}
 
 const screenWidth = Dimensions.get('window').width
 const CHART_WIDTH = screenWidth - 80
@@ -209,6 +219,7 @@ export default function Dashboard() {
   const [safeLocations, setSafeLocations] = useState([])
   const [activityPeriods, setActivityPeriods] = useState([])
   const [emergencyContacts, setEmergencyContacts] = useState([])
+  const [dailyRiskAssessments, setDailyRiskAssessments] = useState([])
   const showHelpInfo = (title, message) => setHelpInfo({ title, message })
 
   const loadDashboardData = React.useCallback(async (days) => {
@@ -221,13 +232,17 @@ export default function Dashboard() {
     const previousEnd = new Date()
     previousEnd.setDate(previousEnd.getDate() - days)
 
-    const [history, previousHistory, alerts, safeLocs, activity, contactsResult] = await Promise.all([
+    const [history, previousHistory, alerts, safeLocs, activity, contactsResult, riskAssessments] = await Promise.all([
       getRecentLocationHistory(user.id, days),
       getLocationHistoryBetween(user.id, previousStart, previousEnd),
       getRecentAlerts(user.id, days),
       getSafeLocations(user.id),
       getRecentActivityPeriods(user.id, days),
       supabase.from('emergency_contacts').select('nome, telefone').eq('user_id', user.id),
+      getDailyRiskAssessmentReport(days).catch(error => {
+        console.warn('Não foi possível carregar o relatório BPM:', error.message)
+        return []
+      }),
     ])
 
     setLocationHistory(history)
@@ -238,6 +253,7 @@ export default function Dashboard() {
     setSafeLocations(safeLocs)
     setActivityPeriods(activity)
     setEmergencyContacts(contactsResult.data || [])
+    setDailyRiskAssessments(riskAssessments)
     setLoading(false)
   }, [])
 
@@ -267,6 +283,20 @@ export default function Dashboard() {
   )
   const mapRegion = useMemo(() => computeMapRegion(mapPoints), [mapPoints])
   const mapClusters = useMemo(() => clusterLocationPoints(mapPoints, mapRegion), [mapPoints, mapRegion])
+  const mapClusterFeatures = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: mapClusters.map((cluster) => ({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [cluster.longitude, cluster.latitude],
+      },
+      properties: {
+        averageRisk: cluster.avgRisk,
+        count: cluster.count,
+      },
+    })),
+  }), [mapClusters])
 
   const contactNameByPhone = useMemo(() => {
     const map = {}
@@ -279,6 +309,24 @@ export default function Dashboard() {
   const movement = classifyMovement(locationHistory, safeLocations)
   const contactsRanking = tallyContactAlerts(recentAlerts, emergencyContacts)
   const alertCount = recentAlerts.length
+  const bpmSampleCount = dailyRiskAssessments.reduce((sum, day) => sum + Number(day.sample_count || 0), 0)
+  const bpmAverage = bpmSampleCount
+    ? Math.round(dailyRiskAssessments.reduce((sum, day) => sum + Number(day.average_bpm || 0) * Number(day.sample_count || 0), 0) / bpmSampleCount)
+    : null
+  const scoredSampleCount = dailyRiskAssessments.reduce((sum, day) => sum + Number(day.scored_count || 0), 0)
+  const experimentalScoreAverage = scoredSampleCount
+    ? Math.round(dailyRiskAssessments.reduce((sum, day) => sum + Number(day.average_experimental_score || 0) * Number(day.scored_count || 0), 0) / scoredSampleCount)
+    : null
+  const contextScoreAverage = bpmSampleCount
+    ? dailyRiskAssessments.reduce((sum, day) => sum + Number(day.average_context_score || 0) * Number(day.sample_count || 0), 0) / bpmSampleCount
+    : null
+  const motionSampleCount = dailyRiskAssessments.reduce((sum, day) => sum + Number(day.motion_sample_count || 0), 0)
+  const motionScoreAverage = motionSampleCount
+    ? dailyRiskAssessments.reduce((sum, day) => sum + Number(day.average_motion_risk_score || 0) * Number(day.motion_sample_count || 0), 0) / motionSampleCount
+    : null
+  const crimeDensityAverage = bpmSampleCount
+    ? dailyRiskAssessments.reduce((sum, day) => sum + Number(day.average_crime_density_per_km2 || 0) * Number(day.sample_count || 0), 0) / bpmSampleCount
+    : null
 
   const chartConfig = {
     backgroundGradientFrom: '#FFF',
@@ -428,6 +476,52 @@ export default function Dashboard() {
             </>
           )}
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.cardTitle}>Frequência cardíaca e score experimental</Text>
+          <Text style={styles.cardSubtitle}>Leituras diretas do relógio · análise exploratória</Text>
+          {bpmSampleCount === 0 ? (
+            <EmptyState text="As leituras do relógio aparecerão aqui quando o monitoramento estiver conectado e o histórico for ativado." />
+          ) : (
+            <>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: Brand.roseDeep }]}>{bpmAverage} bpm</Text>
+                  <Text style={styles.statLabel}>Média no período</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: Brand.blue }]}>{experimentalScoreAverage == null ? '—' : `${experimentalScoreAverage}/10`}</Text>
+                  <Text style={styles.statLabel}>Score experimental</Text>
+                </View>
+              </View>
+              <View style={[styles.statsRow, styles.featureStatsRow]}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.featureStatValue, { color: Brand.blue }]}>{contextScoreAverage == null ? '—' : contextScoreAverage.toFixed(1)}</Text>
+                  <Text style={styles.statLabel}>Contexto /10</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.featureStatValue, { color: Brand.blue }]}>{motionScoreAverage == null ? '—' : motionScoreAverage.toFixed(1)}</Text>
+                  <Text style={styles.statLabel}>Movimento /10</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.featureStatValue, { color: Brand.blue }]}>{crimeDensityAverage == null ? '—' : Math.round(crimeDensityAverage)}</Text>
+                  <Text style={styles.statLabel}>SSP/km²</Text>
+                </View>
+              </View>
+              <Text style={styles.cardSubtitle}>{bpmSampleCount} leituras registradas · score exploratório, não validado e não usado para acionar alertas.</Text>
+              {dailyRiskAssessments.slice(-7).map(day => (
+                <View key={day.day} style={styles.riskAssessmentRow}>
+                  <Text style={styles.riskAssessmentDay}>{new Date(`${day.day}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</Text>
+                  <Text style={styles.riskAssessmentValue}>{Math.round(Number(day.average_bpm))} bpm</Text>
+                  <Text style={styles.riskAssessmentValue}>{day.average_experimental_score == null ? 'Formando base' : `${Number(day.average_experimental_score).toFixed(1)}/10`}</Text>
+                </View>
+              ))}
+            </>
+          )}
+        </View>
         </>}
 
         {reportSection === 'rotina' && <>
@@ -461,39 +555,80 @@ export default function Dashboard() {
           ) : (
             <>
               <View style={styles.riskMapContainer}>
-                <MapView
-                  style={styles.riskMap}
-                  region={mapRegion}
-                  pitchEnabled={false}
-                >
-                  {mapClusters.map((cluster) => {
-                    const rgb = getScoreRGB(cluster.avgRisk)
-                    const coordinate = { latitude: cluster.latitude, longitude: cluster.longitude }
-                    return (
-                      <React.Fragment key={cluster.key}>
-                        <Circle
-                          center={coordinate}
-                          radius={cluster.haloRadius}
-                          fillColor={`rgba(${rgb}, 0.12)`}
-                          strokeColor="transparent"
-                        />
-                        <Circle
-                          center={coordinate}
-                          radius={cluster.haloRadius * 0.5}
-                          fillColor={`rgba(${rgb}, 0.32)`}
-                          strokeColor="transparent"
-                        />
-                        <Marker
-                          coordinate={coordinate}
-                          opacity={0.01}
-                          tracksViewChanges={false}
-                          title={`${cluster.count} ponto${cluster.count > 1 ? 's' : ''} monitorado${cluster.count > 1 ? 's' : ''}`}
-                          description={`Score médio de segurança: ${cluster.avgRisk}`}
-                        />
-                      </React.Fragment>
-                    )
-                  })}
-                </MapView>
+                {Platform.OS !== 'ios' ? (
+                  <MapLibreMap
+                    style={styles.riskMap}
+                    mapStyle="https://tiles.openfreemap.org/styles/liberty"
+                    attribution
+                    logo
+                  >
+                    <MapLibreCamera
+                      initialViewState={{
+                        center: [mapRegion.longitude, mapRegion.latitude],
+                        zoom: Math.max(10, Math.min(16, Math.log2(360 / Math.max(mapRegion.longitudeDelta, 0.005)))),
+                      }}
+                      minZoom={3}
+                      maxZoom={20}
+                    />
+                    <MapLibreGeoJSONSource id="routine-risk-clusters" data={mapClusterFeatures}>
+                      <MapLibreLayer
+                        id="routine-risk-clusters-halo"
+                        type="circle"
+                        paint={{
+                          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 14, 16, 38],
+                          'circle-color': ['step', ['get', 'averageRisk'], '#D32F2F', 50, '#E6A200', 80, '#27AE60'],
+                          'circle-opacity': 0.18,
+                          'circle-blur': 0.55,
+                        }}
+                      />
+                      <MapLibreLayer
+                        id="routine-risk-clusters-points"
+                        type="circle"
+                        paint={{
+                          'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 5, 20, 10],
+                          'circle-color': ['step', ['get', 'averageRisk'], '#D32F2F', 50, '#E6A200', 80, '#27AE60'],
+                          'circle-opacity': 0.78,
+                          'circle-stroke-color': '#FFFFFF',
+                          'circle-stroke-width': 1.5,
+                        }}
+                      />
+                    </MapLibreGeoJSONSource>
+                  </MapLibreMap>
+                ) : (
+                  <MapView
+                    style={styles.riskMap}
+                    region={mapRegion}
+                    pitchEnabled={false}
+                  >
+                    {mapClusters.map((cluster) => {
+                      const rgb = getScoreRGB(cluster.avgRisk)
+                      const coordinate = { latitude: cluster.latitude, longitude: cluster.longitude }
+                      return (
+                        <React.Fragment key={cluster.key}>
+                          <Circle
+                            center={coordinate}
+                            radius={cluster.haloRadius}
+                            fillColor={`rgba(${rgb}, 0.12)`}
+                            strokeColor="transparent"
+                          />
+                          <Circle
+                            center={coordinate}
+                            radius={cluster.haloRadius * 0.5}
+                            fillColor={`rgba(${rgb}, 0.32)`}
+                            strokeColor="transparent"
+                          />
+                          <Marker
+                            coordinate={coordinate}
+                            opacity={0.01}
+                            tracksViewChanges={false}
+                            title={`${cluster.count} ponto${cluster.count > 1 ? 's' : ''} monitorado${cluster.count > 1 ? 's' : ''}`}
+                            description={`Score médio de segurança: ${cluster.avgRisk}`}
+                          />
+                        </React.Fragment>
+                      )
+                    })}
+                  </MapView>
+                )}
               </View>
               <View style={styles.mapLegendRow}>
                 <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#27AE60' }]} /><Text style={styles.legendText}>Baixo risco</Text></View>
@@ -706,12 +841,17 @@ const styles = StyleSheet.create({
   },
   statItem: { alignItems: 'center', flex: 1 },
   statValue: { fontSize: 26, fontWeight: '800' },
+  featureStatsRow: { marginTop: 0, paddingTop: 12 },
+  featureStatValue: { fontSize: 20, fontWeight: '800' },
   statLabel: { fontSize: 11, color: '#5A8FAF', fontWeight: '600', marginTop: 2 },
   statDivider: { width: 1, backgroundColor: 'rgba(27,58,107,0.1)', marginVertical: 4 },
 
   chartStyle: { paddingRight: 10, paddingTop: 10 },
   chartLabelsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginTop: -6 },
   chartLabelText: { fontSize: 11, color: '#5A8FAF', fontWeight: '600' },
+  riskAssessmentRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(27,58,107,0.07)' },
+  riskAssessmentDay: { flex: 1, color: '#5A8FAF', fontSize: 12, fontWeight: '700' },
+  riskAssessmentValue: { flex: 1, color: '#1B3A6B', fontSize: 12, fontWeight: '600', textAlign: 'right' },
 
   riskMapContainer: { height: 260, borderTopLeftRadius: 20, borderTopRightRadius: 10, borderBottomRightRadius: 20, borderBottomLeftRadius: 10, overflow: 'hidden' },
   riskMap: { flex: 1 },

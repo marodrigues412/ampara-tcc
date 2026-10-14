@@ -15,7 +15,7 @@ O SDK e distribuido pela Samsung sob licenca propria e nao deve ser versionado j
 5. Abra Ampara no relogio, toque em **Ativar monitoramento** e aceite as permissoes de frequencia cardiaca e atividade em segundo plano quando solicitadas. Em Wear OS 6, elas sao permissao de leitura de frequencia cardiaca e de dados de saude em segundo plano; em versoes anteriores, os nomes podem ser diferentes.
 6. Deixe o Ampara aberto no Moto G7. O status e o batimento aparecem na tela inicial quando chega uma amostra recente.
 
-O app do relogio mantem um servico em primeiro plano e uma notificacao persistente, tenta retomar depois de reiniciar quando as permissoes estao concedidas e solicita ao Sensor SDK a entrega de dados agrupados a cada cinco segundos. O sensor e o sistema ainda controlam a cadencia real; bloqueio, economia de bateria, falta de contato com a pele, desconexao Bluetooth ou limitacoes do Health Sensor Service podem atrasar a leitura. Isso e monitoramento de bem-estar, nao dispositivo medico nem garantia de resposta de emergencia.
+O app do relogio mantem um servico em primeiro plano, uma notificacao persistente e um wake lock parcial enquanto o monitoramento estiver ativo, para evitar que a tela apagada suspenda a coleta. Se o Health Sensor Service cair, o app tenta reconectar com intervalos progressivos. O wake lock aumenta o consumo de bateria. O sensor e o sistema ainda controlam a cadencia real; economia de bateria, falta de contato com a pele, desconexao Bluetooth ou limitacoes do Health Sensor Service podem atrasar a leitura. Isso e monitoramento de bem-estar, nao dispositivo medico nem garantia de resposta de emergencia.
 
 ## Teste
 

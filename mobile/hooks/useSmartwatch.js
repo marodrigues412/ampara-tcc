@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import { appendHeartRateSample } from '../services/heartRateBaseline'
+import { getRecentHeartRateSamples } from '../services/riskAssessmentService'
 import {
   connectHealthConnect,
   readLatestHeartRate,
 } from '../services/healthConnectService'
 import {
   getDirectWatchStatus,
+  getDirectWatchHeartRateStatus,
   getDirectWatchMonitoringStatus,
   readDirectWatchHeartRate,
   readDirectWatchMotion,
   subscribeToDirectWatchHeartRate,
+  subscribeToDirectWatchHeartRateStatus,
   subscribeToDirectWatchMotion,
   subscribeToDirectWatchMonitoringStatus,
 } from '../services/watchHeartRateService'
@@ -31,12 +34,15 @@ function getNewestMeasurement(...measurements) {
   }, null)
 }
 
-export function useSmartwatch() {
+export function useSmartwatch(userId) {
   const [status, setStatus] = useState('checking')
   const [directWatchStatus, setDirectWatchStatus] = useState('checking')
   const [monitoringStatus, setMonitoringStatus] = useState('checking')
+  const [heartRateSensorStatus, setHeartRateSensorStatus] = useState(null)
   const [measurement, setMeasurement] = useState(null)
   const [heartRateSamples, setHeartRateSamples] = useState([])
+  const [heartRateHistoryUserId, setHeartRateHistoryUserId] = useState(null)
+  const [latestSavedHeartRateAt, setLatestSavedHeartRateAt] = useState(0)
   const [watchMotion, setWatchMotion] = useState(null)
   const [isBusy, setIsBusy] = useState(false)
   const mountedRef = useRef(true)
@@ -74,15 +80,17 @@ export function useSmartwatch() {
     refreshInFlightRef.current = true
     setIsBusy(true)
     try {
-      const [directReading, directMotion, directStatus, watchMonitoringStatus] = await Promise.all([
+      const [directReading, directMotion, directStatus, watchMonitoringStatus, sensorStatus] = await Promise.all([
         readDirectWatchHeartRate(),
         readDirectWatchMotion(),
         getDirectWatchStatus(),
         getDirectWatchMonitoringStatus(),
+        getDirectWatchHeartRateStatus(),
       ])
       if (mountedRef.current) {
         setDirectWatchStatus(directStatus.status)
         setMonitoringStatus(watchMonitoringStatus)
+        setHeartRateSensorStatus(sensorStatus)
         setWatchMotion(directMotion)
       }
       if (directStatus.status === 'connected' && directReading && isLive(directReading)) {
@@ -143,11 +151,13 @@ export function useSmartwatch() {
       lastDirectReadingRef.current = reading
       setDirectWatchStatus('connected')
       setMonitoringStatus('active')
+      setHeartRateSensorStatus({ status: 1, time: reading.time })
       applyResult({
         status: 'connected',
         measurement: { ...reading, isDirect: true, isRecent: true },
       })
     })
+    const unsubscribeHeartRateStatus = subscribeToDirectWatchHeartRateStatus(setHeartRateSensorStatus)
     const unsubscribeMotion = subscribeToDirectWatchMotion(setWatchMotion)
     const unsubscribeMonitorStatus = subscribeToDirectWatchMonitoringStatus(setMonitoringStatus)
 
@@ -158,11 +168,38 @@ export function useSmartwatch() {
     return () => {
       mountedRef.current = false
       unsubscribe()
+      unsubscribeHeartRateStatus()
       unsubscribeMotion()
       unsubscribeMonitorStatus()
       appStateSubscription.remove()
     }
   }, [applyResult, checkConnection])
+
+  useEffect(() => {
+    let active = true
+    let savedAt = 0
+    heartRateSamplesRef.current = []
+
+    if (!userId) return () => { active = false }
+
+    getRecentHeartRateSamples(userId)
+      .then(samples => {
+        if (!active) return
+        const stored = appendHeartRateSample(samples, null)
+        const merged = appendHeartRateSample([...stored, ...heartRateSamplesRef.current], null)
+        heartRateSamplesRef.current = merged
+        savedAt = stored.at(-1)?.timestampMs || 0
+      })
+      .catch(error => console.warn('Não foi possível carregar o histórico de BPM:', error.message))
+      .finally(() => {
+        if (!active) return
+        setHeartRateSamples(appendHeartRateSample(heartRateSamplesRef.current, null))
+        setLatestSavedHeartRateAt(savedAt)
+        setHeartRateHistoryUserId(userId)
+      })
+
+    return () => { active = false }
+  }, [userId])
 
   useEffect(() => {
     const freshnessTimer = setInterval(() => {
@@ -180,5 +217,21 @@ export function useSmartwatch() {
     return () => clearInterval(interval)
   }, [directWatchStatus, refresh])
 
-  return { status, directWatchStatus, monitoringStatus, measurement, heartRateSamples, watchMotion, isBusy, connect, refresh }
+  const heartRateHistoryReady = !userId || heartRateHistoryUserId === userId
+  const visibleHeartRateSamples = userId && heartRateHistoryUserId === userId ? heartRateSamples : []
+
+  return {
+    status,
+    directWatchStatus,
+    monitoringStatus,
+    heartRateSensorStatus,
+    measurement,
+    heartRateSamples: visibleHeartRateSamples,
+    heartRateHistoryReady,
+    latestSavedHeartRateAt: userId && heartRateHistoryUserId === userId ? latestSavedHeartRateAt : 0,
+    watchMotion,
+    isBusy,
+    connect,
+    refresh,
+  }
 }
