@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import { buscarMapaCalor, buscarPeriodoCrimes } from '../services/crimesService'
+import { useAddressSearch } from '../hooks/useAddressSearch'
 import { camadasDifusas, CORES_LEGENDA, DENSIDADE_VERMELHO } from '../utils/mapaCalor'
 import { distanceKm } from '../utils/geo'
 import { Brand } from '../constants/brandTheme'
@@ -24,10 +25,6 @@ const RAIO_MAXIMO_KM = 12
 // quadrado da busca aparecia dentro da tela como uma borda reta de cor.
 const MARGEM_BUSCA = 1.2
 
-// A busca de endereço só procura dentro da área coberta pelos dados (Grande SP): sugerir
-// um endereço fora dela levaria a um mapa sem cor, como se lá não houvesse crime.
-// Ordem do Nominatim: oeste, norte, leste, sul.
-const AREA_BUSCA = '-47.05,-23.25,-46.15,-23.85'
 const CENTRO_SP = { latitude: -23.5505, longitude: -46.6333 }
 // Raio que a tela cobre mais ou menos no zoom 15, para onde a busca leva o mapa. Perto do
 // real, a câmera ao chegar não dispara uma segunda consulta.
@@ -79,13 +76,12 @@ const moverCamera = (camera, latitude, longitude) => {
   }
 }
 
-// "Rua Augusta, Consolação, São Paulo, Região Imediata de São Paulo, ..." vira
-// "Rua Augusta, Consolação, São Paulo": o resto não ajuda a reconhecer o lugar.
-const nomeCurto = (displayName) => String(displayName || '').split(', ').slice(0, 3).join(', ')
 
-export default function CrimeMap() {
+export default function CrimeMap({ route }) {
   const [minhaPosicao, setMinhaPosicao] = useState(null)
   const [erroLocalizacao, setErroLocalizacao] = useState(null)
+  // Prioriza resultados perto dela; sem posição, o centro de SP.
+  const { busca, sugestoes, procurar, limpar: resetarBusca } = useAddressSearch(minhaPosicao)
   // Onde o mapa abre. Fica nulo até o GPS responder, e o mapa só é montado depois disso:
   // as duas bibliotecas de mapa só leem a posição inicial uma vez, e mover a câmera logo
   // depois de montar nem sempre funcionava, então o mapa ficava parado no centro de SP.
@@ -94,9 +90,6 @@ export default function CrimeMap() {
   const [pontoBuscado, setPontoBuscado] = useState(null)
   const [periodoCrimes, setPeriodoCrimes] = useState(null)
 
-  const [busca, setBusca] = useState('')
-  const [sugestoes, setSugestoes] = useState([])
-  const buscaTimeout = useRef(null)
 
   const [areaVisivel, setAreaVisivel] = useState(null)
   const [celulasCalor, setCelulasCalor] = useState([])
@@ -186,45 +179,44 @@ export default function CrimeMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areaVisivel, centroInicial, tiposSelecionados])
 
-  const procurarEndereco = (texto) => {
-    setBusca(texto)
-    if (buscaTimeout.current) clearTimeout(buscaTimeout.current)
-    if (texto.trim().length < 3) { setSugestoes([]); return }
-    // Espera a usuária parar de digitar: o Nominatim pede no máximo uma consulta por
-    // segundo, e cada letra seria uma.
-    buscaTimeout.current = setTimeout(async () => {
-      try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(texto)}&format=json&limit=5&countrycodes=br&viewbox=${AREA_BUSCA}&bounded=1`
-        const resposta = await fetch(url, { headers: { 'User-Agent': 'ampara-tcc-app' } })
-        setSugestoes((await resposta.json()) || [])
-      } catch {
-        setSugestoes([])
-      }
-    }, 700)
-  }
-
-  const escolherSugestao = (item) => {
-    const ponto = { latitude: Number(item.lat), longitude: Number(item.lon), nome: nomeCurto(item.display_name) }
+  // Leva o mapa até um ponto e o marca de rosa: vale para a busca e para quem chega de
+  // outra tela (um compromisso da rotina, por exemplo).
+  const irParaPonto = (ponto) => {
     setPontoBuscado(ponto)
-    setBusca(ponto.nome)
-    setSugestoes([])
-    Keyboard.dismiss()
+    resetarBusca(ponto.nome)
+    // Se o mapa ainda não abriu (GPS respondendo), ele já abre direto no ponto.
+    setCentroInicial((atual) => atual ?? ponto)
     // Já pede o calor do destino em vez de esperar a câmera chegar lá: a animação e a
     // consulta correm ao mesmo tempo, e o aviso de "Calculando" aparece na hora.
     setAreaVisivel({ latitude: ponto.latitude, longitude: ponto.longitude, raioKm: RAIO_DESTINO_KM })
     moverCamera(cameraRef.current, ponto.latitude, ponto.longitude)
   }
 
+  const escolherSugestao = (item) => {
+    Keyboard.dismiss()
+    irParaPonto({ latitude: item.latitude, longitude: item.longitude, nome: item.nome })
+  }
+
+  // Outra tela pode abrir o mapa num lugar: navigate('Tabs', { screen: 'Mapa', params:
+  // { ponto, pedidoEm } }). pedidoEm muda a cada pedido, para o mesmo lugar poder ser
+  // aberto de novo depois de a usuária ter arrastado o mapa.
+  const pedido = route?.params?.ponto
+  const pedidoEm = route?.params?.pedidoEm
+  useFocusEffect(useCallback(() => {
+    if (pedido) irParaPonto(pedido)
+    // Só um pedido novo deve mover o mapa, e não cada volta à aba.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoEm]))
+
   const limparBusca = () => {
-    setBusca('')
-    setSugestoes([])
+    resetarBusca()
     setPontoBuscado(null)
     if (minhaPosicao) moverCamera(cameraRef.current, minhaPosicao.latitude, minhaPosicao.longitude)
   }
 
   const voltarParaMim = () => {
     setPontoBuscado(null)
-    setBusca('')
+    resetarBusca()
     if (minhaPosicao) moverCamera(cameraRef.current, minhaPosicao.latitude, minhaPosicao.longitude)
     setMapaMovido(false)
   }
@@ -310,7 +302,7 @@ export default function CrimeMap() {
           <TextInput
             style={styles.buscaInput}
             value={busca}
-            onChangeText={procurarEndereco}
+            onChangeText={procurar}
             placeholder="Buscar endereço ou bairro"
             placeholderTextColor={Brand.muted}
             returnKeyType="search"
@@ -433,9 +425,12 @@ export default function CrimeMap() {
         {sugestoes.length > 0 && (
           <View style={styles.sugestoes}>
             {sugestoes.map((item) => (
-              <TouchableOpacity key={item.place_id} style={styles.sugestao} onPress={() => escolherSugestao(item)}>
+              <TouchableOpacity key={item.id} style={styles.sugestao} onPress={() => escolherSugestao(item)}>
                 <Ionicons name="location-outline" size={16} color={Brand.rose} />
-                <Text style={styles.sugestaoTexto} numberOfLines={2}>{item.display_name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sugestaoNome} numberOfLines={1}>{item.nome}</Text>
+                  {!!item.endereco && <Text style={styles.sugestaoTexto} numberOfLines={1}>{item.endereco}</Text>}
+                </View>
               </TouchableOpacity>
             ))}
           </View>
@@ -516,7 +511,8 @@ const styles = StyleSheet.create({
 
   sugestoes: { position: 'absolute', top: 8, left: 8, right: 8, backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 4, elevation: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, zIndex: 10 },
   sugestao: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 14 },
-  sugestaoTexto: { flex: 1, fontSize: 13, color: Brand.ink },
+  sugestaoNome: { fontSize: 14, color: Brand.ink, fontWeight: '600' },
+  sugestaoTexto: { fontSize: 12, color: Brand.muted, marginTop: 1 },
 
   legenda: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
   legendaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },

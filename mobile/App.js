@@ -10,8 +10,9 @@ import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
 import EmergencyContacts from './screens/EmergencyContacts'
 import SafeLocations from './screens/SafeLocations'
-import ActivitySchedules from './screens/ActivitySchedules'
 import LegalNotice from './screens/LegalNotice'
+import Routine from './screens/Routine'
+import RoutineCommitment from './screens/RoutineCommitment'
 import MyReports from './screens/MyReports'
 import HelpGuide from './screens/HelpGuide'
 import ChatBot from './screens/ChatBot'
@@ -34,7 +35,7 @@ function Tabs() {
       // azul do app. Os ícones de cada aba ficam definidos dentro do componente.
       tabBar={(props) => <AmparaTabBar {...props} />}
     >
-      <Tab.Screen name="Início" component={Home} />
+      <Tab.Screen name="Proteção" component={Home} />
       <Tab.Screen name="Mapa" component={CrimeMap} />
       <Tab.Screen name="Dashboard" component={Dashboard} />
       <Tab.Screen name="Assistente" component={ChatBot} options={{ tabBarLabel: 'Lia' }} />
@@ -80,8 +81,9 @@ export default function App() {
           <Stack.Screen name="EditProfile" component={EditProfile} />
           <Stack.Screen name="EmergencyContacts" component={EmergencyContacts} />
           <Stack.Screen name="SafeLocations" component={SafeLocations} />
-          <Stack.Screen name="ActivitySchedules" component={ActivitySchedules} />
           <Stack.Screen name="LegalNotice" component={LegalNotice} />
+          <Stack.Screen name="Routine" component={Routine} />
+          <Stack.Screen name="RoutineCommitment" component={RoutineCommitment} />
 
           <Stack.Screen name="MyReports" component={MyReports} />
           <Stack.Screen name="HelpGuide" component={HelpGuide} />

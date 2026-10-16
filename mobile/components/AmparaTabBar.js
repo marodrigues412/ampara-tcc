@@ -6,7 +6,8 @@ import { Brand } from '../constants/brandTheme'
 
 // Ícone de cada aba: [selecionada, normal].
 const ICONES = {
-  'Início': ['heart', 'heart-outline'],
+  // Escudo: a aba reúne o que protege a usuária (score, monitoramento, rotina e SOS).
+  'Proteção': ['shield-checkmark', 'shield-checkmark-outline'],
   Mapa: ['map', 'map-outline'],
   Dashboard: ['stats-chart', 'stats-chart-outline'],
   Assistente: ['chatbubble-ellipses', 'chatbubble-ellipses-outline'],
