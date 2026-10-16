@@ -27,7 +27,8 @@ import { useRiskDetection } from '../hooks/useRiskDetection'
 import { buscarResumoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
-import { listarHorariosAtividade } from "../services/activityScheduleService"
+import { listarCompromissos } from "../services/routineService"
+import { comoHorariosDeAtividade } from "../utils/rotina"
 import { horarioAtivoAgora, descreverProximoHorario } from "../utils/activitySchedule"
 import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
@@ -40,6 +41,7 @@ import { Brand } from '../constants/brandTheme'
 import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
 import SosHoldOverlay from '../components/SosHoldOverlay'
+import RoutineToday from '../components/RoutineToday'
 
 import { dispararAlerta } from '../services/alertService'
 import { FRACAO_DO_ANO } from '../utils/mapaCalor'
@@ -469,7 +471,10 @@ export default function Home({ navigation }) {
   async function loadHorariosAtividade() {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
-    setHorariosAtividade(await listarHorariosAtividade(user.id))
+    // O modo atividade liga sozinho nos compromissos de exercício da rotina que têm
+    // "Ligar o modo atividade". A chave continua manual para o exercício fora da rotina.
+    const compromissos = await listarCompromissos(user.id)
+    setHorariosAtividade(comoHorariosDeAtividade(compromissos, new Date()))
   }
 
   async function loadSafeLocations() {
@@ -503,7 +508,7 @@ export default function Home({ navigation }) {
 
   const showActivityInfo = () => setHelpInfo({
     title: 'Modo atividade',
-    message: 'Ative só enquanto estiver se exercitando. O Ampara considera esse contexto ao interpretar movimentos e calcular o risco, para não tratar o exercício como um movimento incomum. O monitoramento e o SOS continuam ativos. Desative ao terminar.',
+    message: 'Ative só enquanto estiver se exercitando. O Ampara considera esse contexto ao interpretar movimentos e calcular o risco, para não tratar o exercício como um movimento incomum. O monitoramento e o SOS continuam ativos. Desative ao terminar. Para treinos fixos, cadastre um compromisso de Exercício na sua rotina: o modo liga e desliga sozinho.',
   })
 
   function toggleMonitoramento(value) {
@@ -848,7 +853,7 @@ export default function Home({ navigation }) {
   const calculandoScore = monitoramentoAtivo && !resumoPronto
   const horarioAgora = horarioAtivoAgora(horariosAtividade, new Date())
   const textoAtividade = activityMode
-    ? (horarioAgora ? `Até ${horarioAgora.hora_fim.slice(0, 5)}` : 'Exercício ativo')
+    ? (horarioAgora ? `Até ${horarioAgora.hora_fim.slice(0, 5)} · ${horarioAgora.nome}` : 'Exercício ativo')
     : (descreverProximoHorario(horariosAtividade, new Date()) ?? 'Para exercícios')
   const displayLevel = displayScore > 8 ? 'Crítico' : displayScore >= 5 ? 'Moderado' : 'Baixo'
   const riskAccent = !monitoramentoAtivo ? '#9A8C93' : displayLevel === 'Crítico' ? Brand.danger : displayLevel === 'Moderado' ? Brand.amber : Brand.green
@@ -919,9 +924,6 @@ export default function Home({ navigation }) {
             <View style={styles.topModeHeading}>
               <Ionicons name="fitness-outline" size={17} color={activityMode ? Brand.rose : Brand.muted} />
               <Text style={styles.topModeTitle}>Atividade</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('ActivitySchedules')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Programar horários de atividade">
-                <Ionicons name="alarm-outline" size={16} color={Brand.blue} />
-              </TouchableOpacity>
               <TouchableOpacity onPress={showActivityInfo} hitSlop={8} accessibilityRole="button" accessibilityLabel="O que é modo atividade?">
                 <Ionicons name="help-circle-outline" size={16} color={Brand.blue} />
               </TouchableOpacity>
@@ -991,6 +993,9 @@ export default function Home({ navigation }) {
             </View>
           </View>
         </View>
+
+        {/* ── ROTINA DE HOJE ── */}
+        <RoutineToday navigation={navigation} />
 
         <>
         <Text style={styles.mapSectionTitle}>Sensores do dispositivo</Text>

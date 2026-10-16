@@ -1,4 +1,6 @@
-// Regras dos horários programados de atividade (tabela activity_schedules).
+// Regras de horários semanais: dias da semana e se um horário está valendo agora.
+// Usadas pela rotina (compromissos de exercício ligam o modo atividade) e pelas telas
+// que mostram dias da semana.
 //
 // dias segue Date.getDay(): 0 = domingo ... 6 = sábado. Horas chegam do banco como
 // "HH:MM:SS".

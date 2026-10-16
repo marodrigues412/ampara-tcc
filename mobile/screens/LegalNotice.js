@@ -58,7 +58,7 @@ const SECOES = [
       'Só funciona com o Ampara aberto. Com o app fechado ou em segundo plano, não há detecção automática nem alertas.',
       'A localização é atualizada a cada 50 m ou 5 minutos, para economizar bateria.',
       'A detecção de movimentos bruscos pode dar alarme falso (uma queda do celular, um exercício) ou não perceber uma situação real.',
-      'Os horários programados de atividade também só funcionam com o app aberto.',
+      'Os compromissos de exercício da rotina também só ligam o modo atividade com o app aberto.',
     ],
   },
   {
@@ -83,7 +83,7 @@ const SECOES = [
     icone: 'lock-closed-outline',
     titulo: 'Seus dados',
     itens: [
-      'Para funcionar, o Ampara guarda: seu nome e e-mail, seus contatos de emergência, seus locais seguros, o histórico de localização e de score, o status do modo atividade, os alertas enviados e as ocorrências que você registrar.',
+      'Para funcionar, o Ampara guarda: seu nome e e-mail, seus contatos de emergência, seus locais seguros, os compromissos da sua rotina (lugares e horários), o histórico de localização e de score, o status do modo atividade, os alertas enviados e as ocorrências que você registrar.',
       'Com o smartwatch conectado, também são usadas as leituras de frequência cardíaca.',
       'Esses dados ficam num banco de dados na nuvem (Supabase) e são usados só para as funções do app: score, alertas, dashboard e histórico.',
       'As ocorrências que você registra podem ser usadas, sem identificar você, para as funções do app.',
