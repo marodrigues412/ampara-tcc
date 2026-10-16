@@ -1,4 +1,4 @@
-export const PHONE_MOTION_WINDOW_MS = 10_000
+export const PHONE_MOTION_WINDOW_MS = 2_560
 
 export function appendPhoneMotionSample(samples, magnitudeG, timestampMs = Date.now()) {
   const magnitude = Number(magnitudeG)
