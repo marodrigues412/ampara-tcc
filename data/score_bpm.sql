@@ -1,4 +1,4 @@
--- Historico privado de leituras e avaliacao experimental BPM + contexto.
+-- Historico privado de leituras e avaliacao experimental BPM + movimento + contexto.
 -- Script idempotente: pode ser executado novamente para atualizar a estrutura e o relatorio.
 create table if not exists public.risk_assessments (
   id uuid primary key default gen_random_uuid(),
@@ -10,6 +10,7 @@ create table if not exists public.risk_assessments (
   bpm_z_score numeric(7, 3),
   context_score smallint not null check (context_score between 0 and 10),
   experimental_score numeric(3, 1) check (experimental_score between 0 and 10),
+  experimental_risk_level text check (experimental_risk_level in ('baixo', 'moderado', 'alto')),
   hour_of_day smallint check (hour_of_day between 0 and 23),
   time_zone text,
   nearby_crime_count integer,
@@ -17,6 +18,7 @@ create table if not exists public.risk_assessments (
   inside_safe_zone boolean,
   activity_mode boolean,
   motion_risk_score numeric(4, 1),
+  motion_anomaly_score numeric(5, 4) check (motion_anomaly_score between 0 and 1),
   phone_motion_risk_points smallint,
   watch_motion_risk_points smallint,
   phone_mean_magnitude_g numeric(9, 5),
@@ -43,7 +45,9 @@ alter table public.risk_assessments
   add column if not exists crime_density_per_km2 numeric(12, 3),
   add column if not exists inside_safe_zone boolean,
   add column if not exists activity_mode boolean,
+  add column if not exists experimental_risk_level text,
   add column if not exists motion_risk_score numeric(4, 1),
+  add column if not exists motion_anomaly_score numeric(5, 4),
   add column if not exists phone_motion_risk_points smallint,
   add column if not exists watch_motion_risk_points smallint,
   add column if not exists phone_mean_magnitude_g numeric(9, 5),
@@ -56,6 +60,27 @@ alter table public.risk_assessments
   add column if not exists watch_motion_rms_mps2 numeric(9, 4),
   add column if not exists watch_motion_peak_mps2 numeric(9, 4),
   add column if not exists watch_motion_jerk_mps3 numeric(10, 4);
+
+do $constraints$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'risk_assessments_experimental_risk_level_check'
+  ) then
+    alter table public.risk_assessments
+      add constraint risk_assessments_experimental_risk_level_check
+      check (experimental_risk_level in ('baixo', 'moderado', 'alto'));
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'risk_assessments_motion_anomaly_score_check'
+  ) then
+    alter table public.risk_assessments
+      add constraint risk_assessments_motion_anomaly_score_check
+      check (motion_anomaly_score between 0 and 1);
+  end if;
+end
+$constraints$;
 
 create index if not exists risk_assessments_user_measured_idx
   on public.risk_assessments (user_id, measured_at desc);
@@ -82,7 +107,10 @@ returns table (
   average_context_score numeric,
   motion_sample_count bigint,
   average_motion_risk_score numeric,
-  average_crime_density_per_km2 numeric
+  average_crime_density_per_km2 numeric,
+  low_risk_count bigint,
+  moderate_risk_count bigint,
+  high_risk_count bigint
 )
 language sql
 stable
@@ -98,7 +126,10 @@ as $function$
     round(avg(context_score), 1) as average_context_score,
     count(motion_risk_score) as motion_sample_count,
     round(avg(motion_risk_score), 1) as average_motion_risk_score,
-    round(avg(crime_density_per_km2), 1) as average_crime_density_per_km2
+    round(avg(crime_density_per_km2), 1) as average_crime_density_per_km2,
+    count(*) filter (where experimental_risk_level = 'baixo') as low_risk_count,
+    count(*) filter (where experimental_risk_level = 'moderado') as moderate_risk_count,
+    count(*) filter (where experimental_risk_level = 'alto') as high_risk_count
   from public.risk_assessments
   where user_id = auth.uid()
     and measured_at >= p_from

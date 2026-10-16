@@ -1,0 +1,114 @@
+{
+  "modelVersion": "uci-har-motion-if-v1",
+  "algorithm": "IsolationForest",
+  "dataset": "UCI Human Activity Recognition Using Smartphones",
+  "datasetDoi": "10.24432/C54S4K",
+  "datasetLicense": "CC BY 4.0",
+  "features": [
+    "mean_magnitude_g",
+    "stddev_magnitude_g",
+    "peak_magnitude_g",
+    "max_jerk_g_per_second"
+  ],
+  "trainingSamplingHz": 10,
+  "windowDurationSeconds": 2.56,
+  "activityFilter": [
+    "walking",
+    "walking_upstairs",
+    "walking_downstairs",
+    "sitting",
+    "standing",
+    "laying"
+  ],
+  "trainSubjects": [
+    1,
+    3,
+    5,
+    6,
+    7,
+    8,
+    11,
+    14,
+    15,
+    16,
+    17,
+    19,
+    21,
+    22,
+    23,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "calibrationSubjects": [
+    2,
+    4,
+    9,
+    10
+  ],
+  "evaluationSubjects": [
+    12,
+    13,
+    18,
+    20,
+    24
+  ],
+  "trainWindows": 7352,
+  "calibrationWindows": 1201,
+  "evaluationWindows": 1746,
+  "thresholds": {
+    "moderate": 0.5907306353715885,
+    "high": 0.652150141160767,
+    "calibrationPercentiles": {
+      "moderate": 95,
+      "high": 99.5
+    }
+  },
+  "evaluationOnNormalActivities": {
+    "aboveModerateThresholdRate": 0.0149,
+    "aboveHighThresholdRate": 0.0006,
+    "meanAnomalyScore": 0.449728,
+    "byActivity": {
+      "walking": {
+        "samples": 272,
+        "above_moderate_threshold_rate": 0.0331,
+        "above_high_threshold_rate": 0.0
+      },
+      "walking_upstairs": {
+        "samples": 275,
+        "above_moderate_threshold_rate": 0.0,
+        "above_high_threshold_rate": 0.0
+      },
+      "walking_downstairs": {
+        "samples": 248,
+        "above_moderate_threshold_rate": 0.0605,
+        "above_high_threshold_rate": 0.004
+      },
+      "sitting": {
+        "samples": 291,
+        "above_moderate_threshold_rate": 0.0,
+        "above_high_threshold_rate": 0.0
+      },
+      "standing": {
+        "samples": 333,
+        "above_moderate_threshold_rate": 0.003,
+        "above_high_threshold_rate": 0.0
+      },
+      "laying": {
+        "samples": 327,
+        "above_moderate_threshold_rate": 0.0031,
+        "above_high_threshold_rate": 0.0
+      }
+    },
+    "interpretation": "Normal-only holdout estimates outlier rates, not sensitivity to violence or emergency events."
+  },
+  "limitations": [
+    "UCI-HAR contains smartphone inertial signals, but no heart-rate or GPS labels/features.",
+    "The source phone was carried at the waist; Ampara phone placement may differ.",
+    "This model detects movement unlike the training distribution; an anomaly is not evidence of violence.",
+    "Validation with representative Ampara field data is still required before alerts use this score."
+  ]
+}

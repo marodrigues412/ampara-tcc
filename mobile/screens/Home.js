@@ -33,7 +33,8 @@ import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
-import { calculateExperimentalRiskScore, EXPERIMENTAL_RISK_SCORE_VERSION, getExperimentalRiskLevel } from '../services/experimentalRiskScore'
+import { extractPhoneMotionFeatures, fuseExperimentalRiskLayers, scoreIsolationForest } from '../services/isolationForestMotion'
+import isolationForestMotionModel from '../models/isolationForestMotionModel.json'
 import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
 import { Brand } from '../constants/brandTheme'
 import LiaAvatar from '../components/LiaAvatar'
@@ -216,17 +217,22 @@ export default function Home({ navigation }) {
     heartRateIsCurrent ? smartwatch.measurement : null,
   )
   const watchMeasurement = smartwatch.measurement
-  const motionScoreAvailable = Boolean(phoneMotionWindow) || motionRisk.watchIsRecent
-  const experimentalMotionScore = motionScoreAvailable
-    ? Math.round((motionRisk.total / 6) * 100) / 10
+  const phoneMotionFeatures = extractPhoneMotionFeatures(phoneMotionWindow)
+  const phoneMotionInference = phoneMotionFeatures
+    ? scoreIsolationForest(phoneMotionFeatures, isolationForestMotionModel)
     : null
-  const experimentalRiskScore = heartRateBaseline.available
-    ? calculateExperimentalRiskScore({
+  const experimentalMotionScore = phoneMotionInference?.anomalyScore ?? null
+  const experimentalRisk = heartRateBaseline.available
+    ? fuseExperimentalRiskLayers({
       heartRateZScore: heartRateBaseline.zScore,
       contextScore: riskContextScore,
-      motionScore: experimentalMotionScore,
+      motionAnomalyScore: experimentalMotionScore,
     })
     : null
+  const experimentalRiskScore = experimentalRisk
+    ? Math.round(experimentalRisk.bodyScore * 100) / 10
+    : null
+  const experimentalRiskVersion = 'bpm-iforest-context-matrix-v1.0'
   const smartwatchWarning = ['disconnected', 'error', 'development_build_required'].includes(smartwatch.directWatchStatus)
     ? {
         title: smartwatch.directWatchStatus === 'development_build_required'
@@ -674,13 +680,15 @@ export default function Home({ navigation }) {
       bpmZScore: heartRateBaseline.zScore,
       contextScore: riskContextScore,
       experimentalScore: experimentalRiskScore,
+      experimentalRiskLevel: experimentalRisk?.level?.toLowerCase() ?? null,
       hourOfDay: new Date(measuredAt).getHours(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',
       nearbyCrimeCount: totalCrimesEntorno,
       crimeDensityPerKm2: totalCrimesEntorno / (Math.PI * RAIO_INICIAL_KM ** 2),
       insideSafeZone,
       activityMode,
-      motionRiskScore: experimentalMotionScore,
+      motionRiskScore: experimentalMotionScore === null ? null : Math.round(experimentalMotionScore * 1000) / 100,
+      motionAnomalyScore: experimentalMotionScore,
       phoneMotionRiskPoints: motionRisk.phonePoints,
       watchMotionRiskPoints: motionRisk.watchPoints,
       phoneMeanMagnitudeG: phoneMotionWindow?.meanMagnitudeG,
@@ -693,7 +701,7 @@ export default function Home({ navigation }) {
       watchMotionRmsMps2: motionRisk.watchIsRecent ? smartwatch.watchMotion.rms : null,
       watchMotionPeakMps2: motionRisk.watchIsRecent ? smartwatch.watchMotion.peak : null,
       watchMotionJerkMps3: motionRisk.watchIsRecent ? smartwatch.watchMotion.jerk : null,
-      modelVersion: EXPERIMENTAL_RISK_SCORE_VERSION,
+      modelVersion: `${experimentalRiskVersion}:${isolationForestMotionModel.modelVersion}`,
       source: measurement.source,
     }).catch(error => {
       console.warn('Não foi possível salvar a avaliação experimental:', error.message)
@@ -711,6 +719,8 @@ export default function Home({ navigation }) {
     heartRateBaseline.standardDeviationBpm,
     heartRateBaseline.zScore,
     experimentalRiskScore,
+    experimentalRisk?.level,
+    experimentalRiskVersion,
     experimentalMotionScore,
     motionRisk.phonePoints,
     motionRisk.watchPoints,
@@ -1247,8 +1257,8 @@ export default function Home({ navigation }) {
           <>
             <View style={styles.experimentalScorePanel}>
               <View style={styles.experimentalScoreHeading}>
-                <Text style={styles.experimentalScoreTitle}>Score experimental · BPM + contexto</Text>
-                <Text style={styles.experimentalScoreVersion}>{EXPERIMENTAL_RISK_SCORE_VERSION}</Text>
+                <Text style={styles.experimentalScoreTitle}>Score experimental · BPM + movimento ML</Text>
+                <Text style={styles.experimentalScoreVersion}>{experimentalRiskVersion}</Text>
               </View>
               {experimentalRiskScore == null ? (
                 <Text style={styles.experimentalScoreValueUnavailable}>
@@ -1257,9 +1267,9 @@ export default function Home({ navigation }) {
               ) : (
                 <View style={styles.experimentalScoreResult}>
                   <Text style={styles.experimentalScoreValue}>{experimentalRiskScore}/10</Text>
-                  <Text style={styles.experimentalScoreLevel}>{getExperimentalRiskLevel(experimentalRiskScore)}</Text>
+                  <Text style={styles.experimentalScoreLevel}>{experimentalRisk.level}</Text>
                   <Text style={styles.experimentalScoreDetail}>
-                    BPM {heartRateBaseline.zScore >= 0 ? '+' : ''}{heartRateBaseline.zScore.toFixed(1)} desvios · contexto {riskContextScore}/10 · movimento {experimentalMotionScore == null ? '—' : `${experimentalMotionScore}/10`}
+                    BPM {heartRateBaseline.zScore >= 0 ? '+' : ''}{heartRateBaseline.zScore.toFixed(1)} desvios · movimento {experimentalMotionScore == null ? 'aguardando' : `${Math.round(experimentalMotionScore * 100)}% atípico`} · contexto heurístico {riskContextScore}/10
                   </Text>
                 </View>
               )}
