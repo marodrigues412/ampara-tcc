@@ -108,7 +108,6 @@ class AmparaHeartRateListenerService : WearableListenerService() {
       .putExtra("status", status)
       .putExtra("timestamp", timestamp))
   }
-
   companion object {
     const val HEART_RATE_PATH = "/ampara/heart-rate"
     const val HEART_RATE_STATUS_PATH = "/ampara/heart-rate-status"
