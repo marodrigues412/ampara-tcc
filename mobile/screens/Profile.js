@@ -94,6 +94,7 @@ export default function Profile({ navigation }) {
           { icon: 'heart-circle-outline', label: 'Contatos de emergência', screen: 'EmergencyContacts' },
           { icon: 'location-outline', label: 'Locais seguros', screen: 'SafeLocations' },
           { icon: 'alarm-outline', label: 'Horários de atividade', screen: 'ActivitySchedules' },
+          { icon: 'document-text-outline', label: 'Avisos e limitações', screen: 'LegalNotice' },
         ].map((item) => (
           <React.Fragment key={item.screen}>
             <TouchableOpacity
