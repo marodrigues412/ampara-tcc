@@ -5,11 +5,13 @@ import LoginScreen from './screens/LoginScreen'
 import OnboardingScreen from './screens/OnboardingScreen'
 import Dashboard from './screens/Dashboard'
 import Home from './screens/Home'
+import CrimeMap from './screens/CrimeMap'
 import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
 import EmergencyContacts from './screens/EmergencyContacts'
 import SafeLocations from './screens/SafeLocations'
 import ActivitySchedules from './screens/ActivitySchedules'
+import LegalNotice from './screens/LegalNotice'
 import MyReports from './screens/MyReports'
 import HelpGuide from './screens/HelpGuide'
 import ChatBot from './screens/ChatBot'
@@ -33,6 +35,7 @@ function Tabs() {
       tabBar={(props) => <AmparaTabBar {...props} />}
     >
       <Tab.Screen name="Início" component={Home} />
+      <Tab.Screen name="Mapa" component={CrimeMap} />
       <Tab.Screen name="Dashboard" component={Dashboard} />
       <Tab.Screen name="Assistente" component={ChatBot} options={{ tabBarLabel: 'Lia' }} />
       <Tab.Screen name="Perfil" component={Profile} />
@@ -78,6 +81,7 @@ export default function App() {
           <Stack.Screen name="EmergencyContacts" component={EmergencyContacts} />
           <Stack.Screen name="SafeLocations" component={SafeLocations} />
           <Stack.Screen name="ActivitySchedules" component={ActivitySchedules} />
+          <Stack.Screen name="LegalNotice" component={LegalNotice} />
 
           <Stack.Screen name="MyReports" component={MyReports} />
           <Stack.Screen name="HelpGuide" component={HelpGuide} />
