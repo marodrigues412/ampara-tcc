@@ -37,7 +37,7 @@ function Tabs() {
     >
       <Tab.Screen name="Proteção" component={Home} />
       <Tab.Screen name="Mapa" component={CrimeMap} />
-      <Tab.Screen name="Dashboard" component={Dashboard} />
+      <Tab.Screen name="Dashboard" component={Dashboard} options={{ tabBarLabel: 'Relatório' }} />
       <Tab.Screen name="Assistente" component={ChatBot} options={{ tabBarLabel: 'Lia' }} />
       <Tab.Screen name="Perfil" component={Profile} />
     </Tab.Navigator>
