@@ -1,0 +1,137 @@
+﻿local,latitude,longitude,tipo,pergunta,so_ia_status,so_ia_latencia_s,so_ia_resposta,so_ia_citou_lugar_real,referencia_google,backend_status,backend_latencia_s,backend_resposta,avaliacao_humana
+Av. Paulista (MASP),-23.5614,-46.6559,ddm,Onde fica a delegacia da mulher mais perto de mim? Diga o nome e a distância.,200,8.04,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia da mulher mais próxima.
+
+Com base na sua localização atual (-23.5614 latitude, -46.6559 longitude), a delegacia mais próxima é a **Delegacia de Defesa da Mulher (DDM) do 1º Distrito Policial**, localizada a aproximadamente **1,8 km** de você.
+
+Para mais informações e contato, sugiro consultar o site da Polícia Civil: [https://www.policiacivil.sp.gov.br/portal/faces/pages/cidadao/delegacias](https://www.policiacivil.sp.gov.br/portal/faces/pages/cidadao/delegacias).
+
+Se você estiver em perigo imediato, não hesite em ligar para o 190 ou para a Central de Atendimento à Mulher, no número 180.",não,1ª Delegacia de Defesa da Mulher - Centro (3.4 km) | Casa da Mulher Brasileira - São Paulo (3.4 km) | 2ª Delegacia de Defesa da Mulher - Sul (4.8 km),200,3.32,"Olá! A delegacia mais próxima de você é a 1ª Delegacia de Defesa da Mulher - Centro, que está a 3,4 km de distância. Ela está aberta agora mesmo, caso precise de atendimento imediato. Se precisar de ajuda ou orientação, também posso te informar sobre a Casa da Mulher Brasileira, também a 3,4 km, e a 2ª Delegacia de Defesa da Mulher - Sul, que fica a 4,8 km.",
+Av. Paulista (MASP),-23.5614,-46.6559,delegacia,Qual a delegacia de polícia mais próxima? Diga o nome e a distância.,200,4.02,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia de polícia mais próxima.
+
+Com base na sua localização atual (-23.5614 latitude, -46.6559 longitude), a delegacia mais próxima é a **Delegacia de Polícia Sede da Mauá**, localizada a aproximadamente **1.8 km** de você. 
+
+Espero que isso ajude! Se precisar de mais alguma informação ou estiver em uma situação de perigo imediato, lembre-se de ligar para o 190.",não,Corregedoria Geral da Polícia Civil do Estado de São Paulo (0.9 km) | 78º Distrito Policial - Jardins (1.5 km) | Polícia Militar - 7.º Batalhão de Polícia Militar Metropolitano (7.º BPM/M) (1.6 km),200,3.28,"Olá! Sou a Lia, assistente virtual do Ampara. 😊
+
+A delegacia de polícia mais próxima é a Corregedoria Geral da Polícia Civil do Estado de São Paulo, que fica a 0,9 km de você. Se precisar de ajuda imediata, lembre-se que o 190 está disponível para emergências. O 78º Distrito Policial - Jardins também é uma opção, a 1,5 km daqui.",
+Av. Paulista (MASP),-23.5614,-46.6559,hospital,Qual o hospital ou pronto-socorro mais perto daqui? Diga o nome e a distância.,200,3.13,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar um hospital ou pronto-socorro próximo.
+
+Com base na sua localização atual (-23.5614 latitude, -46.6559 longitude), o hospital mais próximo é o Hospital São Luiz, a aproximadamente 2,8 km de distância.
+
+Espero que encontre o atendimento necessário! Se precisar de algo mais, estou aqui para ajudar.",sim,Pronto Socorro Hospital Nove de Julho (0.2 km) | Sírio-Libanês - Pronto Atendimento Adulto e Pediátrico (0.6 km) | Hospital e Pronto Atendimento Sancta Maggiore Amsterdã (0.9 km),200,2.58,"Olá! Sou a Lia, assistente virtual do Ampara. 😊
+
+O hospital mais próximo de você é o Pronto Socorro Hospital Nove de Julho, que fica a apenas 0,2 km de distância. Ele está aberto agora mesmo, caso precise. Se estiver em uma emergência grave, lembre-se que pode ligar para o 190!",
+Av. Paulista (MASP),-23.5614,-46.6559,ddm_aberta,Tem alguma delegacia da mulher aberta agora perto de mim?,200,4.8,"Olá! Sou a Lia, assistente virtual do Ampara. 😊 Entendo sua preocupação em encontrar uma delegacia da mulher aberta neste momento. 
+
+Consultando a localização atual (latitude -23.5614, longitude -46.6559), não tenho acesso a informações em tempo real sobre o horário de funcionamento das delegacias próximas. No entanto, você pode encontrar essa informação no site da Polícia Civil do seu estado ou ligando para o 180, que funciona 24 horas e oferece apoio e orientação em casos de violência contra a mulher.
+
+Se estiver em perigo imediato, não hesite em ligar para o 190. Estou aqui para ajudar no que for possível!",não,1ª Delegacia de Defesa da Mulher - Centro (3.4 km) | Casa da Mulher Brasileira - São Paulo (3.4 km) | 2ª Delegacia de Defesa da Mulher - Sul (4.8 km),200,4.15,"Olá! Sou a Lia, assistente virtual do Ampara. 😊 Percebi que você está buscando uma Delegacia da Mulher e posso te ajudar com isso. 
+
+Existem três opções abertas agora pertinho de você: a 1ª Delegacia de Defesa da Mulher - Centro (3,4 km), a Casa da Mulher Brasileira (3,4 km) e a 2ª Delegacia de Defesa da Mulher - Sul (4,8 km). Se precisar de ajuda imediata ou estiver em perigo, lembre-se que você pode ligar para o 190.",
+Praça da Sé,-23.5503,-46.6339,ddm,Onde fica a delegacia da mulher mais perto de mim? Diga o nome e a distância.,200,5.06,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia da mulher mais próxima.
+
+Consultando sua localização atual (-23.5503 latitude, -46.6339 longitude), a delegacia mais próxima é a **Delegacia de Defesa da Mulher (DDM) da Polícia Civil de São Paulo**, localizada na Rua Dr. Cesário Mota Júnior, 687 – Vila Buarque, SP, a aproximadamente **2,5 km** de você.
+
+Lembre-se que o número 180 está disponível para denúncias e orientações em casos de violência contra a mulher. Se estiver em perigo imediato, ligue para 190.",não,1ª Delegacia de Defesa da Mulher - Centro (1.3 km) | Casa da Mulher Brasileira - São Paulo (1.4 km) | 2ª Delegacia de Defesa da Mulher - Sul (5.7 km),200,3.62,"Olá! A delegacia mais próxima de você é a 1ª Delegacia de Defesa da Mulher - Centro, que está a 1,3 km de distância. Ela está aberta agora mesmo, caso precise de atendimento imediato. Se sentir necessidade, também posso te informar sobre a Casa da Mulher Brasileira, a 1,4 km, ou a 2ª Delegacia de Defesa da Mulher - Sul, com 5,7 km. Lembre-se que estou aqui para ajudar no que for possível!",
+Praça da Sé,-23.5503,-46.6339,delegacia,Qual a delegacia de polícia mais próxima? Diga o nome e a distância.,200,3.99,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia de polícia mais próxima.
+
+Com base na sua localização atual (-23.5503 latitude, -46.6339 longitude), a delegacia mais próxima é a **Delegacia de Polícia da Zona Sul**, localizada a aproximadamente **1,8 km** de você. 
+
+Espero que encontre o apoio necessário! Se precisar de ajuda adicional ou estiver em uma situação de perigo imediato, lembre-se de ligar para o 190.",não,Posto Policial São Bento (0.7 km) | 1ª Companhia da Polícia Militar (0.9 km) | 2ª Cia de Polícia Militar do 7º Batalhão de Polícia Militar Metropolitano (0.9 km),200,2.78,"Olá! A delegacia de polícia mais próxima é o Posto Policial São Bento, que fica a 0,7 km de você. Se precisar de ajuda imediata, lembre-se que você pode ligar para o 190. Para casos de violência contra a mulher, o número 180 está disponível 24 horas por dia. Estou aqui para o que precisar!",
+Praça da Sé,-23.5503,-46.6339,hospital,Qual o hospital ou pronto-socorro mais perto daqui? Diga o nome e a distância.,200,3.31,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar um hospital ou pronto-socorro próximo.
+
+Com base na sua localização atual (-23.5503 latitude, -46.6339 longitude), o Hospital São Luiz – Unidade Anália Franco é o mais próximo, a aproximadamente 1.8 km de distância.
+
+Espero que encontre o atendimento necessário! Se precisar de algo mais, estou aqui para ajudar.",sim,Pronto-Socorro Hospital Leforte Liberdade (0.8 km) | Pronto Socorro Central Santa Casa Municipal De São Paulo (1.8 km) | Pronto-Socorro do Hospital BP (2.0 km),200,2.76,"Olá! Sou a Lia, assistente virtual do Ampara. 😊
+
+O hospital ou pronto-socorro mais próximo de você é o Pronto-Socorro Hospital Leforte Liberdade, que fica a 0,8 km de distância. Ele está aberto agora mesmo, caso precise. Se for uma emergência grave, lembre-se que você pode ligar para o 190!",
+Praça da Sé,-23.5503,-46.6339,ddm_aberta,Tem alguma delegacia da mulher aberta agora perto de mim?,200,4.07,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo sua necessidade em encontrar uma delegacia da mulher neste momento.
+
+Consultando a localização atual (latitude -23.5503, longitude -46.6339), não tenho acesso a informações sobre o horário de funcionamento das delegacias em tempo real. 
+
+Recomendo que você entre em contato com a Central de Atendimento à Mulher – Ligue 180 para obter essa informação ou busque no site da Polícia Civil do seu estado. Se estiver em perigo imediato, ligue para 190.",não,1ª Delegacia de Defesa da Mulher - Centro (1.3 km) | Casa da Mulher Brasileira - São Paulo (1.4 km) | 2ª Delegacia de Defesa da Mulher - Sul (5.7 km),200,4.4,"Olá! Sou a Lia, assistente virtual do Ampara. 😊 Sim, encontrei algumas opções de Delegacias de Defesa da Mulher abertas agora perto de você:
+
+*   **1ª Delegacia de Defesa da Mulher - Centro:** 1,3 km de distância.
+*   **Casa da Mulher Brasileira - São Paulo:** 1,4 km de distância.
+*   **2ª Delegacia de Defesa da Mulher - Sul:** 5,7 km de distância.
+
+Se precisar de ajuda imediata ou estiver em perigo, lembre-se que você pode ligar para o 190!",
+Instituto Mauá (São Caetano),-23.6476,-46.5734,ddm,Onde fica a delegacia da mulher mais perto de mim? Diga o nome e a distância.,200,5.24,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia da mulher mais próxima.
+
+Consultando sua localização atual (-23.6476 latitude, -46.5734 longitude), a delegacia mais próxima é a Delegacia de Defesa da Mulher (DDM) de São Paulo, com aproximadamente 10 km de distância.
+
+Para informações mais detalhadas sobre o endereço e contato, sugiro consultar o site oficial da Polícia Civil do Estado de São Paulo: [https://www.policiacivil.sp.gov.br/](https://www.policiacivil.sp.gov.br/). Em caso de violência imediata, não hesite em ligar para o 180.",não,DDM - Delegacia de Defesa da Mulher - São Caetano do Sul (2.6 km) | 8ª DDM Delegacia de Defesa da Mulher (6.8 km) | 2ª Delegacia de Defesa da Mulher - Sul (8.3 km),200,4.64,"Olá! A delegacia mais próxima de você é a Delegacia de Defesa da Mulher - São Caetano do Sul, com uma distância de 2,6 km. No entanto, ela está fechada no momento.
+
+A 8ª Delegacia de Defesa da Mulher está aberta e fica a 6,8 km de você. Se precisar, também temos a 2ª Delegacia de Defesa da Mulher - Sul, que está aberta e localizada a 8,3 km.
+
+Lembre-se que em caso de violência contra a mulher, você pode ligar para o 180 para obter ajuda. Estou aqui se precisar de mais informações ou apoio!",
+Instituto Mauá (São Caetano),-23.6476,-46.5734,delegacia,Qual a delegacia de polícia mais próxima? Diga o nome e a distância.,200,4.37,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia de polícia mais próxima.
+
+Com base na sua localização atual (-23.6476 latitude, -46.5734 longitude), a delegacia mais próxima é a **Delegacia de Polícia de São Paulo - 10º Distrito Policial**, localizada a aproximadamente **2,8 km** de você.
+
+Lembre-se que em caso de perigo imediato, o número para acionar a polícia é o 190. Se precisar de ajuda ou apoio, estou aqui para o que for possível!",sim,2° Distrito Policial de São Bernardo do Campo - Polícia Civil SP (0.6 km) | 2º Distrito Policial de São Bernardo do Campo (0.6 km) | 2º Distrito Policial de Rudge Ramos (0.6 km),200,3.02,"Olá! Sou a Lia, assistente virtual do Ampara. 😊
+
+A delegacia de polícia mais próxima é o 2° Distrito Policial de São Bernardo do Campo - Polícia Civil SP, que fica a apenas 0,6 km de você. Ele está aberto agora mesmo, caso precise ir até lá. Se estiver em uma situação de perigo imediato, lembre-se que pode ligar para o 190.",
+Instituto Mauá (São Caetano),-23.6476,-46.5734,hospital,Qual o hospital ou pronto-socorro mais perto daqui? Diga o nome e a distância.,200,3.22,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar um hospital ou pronto-socorro próximo.
+
+Com base na sua localização atual (-23.6476 latitude, -46.5734 longitude), o hospital mais perto é o **Hospital São Luiz**, localizado a aproximadamente **1,8 km** de distância. 
+
+Espero que encontre o atendimento necessário! Se precisar de algo mais, estou à disposição.",sim,Hospital Santa Ana (1.8 km) | Hospital e Maternidade São Luiz São Caetano (2.2 km) | Pronto Socorro Municipal São Caetano do Sul (3.7 km),200,2.41,"Olá! Sou a Lia, assistente virtual do Ampara. 😊
+
+O hospital mais próximo de você é o Hospital Santa Ana, que fica a 1,8 km de distância. Ele está aberto agora mesmo, caso precise. Se for uma emergência grave, lembre-se que pode ligar para o 190!",
+Instituto Mauá (São Caetano),-23.6476,-46.5734,ddm_aberta,Tem alguma delegacia da mulher aberta agora perto de mim?,200,4.55,"Olá! Sou a Lia, assistente virtual do Ampara. 😊 Entendo sua necessidade em encontrar uma delegacia da mulher.
+
+Consultando dados atuais na sua localização (latitude -23.6476, longitude -46.5734), não tenho informações sobre o horário de funcionamento específico das delegacias neste momento. 
+
+Para ter certeza, sugiro ligar para a Delegacia Especializada de Atendimento à Mulher (DEAM) mais próxima ou para o 180, que pode te informar as unidades abertas e os horários de atendimento. Em caso de perigo imediato, não hesite em acionar a polícia pelo 190.",não,DDM - Delegacia de Defesa da Mulher - São Caetano do Sul (2.6 km) | 8ª DDM Delegacia de Defesa da Mulher (6.8 km) | 2ª Delegacia de Defesa da Mulher - Sul (8.3 km),200,3.24,"Olá! Sim, encontrei duas Delegacias de Defesa da Mulher abertas perto de você: a 8ª DDM, a 6,8 km, e a 2ª Delegacia de Defesa da Mulher - Sul, a 8,3 km. A DDM de São Caetano do Sul está fechada no momento. Se precisar de ajuda imediata, lembre-se que você pode ligar para o 180.",
+Centro de Santo André,-23.6544,-46.5307,ddm,Onde fica a delegacia da mulher mais perto de mim? Diga o nome e a distância.,200,4.3,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia da mulher mais próxima.
+
+Com base na sua localização atual (-23.6544 latitude, -46.5307 longitude), a delegacia mais próxima é a **Delegacia de Defesa da Mulher (DDM) do 1º Distrito Policial**, que fica a aproximadamente **2,8 km** de você.
+
+Para mais informações e contato, sugiro consultar o site da Polícia Civil ou ligar para o 190 em caso de emergência. Se precisar de ajuda adicional, estou aqui!",não,DDM -Delegacia de Defesa da Mulher de Santo André (1.0 km) | DDM - Delegacia de Defesa da Mulher - São Caetano do Sul (3.2 km) | 8ª DDM Delegacia de Defesa da Mulher (6.2 km),200,3.89,"Olá! Pelo que encontrei aqui no Ampara, a delegacia mais próxima é a **DDM - Delegacia de Defesa da Mulher de Santo André**, a apenas 1,0 km de você. No entanto, ela está fechada agora mesmo.
+
+A segunda opção mais próxima é a **8ª DDM Delegacia de Defesa da Mulher**, que fica a 6,2 km e está aberta no momento! Se precisar de ajuda imediata, lembre-se que o 190 pode te auxiliar em situações de perigo.",
+Centro de Santo André,-23.6544,-46.5307,delegacia,Qual a delegacia de polícia mais próxima? Diga o nome e a distância.,200,4.65,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia de polícia mais próxima.
+
+Com base na sua localização atual (-23.6544 latitude, -46.5307 longitude), a delegacia mais próxima é a **Delegacia de Polícia de São Paulo - 89º DP (Vila Maria)**, que fica a aproximadamente **1,8 km** de você.
+
+Lembre-se, em caso de perigo imediato, ligue para o 190. Se precisar de ajuda em relação à violência contra a mulher, o número 180 está disponível 24 horas por dia.",não,Polícia Militar do Estado de S. Paulo - PM-SP (0.3 km) | 4° Distrito Policial de Santo André (0.5 km) | 1° Distrito Policial de Santo André - Polícia Civil Sp (0.7 km),200,2.6,"Olá! Sou a Lia, assistente virtual do Ampara. A delegacia de polícia mais próxima é a Polícia Militar do Estado de S. Paulo - PM-SP, que está a 0,3 km de você. Se precisar de ajuda imediata, lembre-se que o 190 é um recurso disponível. Estou aqui para o que precisar!",
+Centro de Santo André,-23.6544,-46.5307,hospital,Qual o hospital ou pronto-socorro mais perto daqui? Diga o nome e a distância.,200,3.21,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar um hospital ou pronto-socorro próximo.
+
+Com base na sua localização atual (-23.6544 latitude, -46.5307 longitude), o **Hospital São Luiz Morumbi** é o mais próximo, a aproximadamente 2.8 km de distância.
+
+Espero que encontre o atendimento necessário! Se precisar de algo mais, estou aqui para ajudar.",não,UPA - Central Santo André (0.6 km) | Hospital Beneficência Portuguesa de Santo André (0.7 km) | Centro Hospitalar de Santo André - CHMSA (1.2 km),200,2.66,"Olá! Sou a Lia, assistente virtual do Ampara. 😊 Pelo que encontrei aqui, a UPA - Central Santo André é o local de atendimento mais próximo, com apenas 0,6 km de distância. Ela está aberta agora mesmo, caso precise! Se for uma emergência grave, lembre-se que você pode ligar para o 190.",
+Centro de Santo André,-23.6544,-46.5307,ddm_aberta,Tem alguma delegacia da mulher aberta agora perto de mim?,200,5.14,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo sua necessidade em encontrar uma delegacia da mulher próxima e aberta neste momento.
+
+Consultando informações atualizadas, não tenho acesso direto ao status de funcionamento das delegacias em tempo real. No entanto, você pode encontrar essa informação através do site [https://www.delegaciavirtual.sp.gov.br/](https://www.delegaciavirtual.sp.gov.br/) ou ligando para o 180, que funciona 24 horas por dia e pode te auxiliar a localizar a delegacia mais próxima aberta agora mesmo.
+
+Lembre-se que em caso de perigo imediato, você pode acionar a polícia pelo 190. Estou aqui para ajudar no que for possível!",não,DDM -Delegacia de Defesa da Mulher de Santo André (1.0 km) | DDM - Delegacia de Defesa da Mulher - São Caetano do Sul (3.2 km) | 8ª DDM Delegacia de Defesa da Mulher (6.2 km),200,3.06,"Olá! Sou a Lia, assistente virtual do Ampara. 😊 Percebi que você busca uma Delegacia de Defesa da Mulher aberta neste momento. A 8ª DDM Delegacia de Defesa da Mulher está aberta e fica a 6,2 km daqui. Se precisar de ajuda imediata, lembre-se que o 190 é para emergências e o 180 para violência contra a mulher.",
+Centro de Guarulhos,-23.4538,-46.5333,ddm,Onde fica a delegacia da mulher mais perto de mim? Diga o nome e a distância.,200,4.4,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia da mulher mais próxima.
+
+Com base na sua localização atual (latitude -23.4538, longitude -46.5333), a delegacia mais perto é a **Delegacia Especializada de Atendimento à Mulher (DEAM) - São Paulo**, localizada a aproximadamente **10 km** de você.
+
+Lembre-se que em caso de violência, o número 180 está disponível para te ajudar 24 horas por dia. Se estiver em perigo imediato, ligue para 190.",não,DDM - Delegacia de Defesa da Mulher de Guarulhos - Polícia Civil Sp (1.0 km) | Delegacia de Defesa da Mulher - Guarulhos (1.9 km) | 7ª DDM - Delegacia de Defesa da Mulher (12.2 km),200,4.41,"Olá! A delegacia mais próxima de você é a Delegacia de Defesa da Mulher de Guarulhos - Polícia Civil Sp, que está a 1,0 km de distância. No entanto, ela está fechada no momento.
+
+A segunda opção mais perto é a Delegacia de Defesa da Mulher - Guarulhos, com 1,9 km, também fechada agora.
+
+Se precisar, a 7ª DDM - Delegacia de Defesa da Mulher está aberta e localizada a 12,2 km daqui. Lembre-se que em caso de perigo imediato, ligue para o 190.",
+Centro de Guarulhos,-23.4538,-46.5333,delegacia,Qual a delegacia de polícia mais próxima? Diga o nome e a distância.,200,3.54,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar a delegacia de polícia mais próxima.
+
+Com base na sua localização atual (latitude -23.4538, longitude -46.5333), a delegacia mais próxima é a **Delegacia de Polícia da Zona Oeste**, localizada a aproximadamente **1,7 km** de você. 
+
+Espero que consiga resolver o que precisa! Se precisar de qualquer outra ajuda, estou aqui para te auxiliar.",não,4ª Cia do 15° BPM/M - Guarulhos (0.7 km) | 2º Distrito Policial de Guarulhos – Vila Galvão - Polícia Civil Sp (1.0 km) | 1° Distrito Policial de Guarulhos (2.0 km),200,2.73,"Olá! Sou a Lia, assistente virtual do Ampara. 😊
+
+A delegacia de polícia mais próxima é o 2º Distrito Policial de Guarulhos – Vila Galvão, com uma distância de 1,0 km. Eles estão abertos agora mesmo. Se precisar de ajuda urgente, lembre-se que você pode ligar para o 190!",
+Centro de Guarulhos,-23.4538,-46.5333,hospital,Qual o hospital ou pronto-socorro mais perto daqui? Diga o nome e a distância.,200,3.27,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo que você precisa encontrar um hospital ou pronto-socorro próximo. 
+
+Com base na sua localização atual (-23.4538 latitude, -46.5333 longitude), o Hospital Estadual de São Paulo (HESP) é o mais próximo, a aproximadamente 7 km de você.
+
+Espero que encontre o atendimento necessário! Se precisar de algo mais, estou à disposição.",não,Unidade de Urgência Next Saúde (0.9 km) | Unidade Avançada Carlos Chagas (0.9 km) | Hospital Brás Cubas Guarulhos (1.1 km),200,2.65,"Olá! Sou a Lia, assistente virtual do Ampara. Pelo que encontrei aqui, o Hospital Brás Cubas Guarulhos está a 1,1 km de você. Também temos a Unidade de Urgência Next Saúde e a Unidade Avançada Carlos Chagas a 0,9 km, ambas abertas agora mesmo. Espero que esteja tudo bem!",
+Centro de Guarulhos,-23.4538,-46.5333,ddm_aberta,Tem alguma delegacia da mulher aberta agora perto de mim?,200,5.0,"Olá! Sou a Lia, assistente virtual do Ampara. Entendo sua preocupação em encontrar uma delegacia da mulher aberta neste momento.
+
+Consultando os dados disponíveis na sua localização atual (latitude -23.4538, longitude -46.5333), não tenho informações precisas sobre o horário de funcionamento das delegacias especializadas agora, às 14:38 de sábado, 17/10.
+
+Recomendo que você ligue para o 180 (Central de Atendimento à Mulher) para obter a lista das delegacias mais próximas e seus horários de atendimento atualizados. Em caso de perigo imediato, não hesite em ligar para o 190.",não,DDM - Delegacia de Defesa da Mulher de Guarulhos - Polícia Civil Sp (1.0 km) | Delegacia de Defesa da Mulher - Guarulhos (1.9 km) | 7ª DDM - Delegacia de Defesa da Mulher (12.2 km),200,3.7,"Olá! Sou a Lia, assistente virtual do Ampara. 😊 Entendo sua necessidade em encontrar uma delegacia especializada.
+
+No momento, a 7ª DDM - Delegacia de Defesa da Mulher está aberta e localizada a 12,2 km de você. As demais delegacias próximas estão fechadas agora.
+
+Se estiver em perigo imediato, não hesite em ligar para o 190. Para casos de violência contra a mulher, o número 180 está disponível 24 horas por dia.",
