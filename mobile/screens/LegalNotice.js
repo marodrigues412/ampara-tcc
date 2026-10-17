@@ -1,7 +1,11 @@
 import React from 'react'
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Linking } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+// Cores da seção de onde a tela é aberta.
+const TEMA = TemaDaAba.Perfil
 
 // Avisos que a usuária precisa conhecer antes de confiar no app. Escrito para quem usa,
 // não para quem desenvolve: diz o que o Ampara faz, o que ele não faz e quando ele pode
@@ -104,19 +108,15 @@ const SECOES = [
 export default function LegalNotice({ navigation }) {
   return (
     <View style={styles.container}>
-      <View style={styles.topo}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.voltar}>
-          <Ionicons name="chevron-back" size={20} color={Brand.blue} />
-          <Text style={styles.voltarTexto}>Voltar</Text>
-        </TouchableOpacity>
-        <Image source={require('../assets/images/maos-ampara-azul.png')} style={styles.logo} resizeMode="contain" />
-      </View>
+      <HeaderComCurvas
+        aba="Perfil"
+        onVoltar={() => navigation.goBack()}
+        titulo="Avisos e limitações"
+        subtitulo="Leia antes de usar o Ampara. Aqui está o que o app faz, o que ele não faz e quando ele pode falhar."
+        style={styles.header}
+      />
 
       <ScrollView contentContainerStyle={styles.conteudo} showsVerticalScrollIndicator={false}>
-        <Text style={styles.titulo}>Avisos e limitações</Text>
-        <Text style={styles.subtitulo}>
-          Leia antes de usar o Ampara. Aqui está o que o app faz, o que ele não faz e quando ele pode falhar.
-        </Text>
 
         <View style={styles.emergencia}>
           <TouchableOpacity style={styles.botaoLigar} onPress={() => Linking.openURL('tel:190')} accessibilityRole="button">
@@ -124,15 +124,15 @@ export default function LegalNotice({ navigation }) {
             <Text style={styles.botaoLigarTexto}>Ligar 190</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.botaoLigar, styles.botaoLigar180]} onPress={() => Linking.openURL('tel:180')} accessibilityRole="button">
-            <Ionicons name="call" size={18} color={Brand.rose} />
-            <Text style={[styles.botaoLigarTexto, { color: Brand.rose }]}>Ligar 180</Text>
+            <Ionicons name="call" size={18} color={TEMA.forte} />
+            <Text style={[styles.botaoLigarTexto, { color: TEMA.forte }]}>Ligar 180</Text>
           </TouchableOpacity>
         </View>
 
         {SECOES.map((secao) => (
           <View key={secao.titulo} style={styles.secao}>
             <View style={styles.secaoTopo}>
-              <Ionicons name={secao.icone} size={20} color={Brand.rose} />
+              <Ionicons name={secao.icone} size={20} color={TEMA.forte} />
               <Text style={styles.secaoTitulo} accessibilityRole="header">{secao.titulo}</Text>
             </View>
             {secao.itens.map((item) => (
@@ -151,25 +151,27 @@ export default function LegalNotice({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Brand.canvas, paddingHorizontal: 22 },
+  // O header vai de ponta a ponta: as margens negativas desfazem o padding da tela.
+  header: { marginHorizontal: -22, marginBottom: 14 },
+  container: { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 22 },
   topo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 6 },
   voltar: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  voltarTexto: { color: Brand.blue, fontSize: 15, fontWeight: '600' },
+  voltarTexto: { color: TEMA.forte, fontSize: 15, fontWeight: '600' },
   logo: { width: 36, height: 36 },
   conteudo: { paddingBottom: 60 },
-  titulo: { fontSize: 26, fontWeight: '700', color: Brand.rose, marginTop: 8 },
+  titulo: { fontSize: 26, fontWeight: '700', color: TEMA.forte, marginTop: 8 },
   subtitulo: { color: Brand.muted, fontSize: 14, lineHeight: 20, marginTop: 6 },
 
   emergencia: { flexDirection: 'row', gap: 10, marginTop: 18, marginBottom: 6 },
-  botaoLigar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Brand.rose, borderRadius: 14, paddingVertical: 13 },
-  botaoLigar180: { backgroundColor: Brand.surfaceRose },
+  botaoLigar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: TEMA.forte, borderRadius: 20, paddingVertical: 13 },
+  botaoLigar180: { backgroundColor: TEMA.fundo },
   botaoLigarTexto: { color: '#FFF', fontWeight: '700', fontSize: 15 },
 
-  secao: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Brand.line },
+  secao: { paddingVertical: 16 },
   secaoTopo: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   secaoTitulo: { flex: 1, fontSize: 16, fontWeight: '700', color: Brand.ink },
   item: { flexDirection: 'row', gap: 10, marginBottom: 8, paddingLeft: 4 },
-  marcador: { width: 5, height: 5, borderRadius: 3, backgroundColor: Brand.rose, marginTop: 8 },
+  marcador: { width: 5, height: 5, borderRadius: 3, backgroundColor: TEMA.forte, marginTop: 8 },
   itemTexto: { flex: 1, fontSize: 14, lineHeight: 21, color: Brand.ink },
   rodape: { color: Brand.muted, fontSize: 12, marginTop: 18, textAlign: 'center' },
 })

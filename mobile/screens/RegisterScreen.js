@@ -5,7 +5,10 @@ import {
   Platform, ScrollView, Image
 } from 'react-native'
 import { supabase } from '../services/supabase'
-import { Brand } from '../constants/brandTheme'
+import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+const TEMA = TemaDaAba['Proteção']
 
 export default function RegisterScreen({ onBack }) {
   const [nome, setNome] = useState('')
@@ -84,14 +87,15 @@ export default function RegisterScreen({ onBack }) {
           bounces={false}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brandArea}>
+          <HeaderComCurvas aba="Proteção" semMarca style={styles.hero}>
             <Image
               source={require('../assets/images/maos-ampara-azul.png')}
               style={styles.logo}
               resizeMode="contain"
             />
             <Text style={styles.brand}>Ampara</Text>
-          </View>
+            <Text style={styles.lema}>Você não está sozinha.</Text>
+          </HeaderComCurvas>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Cadastro</Text>
@@ -145,11 +149,7 @@ const styles = StyleSheet.create({
   kav: { flex: 1 },
   scroll: { flexGrow: 1 },
 
-  brandArea: {
-    alignItems: 'center',
-    paddingTop: 54,
-    paddingBottom: 34,
-  },
+  hero: { alignItems: 'center', paddingTop: 70, paddingBottom: 34, borderBottomLeftRadius: 40, borderBottomRightRadius: 40, marginBottom: 26 },
   logo: {
     width: 66,
     height: 66,
@@ -157,9 +157,10 @@ const styles = StyleSheet.create({
   },
   brand: {
     fontSize: 36,
-    fontWeight: '700',
-    color: Brand.rose,
+    fontWeight: '800',
+    color: '#273963',
   },
+  lema: { fontFamily: FonteDaLia, fontSize: 18, color: TEMA.forte, marginTop: 4 },
 
   card: {
     marginHorizontal: 24,
@@ -174,31 +175,30 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   input: {
-    borderBottomWidth: 1,
-    borderColor: '#D8C5CC',
-    borderRadius: 0,
+    backgroundColor: '#F7F4F5',
+    borderRadius: 22,
     paddingVertical: 14,
-    paddingHorizontal: 2,
+    paddingHorizontal: 18,
     fontSize: 15,
     marginBottom: 12,
     color: Brand.ink,
   },
   button: {
-    backgroundColor: Brand.rose,
+    backgroundColor: TEMA.forte,
     paddingVertical: 15,
-    borderRadius: 8,
+    borderRadius: 26,
     alignItems: 'center',
     marginTop: 6,
     marginBottom: 20,
   },
   buttonText: {
     color: '#FFF',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 16,
   },
   backRow: { alignItems: 'center' },
   backText: { color: '#999', fontSize: 13, textAlign: 'center' },
-  backLink: { color: Brand.rose, fontWeight: '600' },
+  backLink: { color: TEMA.forte, fontWeight: '600' },
 
   navyFill: { flex: 1, minHeight: 60 },
 })

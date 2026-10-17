@@ -73,12 +73,14 @@ type Lugar = {
   telefone: string | null
   abertoAgora: boolean | null
   mapsUrl: string | null
+  latitude: number
+  longitude: number
 }
 
 // Lugares a mais de 30 km provavelmente são outro lugar com o mesmo nome.
 const DISTANCIA_MAXIMA_KM = 30
 
-async function buscarLugares(tipo: BuscaDeLugar, latitude: number, longitude: number, chave: string): Promise<Lugar[] | null> {
+async function buscarLugares(tipo: BuscaDeLugar, latitude: number, longitude: number, chave: string, limite = 3): Promise<Lugar[] | null> {
   try {
     const resposta = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
@@ -109,11 +111,13 @@ async function buscarLugares(tipo: BuscaDeLugar, latitude: number, longitude: nu
         telefone: p.nationalPhoneNumber ?? null,
         abertoAgora: typeof p.currentOpeningHours?.openNow === 'boolean' ? p.currentOpeningHours.openNow : null,
         mapsUrl: p.googleMapsUri ?? null,
+        latitude: p.location.latitude,
+        longitude: p.location.longitude,
       }))
       .filter((l: Lugar) => l.distanciaKm <= DISTANCIA_MAXIMA_KM)
       .filter((l: Lugar) => !tipo.exclui || !tipo.exclui.test(semAcento(l.nome)))
       .sort((a: Lugar, b: Lugar) => a.distanciaKm - b.distanciaKm)
-      .slice(0, 3)
+      .slice(0, limite)
   } catch {
     return null
   }
@@ -177,6 +181,14 @@ function blocoDeLugares(tipo: BuscaDeLugar, lugares: Lugar[] | null, temLocaliza
   ].join('\n')
 }
 
+// "Apoio por perto" do Mapa: categorias fixas, buscadas direto no Google Places, sem IA.
+const CATEGORIAS_DE_APOIO: Record<string, BuscaDeLugar> = {
+  ddm: { busca: 'Delegacia de Defesa da Mulher', rotulo: 'Delegacias da Mulher', abertoAgora: false },
+  delegacia: { ...REFORCOS.find((r) => r.rotulo === 'delegacias')!, abertoAgora: false },
+  farmacia: { busca: 'farmácia 24 horas', rotulo: 'farmácias 24 horas', abertoAgora: false },
+  hospital: { busca: 'pronto-socorro hospital', rotulo: 'hospitais', abertoAgora: false },
+}
+
 function json(body: unknown, status: number, origin?: string) {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (origin) {
@@ -229,6 +241,20 @@ Deno.serve(async (request) => {
     if (!authResponse.ok) return json({ erro: 'Sessão inválida.' }, 401, origin)
 
     const body = await request.json().catch(() => null)
+
+    if (body?.acao === 'lugares') {
+      const categoria = CATEGORIAS_DE_APOIO[String(body.categoria)]
+      const latitude = Number(body.latitude)
+      const longitude = Number(body.longitude)
+      if (!categoria || !Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+        return json({ erro: 'Pedido de lugares inválido.' }, 400, origin)
+      }
+      if (!placesKey) return json({ erro: 'Busca de lugares indisponível.' }, 503, origin)
+      const lugares = await buscarLugares(categoria, latitude, longitude, placesKey, 5)
+      if (!lugares) return json({ erro: 'A busca de lugares falhou agora.' }, 502, origin)
+      return json({ lugares }, 200, origin)
+    }
+
     const pergunta = typeof body?.pergunta === 'string' ? body.pergunta.trim() : ''
     if (!pergunta || pergunta.length > MAX_QUESTION_LENGTH) {
       return json({ erro: `A pergunta deve ter entre 1 e ${MAX_QUESTION_LENGTH} caracteres.` }, 400, origin)

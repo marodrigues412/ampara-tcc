@@ -37,11 +37,15 @@ import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
 import { extractPhoneMotionFeatures, fuseExperimentalRiskLayers, scoreIsolationForest } from '../services/isolationForestMotion'
 import isolationForestMotionModel from '../models/isolationForestMotionModel.json'
 import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
-import { Brand } from '../constants/brandTheme'
+import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
+import { nivelDaRegiao } from '../utils/relatorio'
 import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
 import SosHoldOverlay from '../components/SosHoldOverlay'
 import RoutineToday from '../components/RoutineToday'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+import AnelDaLia from '../components/AnelDaLia'
+import CalculoDoRisco from '../components/CalculoDoRisco'
 
 import { dispararAlerta } from '../services/alertService'
 import { FRACAO_DO_ANO } from '../utils/mapaCalor'
@@ -82,12 +86,33 @@ const CHECAGEM_HORARIO_MS = 30_000
 const ESPERA_SCORE_DO_LUGAR_MS = 4_000
 
 
-const getTimeLabel = () => {
-  const h = new Date().getHours()
-  if (h >= 0 && h < 6) return 'madrugada (+3 risco)'
-  if (h >= 22) return 'noite avançada (+2 risco)'
-  if (h >= 18) return 'noite (+1 risco)'
-  return 'período diurno'
+const TEMA = TemaDaAba['Proteção']
+const DIAS_CURTOS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
+// Mesmas cores da legenda do mapa de calor, de poucos para muitos registros.
+const CORES_DO_CALOR = ['#F6E7A8', '#F2B35A', '#E06A3B', '#B83D53']
+// [cor da letra, fundo] de cada pessoa da rede de apoio.
+const CORES_DA_REDE = [['#BD5574', '#F7E7EC'], ['#6E5A9E', '#EFEAF5'], ['#3F6A86', '#E9EFF2']]
+
+// Respostas rápidas abaixo da fala da Lia, de acordo com o estado do risco. As que têm
+// pergunta abrem a aba da Lia já com ela enviada; "Me sinto insegura" responde aqui
+// mesmo, apontando o SOS, porque nessa hora ela não deve precisar trocar de tela.
+const INSEGURA = { id: 'insegura', texto: 'Me sinto insegura' }
+const SOS = { id: 'sos', texto: 'Como funciona o SOS?', pergunta: 'Como funciona o SOS do Ampara?' }
+const RESPOSTAS_RAPIDAS = {
+  tranquilo: [
+    { id: 'ape', texto: 'É seguro ir a pé agora?', pergunta: 'É seguro eu ir a pé agora, daqui onde estou?' },
+    { id: 'trajeto', texto: 'Dicas para meu próximo trajeto', pergunta: 'Que cuidados devo ter no meu próximo trajeto da rotina?' },
+    INSEGURA,
+  ],
+  atencao: [
+    INSEGURA,
+    { id: 'agora', texto: 'O que faço agora?', pergunta: 'Meu risco está alto agora. O que devo fazer?' },
+    SOS,
+  ],
+  pausado: [
+    { id: 'quando', texto: 'Quando ligar o monitoramento?', pergunta: 'Em que momentos é melhor deixar o monitoramento ligado?' },
+    SOS,
+  ],
 }
 
 const formatReadingAge = (time) => {
@@ -132,6 +157,9 @@ export default function Home({ navigation }) {
   const [riskContextScore, setRiskContextScore] = useState(null)
   const [userId, setUserId] = useState(null)
   const [resumoCrimes, setResumoCrimes] = useState({})
+  const [fatoresDoRisco, setFatoresDoRisco] = useState(null)
+  const [contatos, setContatos] = useState([])
+  const [respostaRapida, setRespostaRapida] = useState(null)
   const totalCrimesEntorno = useMemo(
     () => Object.values(resumoCrimes).reduce((soma, n) => soma + n, 0),
     [resumoCrimes],
@@ -340,6 +368,7 @@ export default function Home({ navigation }) {
       loadSafeLocations();
       loadActivity();
       loadHorariosAtividade();
+      loadContatos();
     }, [])
   );
 
@@ -486,6 +515,14 @@ export default function Home({ navigation }) {
     if (data?.nome) setUserName(data.nome);
   }
   
+  // Só para mostrar a rede de apoio na tela; o envio do SOS busca os contatos de novo.
+  async function loadContatos() {
+    const user = (await supabase.auth.getUser()).data.user
+    if (!user) return
+    const { data } = await supabase.from('emergency_contacts').select('id, nome').eq('user_id', user.id)
+    setContatos(data ?? [])
+  }
+
   async function loadActivity() {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
@@ -567,14 +604,13 @@ export default function Home({ navigation }) {
     // que a usuária vê e o score contarem a mesma história.
     // Os limites são por ano; FRACAO_DO_ANO os ajusta para os 6 meses que a base soma.
     const densidadeCrimes = totalCrimesEntorno / (Math.PI * RAIO_INICIAL_KM ** 2)
-    if (densidadeCrimes > 700 * FRACAO_DO_ANO) { score += 4; }
-    else if (densidadeCrimes > 250 * FRACAO_DO_ANO) { score += 2; }
+    const pontosRegiao = densidadeCrimes > 700 * FRACAO_DO_ANO ? 4 : densidadeCrimes > 250 * FRACAO_DO_ANO ? 2 : 0
+    score += pontosRegiao
 
     // Fator horário
     const hora = new Date().getHours()
-    if (hora >= 0 && hora < 6) { score += 3; }
-    else if (hora >= 22) { score += 2; }
-    else if (hora >= 18) { score += 1; }
+    const pontosHorario = hora < 6 ? 3 : hora >= 22 ? 2 : hora >= 18 ? 1 : 0
+    score += pontosHorario
 
     if (activityMode) { score -= 2; }
 
@@ -592,6 +628,8 @@ export default function Home({ navigation }) {
     }
 
     setInsideSafeZone(emZonaSegura)
+    // As mesmas parcelas, para a lista "Por que seu risco está assim" da tela.
+    setFatoresDoRisco({ regiao: pontosRegiao, horario: pontosHorario, hora, atividade: activityMode ? -2 : 0, localSeguro: emZonaSegura ? -3 : 0, movimento: motionRisk.total })
     const contextScore = Math.max(0, Math.min(10, score))
     setRiskContextScore(contextScore)
     score += motionRisk.total
@@ -892,6 +930,70 @@ export default function Home({ navigation }) {
           ? 'checagem'
           : 'trajeto'
 
+  const agoraTela = new Date()
+  const dataDeHoje = `${DIAS_CURTOS[agoraTela.getDay()]}, ${agoraTela.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+
+  // O que a Lia diz no balão, de acordo com o estado do risco.
+  const falaDaLia = !monitoramentoAtivo
+    ? 'O monitoramento está pausado. Ligue quando sair para eu voltar a acompanhar seu risco.'
+    : calculandoScore
+      ? 'Estou olhando sua região e o horário. Já te conto como está seu risco.'
+      : insideSafeZone
+        ? 'Você está em um dos seus locais seguros. Pode ficar tranquila, eu sigo acompanhando.'
+        : displayLevel === 'Crítico'
+          ? 'Seu risco está alto agora. Procure um lugar iluminado e movimentado. Se precisar, segure o SOS.'
+          : displayLevel === 'Moderado'
+            ? 'Atenção redobrada por aqui. Prefira ruas movimentadas e mantenha o celular à mão.'
+            : agoraTela.getHours() >= 18 || agoraTela.getHours() < 6
+              ? 'Já é noite, mas seu risco está baixo. Sigo acompanhando.'
+              : 'Tudo tranquilo por aqui. Sigo acompanhando.'
+
+  // A resposta rápida vale só enquanto o estado do risco não muda.
+  const estadoDoRisco = `${monitoramentoAtivo}|${calculandoScore}|${insideSafeZone}|${displayLevel}`
+  const textoDaResposta = respostaRapida?.estado === estadoDoRisco ? respostaRapida.texto : null
+
+  const respostasRapidas = calculandoScore
+    ? []
+    : !monitoramentoAtivo
+      ? RESPOSTAS_RAPIDAS.pausado
+      : displayLevel === 'Baixo' ? RESPOSTAS_RAPIDAS.tranquilo : RESPOSTAS_RAPIDAS.atencao
+
+  const responderRapido = (resposta) => {
+    if (resposta.pergunta) {
+      navigation.navigate('Assistente', { pergunta: resposta.pergunta, pedidoEm: Date.now() })
+    } else {
+      setRespostaRapida({ estado: estadoDoRisco, texto: 'Estou aqui. Se precisar, segure o SOS por 3 segundos para avisar sua rede. Se puder, vá para um lugar iluminado e com gente por perto.' })
+    }
+  }
+
+  // Cada parcela do score, na ordem em que aparece na lista "Por que seu risco está assim".
+  const f = fatoresDoRisco
+  const listaDeFatores = f ? [
+    {
+      id: 'horario', icone: 'moon-outline', cor: '#6E5A9E', fundo: '#EFEAF5', pontos: f.horario, curto: 'Horário',
+      nome: f.hora < 6 ? 'Horário: madrugada' : f.hora >= 22 ? 'Horário: noite avançada' : f.hora >= 18 ? 'Horário: noite' : 'Horário: dia',
+    },
+    {
+      id: 'regiao', icone: 'map-outline', cor: '#3F6A86', fundo: '#E9EFF2', pontos: f.regiao, curto: 'Região',
+      nome: f.regiao >= 4 ? 'Região: muitos registros' : f.regiao >= 2 ? 'Região: registros moderados' : 'Região: poucos registros',
+    },
+    {
+      id: 'movimento', icone: 'pulse-outline', cor: Brand.amber, fundo: Brand.amberSoft, pontos: f.movimento, curto: 'Movimento',
+      nome: f.movimento > 0 ? 'Movimento brusco detectado' : 'Movimento normal',
+    },
+    {
+      id: 'local', icone: 'home-outline', cor: Brand.green, fundo: Brand.mint, pontos: f.localSeguro, curto: 'Local seguro',
+      nome: f.localSeguro ? 'Em um local seguro' : 'Fora de um local seguro',
+    },
+    ...(f.atividade ? [{ id: 'atividade', icone: 'fitness-outline', cor: Brand.green, fundo: Brand.mint, pontos: f.atividade, curto: 'Atividade', nome: 'Modo atividade ligado' }] : []),
+  ] : []
+
+  const regiao = resumoPronto ? nivelDaRegiao(resumoCrimes) : null
+  // Posição do marcador na barra de cores: a densidade da região entre 0 e 1,5 vez o
+  // limite de "muitos registros".
+  const densidadeRegiao = ['roubo', 'furto', 'violencia'].reduce((soma, id) => soma + (resumoCrimes[id] ?? 0), 0) / Math.PI
+  const posicaoNaRegiao = Math.round(Math.min(densidadeRegiao / (700 * FRACAO_DO_ANO * 1.5), 1) * 92)
+
   const simularNivel = (score) => {
     setDemoEnvLabel(null)
     setDemoBonus(0)
@@ -914,113 +1016,150 @@ export default function Home({ navigation }) {
     <View style={styles.container}>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
 
-        {/* ── HEADER ── */}
-        <View style={styles.headerContainer}>
-          <View style={styles.headerBrandRow}>
-            <Image source={require('../assets/images/maos-ampara-azul.png')} style={styles.headerLogo} resizeMode="contain" />
-            <Text style={styles.header}>Ampara</Text>
+        {/* ── HEADER: a Lia no anel de risco ── */}
+        <HeaderComCurvas aba="Proteção">
+          <View style={styles.topoLinha}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Assistente')}
+              accessibilityRole="button"
+              accessibilityLabel={`Conversar com a Lia. Risco ${calculandoScore ? 'sendo calculado' : monitoramentoAtivo ? `${displayScore} de 10, ${displayLevel}` : 'pausado'}`}
+            >
+              <AnelDaLia score={calculandoScore || !monitoramentoAtivo ? null : displayScore} cor={riskAccent} reacao={liaReaction} />
+            </TouchableOpacity>
+            <View style={styles.topoTextos}>
+              <Text style={styles.topoData}>Proteção · {dataDeHoje}</Text>
+              <Text style={[styles.nomeLia, { color: TEMA.forte }]}>Lia</Text>
+              {calculandoScore ? (
+                <View style={styles.carregandoLinha} accessibilityLiveRegion="polite">
+                  <ActivityIndicator size="small" color={TEMA.forte} />
+                  <Text style={styles.carregandoTexto}>Calculando seu risco…</Text>
+                </View>
+              ) : (
+                <Text style={styles.topoScore}>
+                  <Text style={[styles.topoScoreNumero, { color: riskAccent }]}>{monitoramentoAtivo ? displayScore : '–'}</Text>
+                  <Text style={styles.topoScoreResto}>{monitoramentoAtivo ? ` / 10 · risco ${displayLevel.toLowerCase()}` : '  alertas pausados'}</Text>
+                </Text>
+              )}
+            </View>
+          </View>
+        </HeaderComCurvas>
+
+        {/* ── FALA DA LIA ── */}
+        <View style={styles.falaLinha}>
+          <LiaAvatar size={34} reaction={liaReaction} showRing={false} showBadge={false} />
+          <View style={styles.falaBalao}>
+            <Text style={styles.falaTexto}>{textoDaResposta ?? falaDaLia}</Text>
           </View>
         </View>
+        <View style={styles.respostas}>
+          {respostasRapidas.map((r) => (
+            <TouchableOpacity key={r.id} style={styles.resposta} onPress={() => responderRapido(r)} accessibilityRole="button">
+              <Text style={[styles.respostaTexto, { color: TEMA.forte }]}>{r.texto}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        <View style={styles.topModesRow}>
-          <View style={styles.topModeCell}>
-            <View style={styles.topModeHeading}>
+        {/* ── CÁLCULO DO RISCO ── */}
+        {monitoramentoAtivo && !calculandoScore && fatoresDoRisco && (
+          <CalculoDoRisco
+            fatores={listaDeFatores}
+            total={displayScore}
+            rotuloDoNivel={displayLevel}
+            corDoNivel={riskAccent}
+            corDaAba={TEMA.forte}
+          />
+        )}
+
+        {/* ── MODOS ── */}
+        <View style={styles.secaoLeve}>
+          <Text style={styles.secaoTitulo}>Modos</Text>
+          <View style={styles.modoLinha}>
+            <View style={[styles.modoIcone, { backgroundColor: monitoramentoAtivo ? Brand.mint : '#F3EFF1' }]}>
               <Ionicons name={monitoramentoAtivo ? 'shield-checkmark-outline' : 'shield-outline'} size={17} color={monitoramentoAtivo ? Brand.green : Brand.muted} />
-              <Text style={styles.topModeTitle}>Monitoramento</Text>
-              <TouchableOpacity onPress={showMonitoringInfo} hitSlop={8} accessibilityRole="button" accessibilityLabel="O que é monitoramento?">
-                <Ionicons name="help-circle-outline" size={16} color={Brand.blue} />
-              </TouchableOpacity>
             </View>
-            <View style={styles.topModeControlRow}>
-              <Text style={[styles.topModeSubtitle, !monitoramentoAtivo && styles.monitoringStatusOff]} numberOfLines={1}>
-                {monitoramentoAtivo ? 'Alertas ativos' : 'Alertas pausados'}
-              </Text>
-              <Switch
-                value={monitoramentoAtivo}
-                onValueChange={toggleMonitoramento}
-                trackColor={{ false: '#E6DCE0', true: Brand.green }}
-                thumbColor="#FFF"
-                accessibilityLabel="Modo monitoramento"
-              />
-            </View>
-          </View>
-          <View style={styles.topModeDivider} />
-          <View style={styles.topModeCell}>
-            <View style={styles.topModeHeading}>
-              <Ionicons name="fitness-outline" size={17} color={activityMode ? Brand.rose : Brand.muted} />
-              <Text style={styles.topModeTitle}>Atividade</Text>
-              <TouchableOpacity onPress={showActivityInfo} hitSlop={8} accessibilityRole="button" accessibilityLabel="O que é modo atividade?">
-                <Ionicons name="help-circle-outline" size={16} color={Brand.blue} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.topModeControlRow}>
-              <Text style={styles.topModeSubtitle} numberOfLines={1}>
-                {textoAtividade}
-              </Text>
-              <Switch
-                value={activityMode}
-                onValueChange={toggleActivity}
-                trackColor={{ false: '#E6DCE0', true: Brand.rose }}
-                thumbColor="#FFF"
-                accessibilityLabel="Modo atividade"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* ── RISCO ── */}
-        <View style={styles.riskSection}>
-          <View style={styles.riskPanel}>
-            <View style={styles.riskPanelTop}>
-              <TouchableOpacity
-                style={styles.riskLiaButton}
-                onPress={() => navigation.navigate('ChatBot')}
-                accessibilityRole="button"
-                accessibilityLabel={`Conversar com a Lia. Estado atual: ${monitoramentoAtivo ? displayLevel : 'monitoramento pausado'}`}
-              >
-                <LiaAvatar size={104} reaction={liaReaction} showRing={false} transparentBackground />
-              </TouchableOpacity>
-              <View style={styles.riskContent}>
-                <Text style={styles.riskLabel}>Risco atual</Text>
-                <View style={styles.riskRow}>
-                  {calculandoScore ? (
-                    <View style={styles.carregandoLinha} accessibilityLiveRegion="polite">
-                      <ActivityIndicator size="small" color={Brand.rose} />
-                      <Text style={styles.carregandoTexto}>Calculando score…</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.riskSummary}>
-                      <Text style={[styles.gaugeScoreBig, { color: riskAccent }]}>
-                        {displayScore}<Text style={styles.gaugeScoreMax}>/10</Text>
-                      </Text>
-                      <Text style={[styles.riskBadgeText, { color: riskAccent }]}>
-                        {monitoramentoAtivo ? displayLevel : 'Pausado'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.riskCompactRow}>
-                  {monitoramentoAtivo ? (
-                    <View style={styles.timeFactorRow}>
-                      <Ionicons name={insideSafeZone ? 'home-outline' : 'time-outline'} size={13} color={insideSafeZone ? Brand.green : Brand.blue} />
-                      <Text style={[styles.timeFactorText, insideSafeZone && styles.safeRiskText]} numberOfLines={2}>
-                        {insideSafeZone ? 'Dentro de um local seguro' : getTimeLabel()}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.gaugeDesc}>Alertas automáticos pausados</Text>
-                  )}
-                </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.modoTituloLinha}>
+                <Text style={styles.modoTitulo}>Monitoramento</Text>
+                <TouchableOpacity onPress={showMonitoringInfo} hitSlop={8} accessibilityRole="button" accessibilityLabel="O que é monitoramento?">
+                  <Ionicons name="help-circle-outline" size={16} color={TEMA.forte} />
+                </TouchableOpacity>
               </View>
+              <Text style={styles.modoDetalhe}>{monitoramentoAtivo ? 'Alertas ativos' : 'Alertas pausados'}</Text>
             </View>
-            <View style={styles.scoreTrack}>
-              <View style={[styles.scoreFill, { width: `${calculandoScore ? 0 : Math.min(Math.max(Number(displayScore), 0), 10) * 10}%`, backgroundColor: riskAccent }]} />
+            <Switch
+              value={monitoramentoAtivo}
+              onValueChange={toggleMonitoramento}
+              trackColor={{ false: '#E6DCE0', true: Brand.green }}
+              thumbColor="#FFF"
+              accessibilityLabel="Modo monitoramento"
+            />
+          </View>
+          <View style={styles.modoLinha}>
+            <View style={[styles.modoIcone, { backgroundColor: activityMode ? TEMA.fundo : '#F3EFF1' }]}>
+              <Ionicons name="fitness-outline" size={17} color={activityMode ? TEMA.forte : Brand.muted} />
             </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.modoTituloLinha}>
+                <Text style={styles.modoTitulo}>Atividade</Text>
+                <TouchableOpacity onPress={showActivityInfo} hitSlop={8} accessibilityRole="button" accessibilityLabel="O que é modo atividade?">
+                  <Ionicons name="help-circle-outline" size={16} color={TEMA.forte} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.modoDetalhe} numberOfLines={1}>{textoAtividade}</Text>
+            </View>
+            <Switch
+              value={activityMode}
+              onValueChange={toggleActivity}
+              trackColor={{ false: '#E6DCE0', true: TEMA.forte }}
+              thumbColor="#FFF"
+              accessibilityLabel="Modo atividade"
+            />
           </View>
         </View>
 
-        {/* ── ROTINA DE HOJE ── */}
+        {/* ── SEU DIA ── */}
         <RoutineToday navigation={navigation} />
+
+        {/* ── SUA REGIÃO ── */}
+        {regiao && (
+          <TouchableOpacity style={styles.secaoLeve} onPress={() => navigation.navigate('Mapa')} accessibilityRole="button" accessibilityLabel={`Sua região: ${regiao.rotulo.toLowerCase()} num raio de 1 km. Ver no mapa`}>
+            <View style={styles.secaoTituloLinha}>
+              <Text style={styles.secaoTitulo}>Sua região</Text>
+              <Text style={[styles.secaoLink, { color: TEMA.forte }]}>Ver no mapa ›</Text>
+            </View>
+            <Text style={styles.regiaoTexto}>{regiao.rotulo} num raio de 1 km</Text>
+            <View style={styles.regiaoBarra}>
+              {CORES_DO_CALOR.map((cor) => <View key={cor} style={[styles.regiaoFaixa, { backgroundColor: cor }]} />)}
+              <View style={[styles.regiaoMarcador, { left: `${posicaoNaRegiao}%`, borderColor: regiao.cor }]} />
+            </View>
+            <View style={styles.regiaoLegenda}>
+              <Text style={styles.regiaoLegendaTexto}>poucos registros</Text>
+              <Text style={styles.regiaoLegendaTexto}>muitos</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* ── REDE DE APOIO ── */}
+        <TouchableOpacity style={styles.secaoLeve} onPress={() => navigation.navigate('EmergencyContacts')} accessibilityRole="button">
+          <View style={styles.secaoTituloLinha}>
+            <Text style={styles.secaoTitulo}>Rede de apoio</Text>
+            <Text style={[styles.secaoLink, { color: TEMA.forte }]}>{contatos.length ? 'Editar ›' : 'Adicionar ›'}</Text>
+          </View>
+          {contatos.length ? (
+            <View style={styles.redeLinha}>
+              {contatos.slice(0, 3).map((c, k) => (
+                <View key={c.id ?? k} style={styles.redePessoa}>
+                  <View style={[styles.redeInicial, { backgroundColor: CORES_DA_REDE[k][1] }]}>
+                    <Text style={[styles.redeInicialTexto, { color: CORES_DA_REDE[k][0] }]}>{(c.nome ?? '?').trim().charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.redeNome} numberOfLines={1}>{(c.nome ?? '').split(' ')[0]}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.regiaoTexto}>Cadastre quem deve receber seu alerta SOS.</Text>
+          )}
+        </TouchableOpacity>
 
         <>
         <Text style={styles.mapSectionTitle}>Sensores do dispositivo</Text>
@@ -1052,7 +1191,7 @@ export default function Home({ navigation }) {
               <Ionicons
                 name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
                 size={23}
-                color={heartRateIsCurrent ? Brand.rose : '#9A8C93'}
+                color={heartRateIsCurrent ? TEMA.forte : '#9A8C93'}
               />
               <Text style={styles.heartRateLabel}>FREQUÊNCIA CARDÍACA</Text>
               <View style={styles.heartRateValueRow}>
@@ -1088,7 +1227,7 @@ export default function Home({ navigation }) {
               accessibilityLabel="Conexão com smartwatch"
             >
               <View style={styles.smartwatchIconWrap}>
-                <Ionicons name="watch-outline" size={22} color={smartwatchConnected ? Brand.green : Brand.rose} />
+                <Ionicons name="watch-outline" size={22} color={smartwatchConnected ? Brand.green : TEMA.forte} />
               </View>
               <View style={styles.smartwatchConnectionTexts}>
                 <Text style={styles.smartwatchConnectionTitle}>
@@ -1097,12 +1236,12 @@ export default function Home({ navigation }) {
                 <Text style={styles.smartwatchConnectionSubtitle}>{smartwatchConnectionText}</Text>
               </View>
               {smartwatch.isBusy ? (
-                <ActivityIndicator size="small" color={Brand.rose} />
+                <ActivityIndicator size="small" color={TEMA.forte} />
               ) : (
                 <Ionicons
                   name={smartwatchConnected ? 'checkmark-circle' : 'link-outline'}
                   size={23}
-                  color={smartwatchConnected ? Brand.green : Brand.rose}
+                  color={smartwatchConnected ? Brand.green : TEMA.forte}
                 />
               )}
             </TouchableOpacity>
@@ -1136,8 +1275,8 @@ export default function Home({ navigation }) {
           </>
         )}
         <View style={styles.forceRow}>
-          <Ionicons name="phone-portrait-outline" size={18} color={isHighRisk ? Brand.rose : Brand.muted} />
-          <Text style={[styles.forceValue, { color: isHighRisk ? Brand.rose : Brand.ink }]}>{magnitude}G</Text>
+          <Ionicons name="phone-portrait-outline" size={18} color={isHighRisk ? TEMA.forte : Brand.muted} />
+          <Text style={[styles.forceValue, { color: isHighRisk ? TEMA.forte : Brand.ink }]}>{magnitude}G</Text>
           <Text style={styles.forceLabel}>Acelerômetro do celular{motionRisk.phonePoints > 0 ? ` · +${motionRisk.phonePoints}` : ''}</Text>
           {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
         </View>
@@ -1151,7 +1290,7 @@ export default function Home({ navigation }) {
         {SHOW_PRESENTATION_MODE && (
         <View style={styles.demoPanel}>
           <View style={styles.demoPanelHeader}>
-            <Ionicons name="flask-outline" size={16} color="#5A8FAF" />
+            <Ionicons name="flask-outline" size={16} color={TEMA.forte} />
             <Text style={styles.demoPanelTitle}>Modo Apresentação</Text>
           </View>
 
@@ -1176,16 +1315,16 @@ export default function Home({ navigation }) {
             <TouchableOpacity
               style={[
                 styles.demoBtn,
-                { borderColor: '#D32F2F', borderWidth: demoEnvLabel === 'risco-noite' ? 2.5 : 1.5 },
+                { borderColor: Brand.danger, borderWidth: demoEnvLabel === 'risco-noite' ? 2.5 : 1.5 },
                 demoEnvLabel === 'risco-noite' && { backgroundColor: '#FDEAEA' }
               ]}
               onPress={() => setDemoEnvironment(3, 'risco-noite')}
             >
               {demoEnvLabel === 'risco-noite'
-                ? <Ionicons name="checkmark-circle" size={18} color="#D32F2F" />
-                : <Ionicons name="moon-outline" size={16} color="#D32F2F" />
+                ? <Ionicons name="checkmark-circle" size={18} color={Brand.danger} />
+                : <Ionicons name="moon-outline" size={16} color={Brand.danger} />
               }
-              <Text style={[styles.demoBtnText, { color: '#D32F2F' }]}>Risco noturno</Text>
+              <Text style={[styles.demoBtnText, { color: Brand.danger }]}>Risco noturno</Text>
               <Text style={styles.demoBtnSub}>Sacuda → Crítico</Text>
             </TouchableOpacity>
           </View>
@@ -1210,15 +1349,15 @@ export default function Home({ navigation }) {
               <Text style={[styles.demoBtnText, { color: '#E6A200' }]}>Nível 2</Text>
               <Text style={styles.demoBtnSub}>Confirmar (30s)</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.demoBtn, { borderColor: '#D32F2F' }]} onPress={() => simularNivel(9)}>
-              <Text style={[styles.demoBtnText, { color: '#D32F2F' }]}>Nível 3</Text>
+            <TouchableOpacity style={[styles.demoBtn, { borderColor: Brand.danger }]} onPress={() => simularNivel(9)}>
+              <Text style={[styles.demoBtnText, { color: Brand.danger }]}>Nível 3</Text>
               <Text style={styles.demoBtnSub}>Alerta (10s)</Text>
             </TouchableOpacity>
           </View>
 
           {(demoScore !== null || demoEnvLabel !== null) && (
             <TouchableOpacity style={styles.demoResetBtn} onPress={resetDemo}>
-              <Ionicons name="refresh-outline" size={14} color="#5A8FAF" />
+              <Ionicons name="refresh-outline" size={14} color={TEMA.forte} />
               <Text style={styles.demoResetText}>Resetar demo</Text>
             </TouchableOpacity>
           )}
@@ -1257,18 +1396,18 @@ export default function Home({ navigation }) {
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: sosFeedbackData.status === 'enviado' ? '#4CAF50' : sosFeedbackData.status === 'falhou' ? '#D32F2F' : '#5A8FAF' }]} />
+            <View style={[styles.modalStrip, { backgroundColor: sosFeedbackData.status === 'enviado' ? Brand.green : sosFeedbackData.status === 'falhou' ? Brand.danger : TEMA.forte }]} />
             <View style={styles.modalInner}>
               {sosFeedbackData.status === 'enviando' && (
                 <>
-                  <ActivityIndicator size="large" color="#5A8FAF" style={{ marginBottom: 12 }} />
+                  <ActivityIndicator size="large" color={TEMA.forte} style={{ marginBottom: 12 }} />
                   <Text style={styles.cardTitle}>Enviando alerta...</Text>
                   <Text style={styles.cardSubtitle}>Avisando sua rede de apoio com sua localização.</Text>
                 </>
               )}
               {sosFeedbackData.status === 'enviado' && (
                 <>
-                  <Text style={[styles.cardTitleCritical, { color: '#2E8B57' }]}>Alerta Enviado</Text>
+                  <Text style={[styles.cardTitleCritical, { color: Brand.green }]}>Alerta Enviado</Text>
                   <Text style={styles.cardSubtitle}>
                     Mensagem de WhatsApp com sua localização enviada para {sosFeedbackData.enviados.length} {sosFeedbackData.enviados.length === 1 ? 'contato' : 'contatos'}.
                   </Text>
@@ -1276,12 +1415,12 @@ export default function Home({ navigation }) {
               )}
               {sosFeedbackData.status === 'falhou' && (
                 <>
-                  <Text style={[styles.cardTitleCritical, { color: '#D32F2F' }]}>Alerta NÃO confirmado</Text>
+                  <Text style={[styles.cardTitleCritical, { color: Brand.danger }]}>Alerta NÃO confirmado</Text>
                   <Text style={styles.cardSubtitle}>
                     Não conseguimos confirmar o envio aos seus contatos. Se estiver em perigo, ligue para a polícia agora.
                   </Text>
                   <Text style={styles.sosFailDetail}>Motivo: {sosFeedbackData.detalhe}</Text>
-                  <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: '#D32F2F', marginBottom: 12 }]} onPress={() => Linking.openURL('tel:190')}>
+                  <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: Brand.danger, marginBottom: 12 }]} onPress={() => Linking.openURL('tel:190')}>
                     <Text style={styles.btnPrimaryText}>Ligar 190</Text>
                   </TouchableOpacity>
                 </>
@@ -1290,7 +1429,7 @@ export default function Home({ navigation }) {
               {sosFeedbackData.status !== 'enviando' && (
                 <View style={styles.feedbackBox}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <Ionicons name="location" size={14} color="#5A8FAF" />
+                    <Ionicons name="location" size={14} color={TEMA.forte} />
                     <Text style={styles.feedbackLabel}>Sua localização</Text>
                   </View>
                   <Text style={styles.feedbackAddressText}>{sosFeedbackData.endereco}</Text>
@@ -1298,7 +1437,7 @@ export default function Home({ navigation }) {
                   {sosFeedbackData.enviados.length > 0 && (
                     <>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 4 }}>
-                        <Ionicons name="logo-whatsapp" size={14} color="#2E8B57" />
+                        <Ionicons name="logo-whatsapp" size={14} color={Brand.green} />
                         <Text style={styles.feedbackLabel}>Mensagem de WhatsApp enviada para</Text>
                       </View>
                       {sosFeedbackData.enviados.map((c) => (
@@ -1311,12 +1450,12 @@ export default function Home({ navigation }) {
                   {sosFeedbackData.falhas.length > 0 && (
                     <>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 4 }}>
-                        <Ionicons name="close-circle" size={14} color="#D32F2F" />
+                        <Ionicons name="close-circle" size={14} color={Brand.danger} />
                         <Text style={styles.feedbackLabel}>Não foi possível enviar para · toque para ligar</Text>
                       </View>
                       {sosFeedbackData.falhas.map((c) => (
                         <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)}>
-                          <Text style={[styles.feedbackContact, { color: '#D32F2F' }]}>{c}</Text>
+                          <Text style={[styles.feedbackContact, { color: Brand.danger }]}>{c}</Text>
                         </TouchableOpacity>
                       ))}
                     </>
@@ -1425,20 +1564,20 @@ export default function Home({ navigation }) {
       <Modal transparent visible={simpleCheckVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: '#2E8B57' }]} />
+            <View style={[styles.modalStrip, { backgroundColor: Brand.green }]} />
             <View style={styles.modalInner}>
               <View style={{ alignItems: 'center', marginBottom: 8 }}>
                 <LiaAvatar size={72} reaction="checagem" />
               </View>
-              <Text style={[styles.cardTitleCritical, { color: '#2E8B57' }]}>Tudo bem?</Text>
+              <Text style={[styles.cardTitleCritical, { color: Brand.green }]}>Tudo bem?</Text>
               <Text style={styles.cardSubtitle}>
                 O Ampara está monitorando você. Confirme que está segura.
               </Text>
-              <TouchableOpacity style={[styles.btnSafe, { backgroundColor: '#2E8B57' }]} onPress={handleUserIsSafe}>
+              <TouchableOpacity style={[styles.btnSafe, { backgroundColor: Brand.green }]} onPress={handleUserIsSafe}>
                 <Text style={styles.btnSafeText}>Sim, estou bem</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.btnPrimary, { marginTop: 10, backgroundColor: Brand.rose }]}
+                style={[styles.btnPrimary, { marginTop: 10, backgroundColor: TEMA.forte }]}
                 onPress={() => { setSimpleCheckVisible(false); executarEnvioDeSocorro(); }}
               >
                 <Text style={styles.btnPrimaryText}>Preciso de ajuda</Text>
@@ -1452,7 +1591,7 @@ export default function Home({ navigation }) {
       <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: alertType === 'critico' ? Brand.rose : '#D4A017' }]} />
+            <View style={[styles.modalStrip, { backgroundColor: alertType === 'critico' ? Brand.danger : Brand.amber }]} />
             <View style={styles.modalInner}>
               <View style={{ alignItems: 'center', marginBottom: 8 }}>
                 <LiaAvatar size={72} reaction={alertType === 'critico' ? 'critico' : 'checagem'} />
@@ -1467,8 +1606,8 @@ export default function Home({ navigation }) {
               </Text>
 
               <View style={{alignItems: 'center', marginVertical: 10}}>
-                <View style={[styles.timerCircle, { borderColor: alertType === 'critico' ? Brand.rose : '#D4A017' }]}>
-                  <Text style={[styles.timerCountText, { color: alertType === 'critico' ? Brand.rose : '#D4A017' }]}>{countdown}</Text>
+                <View style={[styles.timerCircle, { borderColor: alertType === 'critico' ? Brand.danger : Brand.amber }]}>
+                  <Text style={[styles.timerCountText, { color: alertType === 'critico' ? Brand.danger : Brand.amber }]}>{countdown}</Text>
                   <Text style={styles.timerSecondsText}>seg</Text>
                 </View>
               </View>
@@ -1510,7 +1649,7 @@ export default function Home({ navigation }) {
 
           <View style={styles.watchAlertContent}>
             <View style={styles.watchAlertIcon}>
-              <Ionicons name="heart-dis" size={38} color={Brand.rose} />
+              <Ionicons name="heart-dis" size={38} color={TEMA.forte} />
             </View>
             <Text style={styles.watchAlertEyebrow}>ATENÇÃO AO MONITORAMENTO</Text>
             <Text style={styles.watchAlertTitle}>O Ampara não está recebendo seus batimentos</Text>
@@ -1541,12 +1680,51 @@ export default function Home({ navigation }) {
 const styles = StyleSheet.create({
   flexOne: { flex: 1 },
   container: { flex: 1, backgroundColor: Brand.canvas },
+
+  // Header com a Lia no anel de risco
+  topoLinha: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  topoTextos: { flex: 1 },
+  topoData: { fontSize: 12.5, color: '#776C73' },
+  nomeLia: { fontFamily: FonteDaLia, fontSize: 28, lineHeight: 34 },
+  topoScore: { marginTop: 2 },
+  topoScoreNumero: { fontSize: 24, fontWeight: '800' },
+  topoScoreResto: { fontSize: 14, color: '#776C73' },
+
+  // Fala da Lia e respostas rápidas
+  falaLinha: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginHorizontal: 20, marginTop: 18 },
+  falaBalao: { flex: 1, backgroundColor: '#FBF2F5', borderRadius: 18, borderTopLeftRadius: 4, paddingVertical: 11, paddingHorizontal: 14 },
+  falaTexto: { fontSize: 14, lineHeight: 20, color: '#4A3540' },
+  respostas: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginLeft: 64, marginRight: 20, marginTop: 10 },
+  resposta: { backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: TEMA.curva, paddingVertical: 7, paddingHorizontal: 12 },
+  respostaTexto: { fontSize: 13, fontWeight: '600' },
+
+  // Seções leves: só título e conteúdo, sem caixa nem divisória
+  secaoLeve: { marginHorizontal: 20, marginTop: 20 },
+  secaoTituloLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  secaoTitulo: { fontSize: 12, letterSpacing: 0.7, textTransform: 'uppercase', fontWeight: '700', color: '#8A8590', marginBottom: 4 },
+  secaoLink: { fontSize: 13, fontWeight: '600' },
+  modoLinha: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7 },
+  modoIcone: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  modoTituloLinha: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  modoTitulo: { fontSize: 15, color: Brand.ink },
+  modoDetalhe: { fontSize: 12, color: '#8A8590', marginTop: 1 },
+  regiaoTexto: { fontSize: 14, color: Brand.ink, marginTop: 2 },
+  regiaoBarra: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'visible', marginTop: 12 },
+  regiaoFaixa: { flex: 1, height: 8 },
+  regiaoMarcador: { position: 'absolute', top: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFF', borderWidth: 3 },
+  regiaoLegenda: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  regiaoLegendaTexto: { fontSize: 11, color: '#8A8590' },
+  redeLinha: { flexDirection: 'row', gap: 16, marginTop: 6 },
+  redePessoa: { alignItems: 'center', width: 52 },
+  redeInicial: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  redeInicialTexto: { fontSize: 16, fontWeight: '700' },
+  redeNome: { fontSize: 12, color: '#8A8590', marginTop: 4 },
   scrollContent: { paddingBottom: 130 },
 
   headerContainer: { paddingTop: 52, paddingHorizontal: 22, paddingBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerLogo: { width: 42, height: 36 },
-  header: { fontSize: 29, color: Brand.rose, fontWeight: '700' },
+  header: { fontSize: 29, color: TEMA.forte, fontWeight: '700' },
 
   topModesRow: { minHeight: 70, marginHorizontal: 22, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: Brand.line },
   topModeCell: { flex: 1, minWidth: 0, paddingVertical: 7, paddingHorizontal: 4 },
@@ -1564,8 +1742,8 @@ const styles = StyleSheet.create({
   riskContent: { flex: 1, minWidth: 0, justifyContent: 'center', gap: 1 },
   riskRow: { minHeight: 48, flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'baseline' },
   riskSummary: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
-  riskLabel: { fontSize: 13, color: Brand.rose, fontWeight: '700', textTransform: 'uppercase' },
-  riskBadgeText: { color: Brand.rose, fontWeight: '700', fontSize: 14 },
+  riskLabel: { fontSize: 13, color: TEMA.forte, fontWeight: '700', textTransform: 'uppercase' },
+  riskBadgeText: { color: TEMA.forte, fontWeight: '700', fontSize: 14 },
   riskCompactRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center' },
   gaugeScoreBig: { fontSize: 52, fontWeight: '800', lineHeight: 56 },
   gaugeScoreMax: { fontSize: 18, fontWeight: '500', color: Brand.muted },
@@ -1585,7 +1763,7 @@ const styles = StyleSheet.create({
   heartRatePanel: { minHeight: 132, marginHorizontal: 22, marginTop: 2, paddingVertical: 12, paddingHorizontal: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: Brand.line },
   heartRateLabel: { marginTop: 6, color: Brand.muted, fontSize: 11, fontWeight: '700' },
   heartRateValueRow: { minHeight: 58, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
-  heartRateValue: { color: Brand.rose, fontSize: 46, lineHeight: 56, fontWeight: '800' },
+  heartRateValue: { color: TEMA.forte, fontSize: 46, lineHeight: 56, fontWeight: '800' },
   heartRateValueUnavailable: { color: Brand.muted },
   heartRateUnit: { marginLeft: 6, color: Brand.muted, fontSize: 18, fontWeight: '600' },
   heartRateDetail: { minHeight: 18, color: Brand.green, fontSize: 12, fontWeight: '600', textAlign: 'center' },
@@ -1618,19 +1796,19 @@ const styles = StyleSheet.create({
   watchAlertClose: { width: 42, height: 42, borderRadius: 21, backgroundColor: Brand.surfaceRose, alignItems: 'center', justifyContent: 'center' },
   watchAlertContent: { flex: 1, justifyContent: 'center', alignItems: 'center', maxWidth: 460, width: '100%', alignSelf: 'center' },
   watchAlertIcon: { width: 76, height: 76, borderRadius: 38, backgroundColor: Brand.surfaceRose, alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
-  watchAlertEyebrow: { color: Brand.rose, fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
+  watchAlertEyebrow: { color: TEMA.forte, fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
   watchAlertTitle: { color: Brand.ink, fontSize: 26, lineHeight: 32, fontWeight: '800', textAlign: 'center' },
   watchAlertBody: { color: Brand.muted, fontSize: 16, lineHeight: 23, textAlign: 'center', marginTop: 14 },
   watchAlertSteps: { width: '100%', marginTop: 28, padding: 18, backgroundColor: Brand.surface, borderRadius: 20, borderWidth: 1, borderColor: Brand.line, gap: 10 },
   watchAlertStepsTitle: { color: Brand.ink, fontSize: 15, fontWeight: '700', marginBottom: 2 },
   watchAlertStep: { color: Brand.muted, fontSize: 14, lineHeight: 20 },
-  watchAlertButton: { width: '100%', minHeight: 54, marginTop: 24, backgroundColor: Brand.rose, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  watchAlertButton: { width: '100%', minHeight: 54, marginTop: 24, backgroundColor: TEMA.forte, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   watchAlertButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 
   separator: { height: 1, backgroundColor: Brand.line, marginHorizontal: 22 },
 
 
-  carregandoLinha: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  carregandoLinha: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 8 },
   carregandoTexto: { color: Brand.muted, fontSize: 13, fontWeight: '600' },
 
 
@@ -1638,7 +1816,7 @@ const styles = StyleSheet.create({
   forceValue: { fontSize: 22, fontWeight: '700' },
   forceLabel: { fontSize: 13, color: '#AAA', flex: 1 },
   forcePill: { backgroundColor: Brand.surfaceRose, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
-  forcePillText: { color: Brand.rose, fontSize: 11, fontWeight: '700' },
+  forcePillText: { color: TEMA.forte, fontSize: 11, fontWeight: '700' },
   watchMotionRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 22, paddingVertical: 8 },
   watchMotionValue: { minWidth: 82, color: Brand.blue, fontSize: 14, fontWeight: '700' },
   watchMotionTexts: { flex: 1 },
@@ -1653,51 +1831,51 @@ const styles = StyleSheet.create({
   fabHoldHint: { color: '#FFF1F4', fontSize: 10, fontWeight: '600', marginTop: 2 },
   fabText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
 
-  overlayCentered: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  cardModal: { backgroundColor: '#FFF', borderRadius: 28, overflow: 'hidden', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12 },
-  modalStrip: { height: 6, backgroundColor: Brand.rose, width: '100%' },
+  overlayCentered: { flex: 1, backgroundColor: 'rgba(42,29,35,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  cardModal: { backgroundColor: '#FFF', borderRadius: 30, overflow: 'hidden', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 12 },
+  modalStrip: { height: 12, backgroundColor: TEMA.forte, width: '100%' },
   modalInner: { padding: 25 },
-  cardTitle: { fontSize: 22, fontWeight: '700', color: Brand.blue, marginBottom: 5, textAlign: 'center' },
-  cardTitleCritical: { fontSize: 22, fontWeight: '700', color: Brand.rose, marginBottom: 5, textAlign: 'center' },
-  cardSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10, lineHeight: 20 },
+  cardTitle: { fontSize: 22, fontWeight: '800', color: TEMA.forte, marginBottom: 5, textAlign: 'center' },
+  cardTitleCritical: { fontSize: 22, fontWeight: '800', color: TEMA.forte, marginBottom: 5, textAlign: 'center' },
+  cardSubtitle: { fontSize: 14, color: '#776C73', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10, lineHeight: 20 },
 
-  btnPrimary: { backgroundColor: Brand.blue, paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
+  btnPrimary: { backgroundColor: TEMA.forte, paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
   btnPrimaryText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
-  btnCancelText: { textAlign: 'center', color: Brand.rose, marginTop: 15, fontWeight: '600', fontSize: 15 },
-  btnHelpGuide: { marginTop: 12, paddingVertical: 14, borderRadius: 30, alignItems: 'center', backgroundColor: Brand.canvas },
-  btnHelpGuideText: { color: Brand.blue, fontWeight: '700', fontSize: 14 },
-  btnSafe: { backgroundColor: '#4CAF50', paddingVertical: 15, width: '100%', borderRadius: 30, alignItems: 'center' },
+  btnCancelText: { textAlign: 'center', color: TEMA.forte, marginTop: 15, fontWeight: '600', fontSize: 15 },
+  btnHelpGuide: { marginTop: 10, paddingVertical: 14, borderRadius: 30, alignItems: 'center', backgroundColor: TEMA.fundo },
+  btnHelpGuideText: { color: TEMA.forte, fontWeight: '700', fontSize: 14 },
+  btnSafe: { backgroundColor: Brand.green, paddingVertical: 15, width: '100%', borderRadius: 30, alignItems: 'center' },
   btnSafeText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
 
-  feedbackBox: { backgroundColor: Brand.canvas, padding: 15, borderRadius: 15, marginBottom: 25, borderWidth: 1, borderColor: Brand.line },
-  feedbackLabel: { fontSize: 12, fontWeight: 'bold', color: '#5A8FAF', marginBottom: 5 },
-  feedbackAddressText: { fontSize: 16, color: Brand.rose, fontWeight: 'bold', marginBottom: 5 },
+  feedbackBox: { backgroundColor: TEMA.fundo, padding: 16, borderRadius: 22, marginBottom: 20 },
+  feedbackLabel: { fontSize: 12, fontWeight: 'bold', color: TEMA.forte, marginBottom: 5 },
+  feedbackAddressText: { fontSize: 15, color: Brand.ink, fontWeight: 'bold', marginBottom: 5 },
   feedbackText: { fontSize: 14, color: '#333', fontStyle: 'italic' },
   sosFailDetail: { fontSize: 11, color: '#999', textAlign: 'center', marginTop: -12, marginBottom: 16 },
-  feedbackContact: { fontSize: 15, color: Brand.blue, fontWeight: '600', marginTop: 3 },
+  feedbackContact: { fontSize: 15, color: TEMA.forte, fontWeight: '600', marginTop: 3 },
 
-  overlayBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  cardModalBottom: { backgroundColor: '#FFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '90%', overflow: 'hidden', elevation: 20 },
+  overlayBottom: { flex: 1, backgroundColor: 'rgba(42,29,35,0.5)', justifyContent: 'flex-end' },
+  cardModalBottom: { backgroundColor: '#FFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: '90%', overflow: 'hidden', elevation: 20 },
   modalHandle: { width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 16 },
-  btnOrange: { backgroundColor: '#E8622A', paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
+  btnOrange: { backgroundColor: TEMA.forte, paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%' },
 
   occScrollContent: { flexGrow: 1, padding: 22, paddingTop: 0 },
-  occLabel: { color: Brand.blue, fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
+  occLabel: { color: TEMA.forte, fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
   inputRow: { flexDirection: 'row', gap: 10 },
-  inputFlex: { flex: 1, borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9' },
-  input: { borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 14, padding: 14, fontSize: 15, backgroundColor: '#F9F9F9', marginTop: 5 },
-  gpsBtn: { backgroundColor: Brand.canvas, width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#D8D0CC' },
+  inputFlex: { flex: 1, borderRadius: 18, padding: 14, fontSize: 15, backgroundColor: '#FAF6F7' },
+  input: { borderRadius: 18, padding: 14, fontSize: 15, backgroundColor: '#FAF6F7', marginTop: 5 },
+  gpsBtn: { backgroundColor: TEMA.fundo, width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 18 },
   typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 5 },
-  typeButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#D8D0CC', backgroundColor: '#FFF' },
-  typeSelected: { backgroundColor: Brand.blue, borderColor: Brand.blue },
+  typeButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20, backgroundColor: '#F3EFF1' },
+  typeSelected: { backgroundColor: TEMA.forte },
   typeText: { color: '#555', fontSize: 13, fontWeight: '500' },
   typeTextSelected: { color: '#FFF', fontWeight: 'bold' },
   suggestionsBox: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#D8D0CC', borderRadius: 12, marginTop: 5, maxHeight: 150 },
   suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: Brand.line },
   suggestionText: { fontSize: 13, color: '#333' },
 
-  timerCircle: { width: 90, height: 90, borderRadius: 45, borderWidth: 4, borderColor: Brand.rose, justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
-  timerCountText: { fontSize: 32, fontWeight: 'bold', color: Brand.rose },
+  timerCircle: { width: 96, height: 96, borderRadius: 48, borderWidth: 5, borderColor: TEMA.forte, justifyContent: 'center', alignItems: 'center', marginVertical: 10 },
+  timerCountText: { fontSize: 32, fontWeight: 'bold', color: TEMA.forte },
   timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' },
   alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
 

@@ -8,7 +8,10 @@ import { Ionicons } from '@expo/vector-icons'
 import { ActivityIndicator } from 'react-native'
 import { supabase } from '../services/supabase'
 import { entrarComProvedor } from '../services/authService'
-import { Brand } from '../constants/brandTheme'
+import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+const TEMA = TemaDaAba['Proteção']
 import RegisterScreen from './RegisterScreen'
 
 export default function LoginScreen({ onLogin }) {
@@ -51,14 +54,15 @@ export default function LoginScreen({ onLogin }) {
           bounces={false}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brandArea}>
+          <HeaderComCurvas aba="Proteção" semMarca style={styles.hero}>
             <Image
               source={require('../assets/images/maos-ampara-azul.png')}
               style={styles.logo}
               resizeMode="contain"
             />
             <Text style={styles.brand}>Ampara</Text>
-          </View>
+            <Text style={styles.lema}>Você não está sozinha.</Text>
+          </HeaderComCurvas>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Entrar</Text>
@@ -102,9 +106,9 @@ export default function LoginScreen({ onLogin }) {
               disabled={provedorCarregando !== null}
             >
               {provedorCarregando === 'google'
-                ? <ActivityIndicator size="small" color={Brand.rose} />
+                ? <ActivityIndicator size="small" color={TEMA.forte} />
                 : <>
-                    <Ionicons name="logo-google" size={18} color={Brand.rose} />
+                    <Ionicons name="logo-google" size={18} color={TEMA.forte} />
                     <Text style={styles.provedorTextoGoogle}>Google</Text>
                   </>}
             </TouchableOpacity>
@@ -129,11 +133,7 @@ const styles = StyleSheet.create({
   kav: { flex: 1 },
   scroll: { flexGrow: 1 },
 
-  brandArea: {
-    alignItems: 'center',
-    paddingTop: 54,
-    paddingBottom: 34,
-  },
+  hero: { alignItems: 'center', paddingTop: 70, paddingBottom: 34, borderBottomLeftRadius: 40, borderBottomRightRadius: 40, marginBottom: 26 },
   logo: {
     width: 66,
     height: 66,
@@ -141,9 +141,10 @@ const styles = StyleSheet.create({
   },
   brand: {
     fontSize: 36,
-    fontWeight: '700',
-    color: Brand.rose,
+    fontWeight: '800',
+    color: '#273963',
   },
+  lema: { fontFamily: FonteDaLia, fontSize: 18, color: TEMA.forte, marginTop: 4 },
 
   card: {
     marginHorizontal: 24,
@@ -158,38 +159,37 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   input: {
-    borderBottomWidth: 1,
-    borderColor: '#D8C5CC',
-    borderRadius: 0,
+    backgroundColor: '#F7F4F5',
+    borderRadius: 22,
     paddingVertical: 14,
-    paddingHorizontal: 2,
+    paddingHorizontal: 18,
     fontSize: 15,
     marginBottom: 12,
     color: Brand.ink,
   },
   button: {
-    backgroundColor: Brand.rose,
+    backgroundColor: TEMA.forte,
     paddingVertical: 15,
-    borderRadius: 8,
+    borderRadius: 26,
     alignItems: 'center',
     marginTop: 6,
     marginBottom: 20,
   },
   buttonText: {
     color: '#FFF',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 16,
   },
-  divisorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  divisorLinha: { flex: 1, height: 1, backgroundColor: Brand.line },
+  divisorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  divisorLinha: { display: 'none' },
   divisorTexto: { color: '#999', fontSize: 12 },
-  provedorBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 48, borderRadius: 8, marginBottom: 10 },
-  provedorGoogle: { backgroundColor: 'transparent', borderBottomWidth: 1, borderColor: Brand.line },
+  provedorBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 50, borderRadius: 26, marginBottom: 10 },
+  provedorGoogle: { backgroundColor: TEMA.fundo },
   provedorTextoGoogle: { color: Brand.ink, fontWeight: '600', fontSize: 15 },
 
   registerRow: { alignItems: 'center', marginTop: 10 },
   registerText: { color: '#999', fontSize: 13, textAlign: 'center' },
-  registerLink: { color: Brand.rose, fontWeight: '600' },
+  registerLink: { color: TEMA.forte, fontWeight: '600' },
 
   navyFill: { flex: 1, minHeight: 60 },
 })

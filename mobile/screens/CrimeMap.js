@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Keyboard,
-  ActivityIndicator, Platform, Image,
+  ActivityIndicator, Platform,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
@@ -10,7 +10,11 @@ import { buscarMapaCalor, buscarPeriodoCrimes } from '../services/crimesService'
 import { useAddressSearch } from '../hooks/useAddressSearch'
 import { camadasDifusas, CORES_LEGENDA, DENSIDADE_VERMELHO } from '../utils/mapaCalor'
 import { distanceKm } from '../utils/geo'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+import ApoioPorPerto from '../components/ApoioPorPerto'
+
+const TEMA = TemaDaAba.Mapa
 
 // Aba do mapa de ocorrências. Mostra o calor dos crimes e deixa a usuária procurar um
 // endereço para ver como está a região antes de ir até lá.
@@ -57,6 +61,16 @@ const FILTROS_CRIME = [
 //   não onde a usuária corre mais risco.
 const GRUPOS_NO_MAPA = ['roubo', 'furto', 'violencia']
 
+// Pinos do "Apoio por perto".
+const lugaresGeoJSON = (lugares) => ({
+  type: 'FeatureCollection',
+  features: lugares.map((l, i) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [l.longitude, l.latitude] },
+    properties: { numero: String(i + 1) },
+  })),
+})
+
 const pontoGeoJSON = (ponto) => ({
   type: 'FeatureCollection',
   features: ponto ? [{
@@ -79,6 +93,7 @@ const moverCamera = (camera, latitude, longitude) => {
 
 export default function CrimeMap({ route }) {
   const [minhaPosicao, setMinhaPosicao] = useState(null)
+  const [lugaresDeApoio, setLugaresDeApoio] = useState([])
   const [erroLocalizacao, setErroLocalizacao] = useState(null)
   // Prioriza resultados perto dela; sem posição, o centro de SP.
   const { busca, sugestoes, procurar, limpar: resetarBusca } = useAddressSearch(minhaPosicao)
@@ -291,14 +306,11 @@ export default function CrimeMap({ route }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.topo}>
-        <View style={styles.tituloLinha}>
-          <Image source={require('../assets/images/maos-ampara-azul.png')} style={styles.logo} resizeMode="contain" />
-          <Text style={styles.titulo}>Mapa de ocorrências</Text>
-        </View>
+      <HeaderComCurvas aba="Mapa" style={styles.topo}>
+        <Text style={styles.titulo}>Mapa de ocorrências</Text>
 
         <View style={styles.buscaCaixa}>
-          <Ionicons name="search" size={18} color={Brand.muted} />
+          <Ionicons name="search" size={18} color={TEMA.forte} />
           <TextInput
             style={styles.buscaInput}
             value={busca}
@@ -334,13 +346,13 @@ export default function CrimeMap({ route }) {
         <Text style={styles.periodoTexto}>
           Últimos 6 meses{periodoCrimes ? ` (${periodoCrimes})` : ''} · SSP-SP
         </Text>
-      </View>
+      </HeaderComCurvas>
 
       <View style={styles.mapaArea}>
         {!centroInicial ? (
           <View style={styles.localizando}>
             <View style={styles.carregando} accessibilityLiveRegion="polite">
-              <ActivityIndicator size="small" color={Brand.rose} />
+              <ActivityIndicator size="small" color={TEMA.forte} />
               <Text style={styles.carregandoTexto}>Calculando mapa de calor…</Text>
             </View>
           </View>
@@ -385,6 +397,13 @@ export default function CrimeMap({ route }) {
                 }}
               />
             </MapLibreGeoJSONSource>
+            <MapLibreGeoJSONSource id="ampara-apoio" data={lugaresGeoJSON(lugaresDeApoio)}>
+              <MapLibreLayer
+                id="ampara-apoio-layer"
+                type="circle"
+                paint={{ 'circle-radius': 11, 'circle-color': TEMA.forte, 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 3 }}
+              />
+            </MapLibreGeoJSONSource>
             <MapLibreGeoJSONSource id="ampara-minha-posicao" data={pontoGeoJSON(minhaPosicao)}>
               <MapLibreLayer
                 id="ampara-minha-posicao-layer"
@@ -418,6 +437,9 @@ export default function CrimeMap({ route }) {
             {pontoBuscado && (
               <Marker coordinate={pontoBuscado} pinColor={Brand.rose} title={pontoBuscado.nome} />
             )}
+            {lugaresDeApoio.map((l) => (
+              <Marker key={`${l.nome}${l.distanciaKm}`} coordinate={{ latitude: l.latitude, longitude: l.longitude }} pinColor={TEMA.forte} title={l.nome} />
+            ))}
           </MapView>
         )}
 
@@ -463,7 +485,7 @@ export default function CrimeMap({ route }) {
         {(calorCarregando || mapaArrastando || desenhandoCalor) && centroInicial && (
           <View style={styles.carregandoCamada} pointerEvents="none">
             <View style={styles.carregando} accessibilityLiveRegion="polite">
-              <ActivityIndicator size="small" color={Brand.rose} />
+              <ActivityIndicator size="small" color={TEMA.forte} />
               <Text style={styles.carregandoTexto}>Calculando mapa de calor…</Text>
             </View>
           </View>
@@ -476,10 +498,19 @@ export default function CrimeMap({ route }) {
           </TouchableOpacity>
         )}
 
+        {centroInicial && (
+          <ApoioPorPerto
+            centro={pontoBuscado ?? minhaPosicao ?? centroInicial}
+            onLugares={(lista) => setLugaresDeApoio(lista.filter((l) => Number.isFinite(l.latitude) && Number.isFinite(l.longitude)))}
+            // Lugares vindos do caminho antigo não têm coordenada: aí o toque só não move o mapa.
+            onEscolher={(l) => { if (Number.isFinite(l.latitude) && Number.isFinite(l.longitude)) moverCamera(cameraRef.current, l.latitude, l.longitude) }}
+          />
+        )}
+
         {/* Sem localização, o mapa abre no centro de SP; este aviso diz por quê. */}
         {erroLocalizacao && (
           <View style={styles.aviso}>
-            <Ionicons name="information-circle-outline" size={18} color={Brand.blue} />
+            <Ionicons name="information-circle-outline" size={18} color={TEMA.forte} />
             <Text style={styles.avisoTexto}>{erroLocalizacao}</Text>
           </View>
         )}
@@ -489,32 +520,30 @@ export default function CrimeMap({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Brand.canvas },
-  topo: { paddingTop: 52, paddingHorizontal: 20, paddingBottom: 10, gap: 10 },
-  tituloLinha: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  logo: { width: 34, height: 30 },
-  titulo: { fontSize: 22, color: Brand.rose, fontWeight: '700' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  topo: { paddingBottom: 14 },
+  titulo: { fontSize: 22, color: TEMA.forte, fontWeight: '800', marginBottom: 10 },
 
-  buscaCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: Brand.line, borderRadius: 14, paddingHorizontal: 12, height: 46, backgroundColor: Brand.surface },
+  buscaCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 23, paddingHorizontal: 16, height: 46, backgroundColor: '#FFFFFF', marginBottom: 10 },
   buscaInput: { flex: 1, fontSize: 15, color: Brand.ink },
 
   filtroRow: { gap: 8, paddingRight: 20 },
-  filtroChip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: Brand.line, backgroundColor: '#FFF' },
-  filtroChipAtivo: { backgroundColor: Brand.blue, borderColor: Brand.blue },
-  filtroTexto: { fontSize: 13, color: Brand.blue, fontWeight: '600' },
+  filtroChip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20, backgroundColor: '#FFF' },
+  filtroChipAtivo: { backgroundColor: TEMA.forte },
+  filtroTexto: { fontSize: 13, color: TEMA.forte, fontWeight: '600' },
   filtroTextoAtivo: { color: '#FFF' },
-  periodoTexto: { color: Brand.muted, fontSize: 12 },
+  periodoTexto: { color: '#776C73', fontSize: 12, marginTop: 8 },
 
-  mapaArea: { flex: 1, marginHorizontal: 12, marginBottom: 6, borderRadius: 22, overflow: 'hidden' },
+  mapaArea: { flex: 1, marginHorizontal: 12, marginTop: 10, marginBottom: 8, borderRadius: 28, overflow: 'hidden' },
   mapa: { flex: 1 },
-  localizando: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Brand.blueSoft },
+  localizando: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: TEMA.fundo },
 
-  sugestoes: { position: 'absolute', top: 8, left: 8, right: 8, backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 4, elevation: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, zIndex: 10 },
+  sugestoes: { position: 'absolute', top: 8, left: 8, right: 8, backgroundColor: '#FFF', borderRadius: 20, paddingVertical: 4, elevation: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, zIndex: 10 },
   sugestao: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 14 },
   sugestaoNome: { fontSize: 14, color: Brand.ink, fontWeight: '600' },
   sugestaoTexto: { fontSize: 12, color: Brand.muted, marginTop: 1 },
 
-  legenda: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
+  legenda: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 18, paddingVertical: 8, paddingHorizontal: 12, gap: 6 },
   legendaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendaPonto: { width: 10, height: 10, borderRadius: 5 },
   legendaTexto: { fontSize: 11, color: Brand.ink, fontWeight: '600' },
@@ -527,10 +556,10 @@ const styles = StyleSheet.create({
   carregando: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.96)', borderRadius: 20, paddingVertical: 11, paddingHorizontal: 16, elevation: 4, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
   carregandoTexto: { color: Brand.ink, fontSize: 13, fontWeight: '600' },
 
-  botaoVoltar: { position: 'absolute', right: 12, bottom: 16, backgroundColor: Brand.blue, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20 },
+  botaoVoltar: { position: 'absolute', right: 12, bottom: 112, backgroundColor: TEMA.forte, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20 },
   botaoVoltarTexto: { color: '#FFF', fontWeight: '600', fontSize: 13 },
 
-  aviso: { position: 'absolute', left: 10, right: 10, bottom: 64, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 14, padding: 12, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  aviso: { position: 'absolute', left: 10, right: 10, bottom: 160, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 20, padding: 12, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
   avisoTexto: { flex: 1, color: Brand.ink, fontSize: 13, lineHeight: 18 },
 
 })

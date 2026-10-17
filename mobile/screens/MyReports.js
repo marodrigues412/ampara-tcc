@@ -3,15 +3,17 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   FlatList,
   ActivityIndicator,
   Alert
 } from 'react-native'
-import { Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+// Cores da seção de onde a tela é aberta.
+const TEMA = TemaDaAba.Perfil
 
 export default function MyReports({ navigation }) {
   const [reports, setReports] = useState([])
@@ -103,23 +105,20 @@ export default function MyReports({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Brand.blue} />
+        <ActivityIndicator size="large" color={TEMA.forte} />
       </View>
     )
   }
 
   return (
     <View style={styles.container}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={20} color={Brand.blue} />
-          <Text style={styles.backText}>Voltar</Text>
-        </TouchableOpacity>
-        <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
-      </View>
-
-      <Text style={styles.title}>Meus Registros</Text>
-      <Text style={styles.subtitle}>Suas contribuições para a comunidade Ampara</Text>
+      <HeaderComCurvas
+        aba="Perfil"
+        onVoltar={() => navigation.goBack()}
+        titulo="Meus registros"
+        subtitulo="Suas contribuições para a comunidade Ampara"
+        style={styles.header}
+      />
 
       <FlatList
         data={reports}
@@ -139,9 +138,11 @@ export default function MyReports({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // O header vai de ponta a ponta: as margens negativas desfazem o padding da tela.
+  header: { marginHorizontal: -20, marginTop: -20, marginBottom: 12 },
   container: {
     flex: 1,
-    backgroundColor: Brand.canvas,
+    backgroundColor: '#FFFFFF',
     padding: 20
   },
   backButton: {
@@ -153,35 +154,28 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 16,
-    color: Brand.blue,
+    color: TEMA.forte,
     fontWeight: '600'
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: Brand.blue,
+    color: TEMA.forte,
     marginTop: 10,
   },
   subtitle: {
     fontSize: 16,
-    color: '#5A8FAF',
+    color: TEMA.forte,
     marginBottom: 20
   },
   listContent: {
     paddingBottom: 40
   },
   reportCard: {
-    backgroundColor: Brand.surfaceRose,
-    padding: 18,
-    borderRadius: 20,
-    marginBottom: 12,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5
   },
   reportInfo: {
     flex: 1,
@@ -190,7 +184,7 @@ const styles = StyleSheet.create({
   reportType: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Brand.rose
+    color: TEMA.forte
   },
   reportLocal: {
     fontSize: 14,
@@ -220,7 +214,7 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     fontSize: 11,
-    color: '#5A8FAF',
+    color: TEMA.forte,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4

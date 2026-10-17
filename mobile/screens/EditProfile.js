@@ -6,12 +6,14 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  ScrollView,
-  Image
+  ScrollView
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+// Cores da seção de onde a tela é aberta.
+const TEMA = TemaDaAba.Perfil
 
 export default function EditProfile({ navigation }) {
   const [user, setUser] = useState(null)
@@ -72,15 +74,12 @@ export default function EditProfile({ navigation }) {
       style={styles.container}
       contentContainerStyle={styles.content}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="chevron-back" size={20} color={Brand.blue} />
-          <Text style={{ fontSize: 16, color: Brand.blue, fontWeight: '600' }}>Voltar</Text>
-        </TouchableOpacity>
-        <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
-      </View>
-
-      <Text style={styles.title}>Editar Perfil</Text>
+      <HeaderComCurvas
+        aba="Perfil"
+        onVoltar={() => navigation.goBack()}
+        titulo="Editar perfil"
+        style={styles.header}
+      />
 
       <View style={styles.card}>
         <Text style={styles.label}>Nome</Text>
@@ -126,8 +125,10 @@ export default function EditProfile({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Brand.canvas
+    backgroundColor: '#FFFFFF'
   },
+
+  header: { marginHorizontal: -20, marginTop: -60, marginBottom: 20 },
 
   content: {
     padding: 20,
@@ -137,23 +138,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: Brand.blue,
+    color: TEMA.forte,
     marginBottom: 20
   },
 
+  // Formulário solto na tela, sem caixa em volta.
   card: {
-    backgroundColor: '#FFF',
-    padding: 20,
-    borderRadius: 20,
-    elevation: 2,
-    shadowColor: Brand.blue,
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
+    paddingVertical: 4,
   },
 
   label: {
-    color: '#5A8FAF',
+    color: TEMA.forte,
     fontWeight: '600',
     fontSize: 12,
     textTransform: 'uppercase',
@@ -162,14 +157,12 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    borderWidth: 1,
-    borderColor: '#E8E0DA',
-    borderRadius: 12,
+    backgroundColor: '#F7F4F5',
+    borderRadius: 18,
     padding: 12,
     marginBottom: 15,
     fontSize: 15,
     color: '#222',
-    backgroundColor: '#FAFAFA',
   },
 
   email: {
@@ -179,9 +172,9 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    backgroundColor: Brand.rose,
+    backgroundColor: TEMA.forte,
     padding: 15,
-    borderRadius: 12,
+    borderRadius: 20,
     alignItems: 'center'
   },
 
@@ -196,6 +189,6 @@ const styles = StyleSheet.create({
   },
 
   cancelText: {
-    color: '#5A8FAF'
+    color: TEMA.forte
   }
 })

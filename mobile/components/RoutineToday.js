@@ -1,23 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
 import { listarCompromissos, listarLocaisSeguros } from '../services/routineService'
 import {
-  TIPOS_COMPROMISSO, TRANSPORTES, linhaDoTempo, minutosDoDia, horaDosMinutos, dataLocal,
+  TIPOS_COMPROMISSO, linhaDoTempo, minutosDoDia, horaDosMinutos, dataLocal,
   abrirNoMapa, proximoNosProximosDias,
 } from '../utils/rotina'
 import { DIAS_SEMANA } from '../utils/activitySchedule'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
 
-// Card "Hoje" da tela principal, no formato de widget de agenda: o próximo compromisso em
-// destaque, com a hora de sair, e os demais do dia numa fileira que rola para o lado.
-// Tocar num compromisso abre a aba Mapa no lugar dele.
+// "Seu dia" na tela Proteção: os compromissos de hoje em lista, com o atual ou o próximo
+// em destaque (e a hora de sair). Tocar num compromisso abre a aba Mapa no lugar dele.
 
-const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const iconeDoTipo = (tipo) => TIPOS_COMPROMISSO.find((t) => t.id === tipo)?.icone ?? 'location-outline'
-const transporteDe = (id) => TRANSPORTES.find((t) => t.id === id) ?? TRANSPORTES[2]
 
 // "em 25 min", "em 1 h 10"
 const daquiA = (minutos) => {
@@ -34,7 +31,7 @@ const dataDoTexto = (texto) => {
   return new Date(ano, mes - 1, dia)
 }
 
-export default function RoutineToday({ navigation }) {
+export default function RoutineToday({ navigation, cor = TemaDaAba['Proteção'].forte, fundo = TemaDaAba['Proteção'].fundo }) {
   const [compromissos, setCompromissos] = useState(null)
   const [casa, setCasa] = useState(null)
   // Atualiza a cada minuto para o "em 25 min" e o destaque andarem sozinhos.
@@ -76,188 +73,110 @@ export default function RoutineToday({ navigation }) {
   const doDia = itens.filter((i) => i.tipo === 'compromisso').map((i) => i.compromisso)
   const trajetoPara = (c) => itens.find((i) => i.tipo === 'trajeto' && i.compromisso === c) ?? null
 
-  // Destaque: o compromisso em andamento; senão o próximo de hoje; senão o próximo da semana.
+  // Só o relógio e a rotina cadastrada decidem o estado de cada linha: o app não sabe se
+  // ela de fato foi ao lugar, então nada é marcado como "feito".
   const emAndamento = doDia.find((c) => minutoAgora >= minutosDoDia(c.hora_chegada) && minutoAgora < minutosDoDia(c.hora_saida))
   const proximoHoje = doDia.find((c) => minutosDoDia(c.hora_chegada) > minutoAgora)
-  const destaque = emAndamento ?? proximoHoje ?? futuro?.compromisso ?? null
-  const ehDeOutroDia = !emAndamento && !proximoHoje && Boolean(futuro)
-  const trajeto = emAndamento ? null : ehDeOutroDia ? futuro.trajeto : destaque ? trajetoPara(destaque) : null
-  const aCaminho = !ehDeOutroDia && Boolean(trajeto) && minutoAgora >= trajeto.saida
-  const outrosDeHoje = ehDeOutroDia ? [] : doDia.filter((c) => c !== destaque)
 
-  let etiqueta = null
-  if (emAndamento) etiqueta = 'Agora'
-  else if (ehDeOutroDia) etiqueta = futuro.adiante === 1 ? 'Amanhã' : DIAS_SEMANA[futuro.dia.getDay()].nome
-  else if (aCaminho) etiqueta = 'A caminho'
-  else if (destaque) etiqueta = `Próximo · ${daquiA(minutosDoDia(destaque.hora_chegada) - minutoAgora)}`
-
-  let rodape = null
-  if (emAndamento) rodape = { icone: 'time-outline', texto: `Até ${emAndamento.hora_saida.slice(0, 5)}` }
-  else if (trajeto) {
-    rodape = {
-      icone: transporteDe(trajeto.transporte).icone,
-      texto: aCaminho
-        ? `Chegada prevista às ${horaDosMinutos(trajeto.chegada)}`
-        : `Sair às ${horaDosMinutos(trajeto.saida)} · cerca de ${trajeto.minutos} min`,
+  const detalheDe = (c) => {
+    const horario = `${c.hora_chegada.slice(0, 5)} – ${c.hora_saida.slice(0, 5)}`
+    if (c === emAndamento) return { texto: horario, etiqueta: 'agora' }
+    if (c !== proximoHoje) return { texto: horario, etiqueta: null }
+    const trajeto = trajetoPara(c)
+    if (!trajeto) return { texto: horario, etiqueta: `próximo · ${daquiA(minutosDoDia(c.hora_chegada) - minutoAgora)}` }
+    const aCaminho = minutoAgora >= trajeto.saida
+    return {
+      texto: aCaminho ? `${horario} · chegada prevista ${horaDosMinutos(trajeto.chegada)}` : `${horario} · sair às ${horaDosMinutos(trajeto.saida)}`,
+      etiqueta: aCaminho ? 'a caminho' : 'próximo',
     }
   }
 
   const titulo = (
     <View style={styles.cabecalho}>
-      <View>
-        <Text style={styles.titulo}>Hoje</Text>
-        <Text style={styles.data}>{DIAS_SEMANA[agora.getDay()].nome}, {agora.getDate()} {MESES[agora.getMonth()]}</Text>
-      </View>
+      <Text style={styles.titulo}>Seu dia</Text>
       <TouchableOpacity onPress={() => navigation.navigate('Routine')} hitSlop={8} style={styles.verTudo} accessibilityRole="button">
-        <Text style={styles.verTudoTexto}>Ver rotina</Text>
-        <Ionicons name="chevron-forward" size={16} color={Brand.blue} />
+        <Text style={[styles.verTudoTexto, { color: cor }]}>Ver rotina</Text>
+        <Ionicons name="chevron-forward" size={15} color={cor} />
       </TouchableOpacity>
     </View>
   )
 
   // Ainda carregando: reserva o espaço sem piscar um estado vazio.
-  if (compromissos === null) return <View style={styles.secao}>{titulo}<View style={[styles.destaque, styles.esqueleto]} /></View>
+  if (compromissos === null) return <View style={styles.secao}>{titulo}<View style={styles.esqueleto} /></View>
 
   // Nenhum compromisso cadastrado: convite para montar a rotina.
   if (compromissos.length === 0) {
     return (
       <View style={styles.secao}>
         {titulo}
-        <TouchableOpacity style={styles.convite} onPress={() => navigation.navigate('Routine')} accessibilityRole="button">
-          <View style={styles.iconeRedondo}>
-            <Ionicons name="calendar-outline" size={22} color={Brand.rose} />
+        <TouchableOpacity style={styles.linha} onPress={() => navigation.navigate('Routine')} accessibilityRole="button">
+          <View style={[styles.icone, { backgroundColor: fundo }]}>
+            <Ionicons name="calendar-outline" size={17} color={cor} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.conviteTitulo}>Monte sua rotina</Text>
-            <Text style={styles.conviteTexto}>Cadastre faculdade, trabalho e academia para o Ampara conhecer seus horários de deslocamento.</Text>
+            <Text style={styles.nome}>Monte sua rotina</Text>
+            <Text style={styles.detalhe}>Cadastre faculdade, trabalho e academia para o Ampara conhecer seus horários.</Text>
           </View>
-          <Ionicons name="add-circle" size={28} color={Brand.rose} />
+          <Ionicons name="add" size={22} color={cor} />
         </TouchableOpacity>
       </View>
     )
   }
 
+  const linha = (c, { texto, etiqueta }, apagado, chave) => (
+    // Tocar leva ao mapa do lugar: a pergunta aqui é "como está a região para onde eu vou?".
+    <TouchableOpacity
+      key={chave}
+      style={styles.linha}
+      onPress={() => abrirNoMapa(navigation, c)}
+      accessibilityRole="button"
+      accessibilityLabel={`${c.nome}, ${texto}${etiqueta ? `, ${etiqueta}` : ''}. Ver a região no mapa`}
+    >
+      <View style={[styles.icone, { backgroundColor: etiqueta ? fundo : '#F3EFF1' }]}>
+        <Ionicons name={iconeDoTipo(c.tipo)} size={17} color={etiqueta ? cor : Brand.muted} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.nome, apagado && styles.apagado]} numberOfLines={1}>{c.nome}</Text>
+        <Text style={styles.detalhe} numberOfLines={1}>{texto}</Text>
+      </View>
+      {etiqueta && <Text style={[styles.etiqueta, { color: cor }]}>{etiqueta}</Text>}
+      <Ionicons name="chevron-forward" size={16} color="#C9C2C6" />
+    </TouchableOpacity>
+  )
+
   return (
     <View style={styles.secao}>
       {titulo}
-
-      {ehDeOutroDia && (
-        <View style={styles.statusHoje}>
-          <Ionicons name={doDia.length ? 'checkmark-circle' : 'sunny-outline'} size={16} color={Brand.green} />
-          <Text style={styles.statusHojeTexto}>{doDia.length ? 'Rotina de hoje concluída' : 'Nada na sua rotina hoje'}</Text>
-        </View>
-      )}
-
-      {destaque ? (
-        // Tocar leva ao mapa do lugar: na tela principal, a pergunta é "como está a
-        // região para onde eu vou?". Para editar, "Ver rotina".
-        <TouchableOpacity
-          style={styles.destaque}
-          onPress={() => abrirNoMapa(navigation, destaque)}
-          accessibilityRole="button"
-          accessibilityLabel={`${destaque.nome}, ${destaque.hora_chegada.slice(0, 5)}. Ver a região no mapa`}
-        >
-          <View style={styles.destaqueTopo}>
-            <View style={[styles.etiqueta, emAndamento ? styles.etiquetaAgora : aCaminho ? styles.etiquetaCaminho : null]}>
-              <Text style={[styles.etiquetaTexto, emAndamento && styles.etiquetaTextoAgora]}>{etiqueta}</Text>
-            </View>
-            <View style={styles.verMapa}>
-              <Ionicons name="map-outline" size={14} color={Brand.blue} />
-              <Text style={styles.verMapaTexto}>Ver região</Text>
-            </View>
-          </View>
-          <View style={styles.destaqueCorpo}>
-            <View style={styles.iconeRedondo}>
-              <Ionicons name={iconeDoTipo(destaque.tipo)} size={22} color={Brand.rose} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.destaqueNome} numberOfLines={1}>{destaque.nome}</Text>
-              <Text style={styles.destaqueDetalhe} numberOfLines={1}>
-                {destaque.hora_chegada.slice(0, 5)} – {destaque.hora_saida.slice(0, 5)} · {destaque.local_nome}
-              </Text>
-            </View>
-          </View>
-          {rodape && (
-            <View style={styles.destaqueRodape}>
-              <Ionicons name={rodape.icone} size={15} color={Brand.blue} />
-              <Text style={styles.destaqueRodapeTexto}>{rodape.texto}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.fimDoDia}>
-          <Ionicons name="checkmark-circle-outline" size={20} color={Brand.green} />
-          <Text style={styles.fimDoDiaTexto}>
-            {doDia.length ? 'Rotina de hoje concluída' : 'Nada na sua rotina esta semana'}
-          </Text>
-        </View>
-      )}
-
-      {/* Os outros compromissos de hoje, em ordem. Os que já passaram ficam apagados. */}
-      {outrosDeHoje.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.fileira}>
-          {outrosDeHoje.map((c) => {
-            const passou = minutosDoDia(c.hora_saida) <= minutoAgora
-            return (
-              <TouchableOpacity
-                key={c.id}
-                style={[styles.mini, passou && styles.miniPassou]}
-                onPress={() => abrirNoMapa(navigation, c)}
-                accessibilityLabel={`${c.nome}, ${c.hora_chegada.slice(0, 5)}. Ver a região no mapa`}
-              >
-                <Ionicons name={passou ? 'checkmark' : iconeDoTipo(c.tipo)} size={15} color={passou ? Brand.muted : Brand.rose} />
-                <View>
-                  <Text style={[styles.miniHora, passou && styles.miniTextoPassou]}>{c.hora_chegada.slice(0, 5)}</Text>
-                  <Text style={[styles.miniNome, passou && styles.miniTextoPassou]} numberOfLines={1}>{c.nome}</Text>
-                </View>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
+      {doDia.map((c) => {
+        const passou = minutosDoDia(c.hora_saida) <= minutoAgora
+        return linha(c, detalheDe(c), passou, c.id)
+      })}
+      {/* Com o dia acabado (ou vazio), mostra o próximo compromisso da semana. */}
+      {!emAndamento && !proximoHoje && futuro && (
+        <>
+          {doDia.length === 0 && <Text style={styles.aviso}>Nada na sua rotina hoje.</Text>}
+          {linha(futuro.compromisso, {
+            texto: `${futuro.compromisso.hora_chegada.slice(0, 5)} – ${futuro.compromisso.hora_saida.slice(0, 5)}`,
+            etiqueta: futuro.adiante === 1 ? 'amanhã' : DIAS_SEMANA[futuro.dia.getDay()].nome.toLowerCase(),
+          }, false, 'futuro')}
+        </>
       )}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  secao: { marginHorizontal: 20, marginTop: 18 },
-  cabecalho: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 10 },
-  titulo: { fontSize: 19, fontWeight: '700', color: Brand.ink },
-  data: { fontSize: 13, color: Brand.muted, marginTop: 1 },
+  secao: { marginHorizontal: 20, marginTop: 20 },
+  cabecalho: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  titulo: { fontSize: 12, letterSpacing: 0.7, textTransform: 'uppercase', fontWeight: '700', color: '#8A8590' },
   verTudo: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  verTudoTexto: { color: Brand.blue, fontSize: 14, fontWeight: '600' },
-
-  statusHoje: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  statusHojeTexto: { color: Brand.green, fontSize: 13, fontWeight: '600' },
-
-  destaque: { backgroundColor: Brand.surface, borderRadius: 20, borderWidth: 1, borderColor: Brand.line, padding: 16, gap: 12, shadowColor: '#291D23', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 2 },
-  esqueleto: { height: 128, backgroundColor: Brand.surfaceSoft, borderColor: Brand.surfaceSoft, shadowOpacity: 0, elevation: 0 },
-  destaqueTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  etiqueta: { backgroundColor: Brand.blueSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
-  etiquetaAgora: { backgroundColor: Brand.rose },
-  etiquetaCaminho: { backgroundColor: Brand.amberSoft },
-  etiquetaTexto: { fontSize: 12, fontWeight: '700', color: Brand.blue },
-  etiquetaTextoAgora: { color: '#FFF' },
-  verMapa: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  verMapaTexto: { color: Brand.blue, fontSize: 12, fontWeight: '600' },
-  destaqueCorpo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconeRedondo: { width: 44, height: 44, borderRadius: 22, backgroundColor: Brand.surfaceRose, alignItems: 'center', justifyContent: 'center' },
-  destaqueNome: { fontSize: 18, fontWeight: '700', color: Brand.ink },
-  destaqueDetalhe: { fontSize: 13, color: Brand.muted, marginTop: 2 },
-  destaqueRodape: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: Brand.line, paddingTop: 11 },
-  destaqueRodapeTexto: { color: Brand.blue, fontSize: 13, fontWeight: '600' },
-
-  fimDoDia: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Brand.mint, borderRadius: 16, padding: 14 },
-  fimDoDiaTexto: { color: Brand.green, fontSize: 14, fontWeight: '600' },
-
-  fileira: { gap: 8, paddingTop: 10, paddingRight: 4 },
-  mini: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, borderWidth: 1, borderColor: Brand.line, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: Brand.surface, maxWidth: 170 },
-  miniPassou: { backgroundColor: '#F7F4F5', borderColor: '#F0EAEC' },
-  miniHora: { fontSize: 12, fontWeight: '700', color: Brand.ink, fontVariant: ['tabular-nums'] },
-  miniNome: { fontSize: 12, color: Brand.muted, maxWidth: 120 },
-  miniTextoPassou: { color: '#B9AEB4' },
-
-  convite: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Brand.surfaceSoft, borderRadius: 20, padding: 16 },
-  conviteTitulo: { fontSize: 16, fontWeight: '700', color: Brand.ink },
-  conviteTexto: { fontSize: 13, color: Brand.muted, marginTop: 3, lineHeight: 18 },
+  verTudoTexto: { fontSize: 13, fontWeight: '600' },
+  esqueleto: { height: 96, borderRadius: 16, backgroundColor: '#FAF6F7' },
+  linha: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  icone: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  nome: { fontSize: 15, color: Brand.ink },
+  apagado: { color: '#8A8590' },
+  detalhe: { fontSize: 12, color: '#8A8590', marginTop: 1 },
+  etiqueta: { fontSize: 12, fontWeight: '700' },
+  aviso: { fontSize: 13, color: '#8A8590', paddingVertical: 4 },
 })

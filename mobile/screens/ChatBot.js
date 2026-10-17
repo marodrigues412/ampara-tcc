@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { useFocusEffect } from '@react-navigation/native'
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   FlatList, Keyboard, KeyboardAvoidingView, Platform, ActivityIndicator, Switch, Linking,
@@ -10,7 +11,10 @@ import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
 import { conversarComLia } from '../services/chatService'
 import { montarContextoDaLia, esquecerContextoDaLia } from '../services/contextoDaLia'
-import { Brand } from '../constants/brandTheme'
+import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+const TEMA = TemaDaAba.Assistente
 
 // Aberto ao tocar na Lia do cabeçalho. O modelo é o mesmo configurado em
 // supabase/functions/ampara-chat (google/gemma-3-27b, via ia.maua.br).
@@ -88,7 +92,7 @@ function responder(pergunta) {
   return achada ? achada.texto : RESPOSTA_PADRAO
 }
 
-export default function ChatBot({ navigation }) {
+export default function ChatBot({ navigation, route }) {
   const [mensagens, setMensagens] = useState([MENSAGEM_INICIAL])
   const [texto, setTexto] = useState('')
   const [digitando, setDigitando] = useState(false)
@@ -170,6 +174,20 @@ export default function ChatBot({ navigation }) {
     }
   }
 
+  // Pergunta enviada por outra tela (a resposta rápida "Lugar aberto por perto" da
+  // Proteção). pedidoEm muda a cada toque, para a mesma pergunta poder ir de novo.
+  const pedidoEm = route?.params?.pedidoEm
+  const perguntaPedida = route?.params?.pergunta
+  // O foco volta a cada troca de aba: a ref garante que cada pedido vá uma vez só.
+  const ultimoPedidoRef = useRef(null)
+  useFocusEffect(useCallback(() => {
+    if (!perguntaPedida || !pedidoEm || ultimoPedidoRef.current === pedidoEm) return
+    ultimoPedidoRef.current = pedidoEm
+    enviar(perguntaPedida)
+    // Só um pedido novo deve enviar a pergunta, e não cada volta à aba.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoEm]))
+
   const renderMensagem = ({ item }) => {
     const daUsuaria = item.autor === 'usuaria'
     return (
@@ -197,13 +215,13 @@ export default function ChatBot({ navigation }) {
                   <View style={styles.lugarAcoes}>
                     {!!lugar.mapsUrl && (
                       <TouchableOpacity style={styles.lugarBotao} onPress={() => Linking.openURL(lugar.mapsUrl)} accessibilityRole="button">
-                        <Ionicons name="map-outline" size={14} color={Brand.blue} />
+                        <Ionicons name="map-outline" size={14} color={TEMA.forte} />
                         <Text style={styles.lugarBotaoTexto}>Abrir no mapa</Text>
                       </TouchableOpacity>
                     )}
                     {!!lugar.telefone && (
                       <TouchableOpacity style={styles.lugarBotao} onPress={() => Linking.openURL(`tel:${lugar.telefone.replace(/[^\d+]/g, '')}`)} accessibilityRole="button">
-                        <Ionicons name="call-outline" size={14} color={Brand.blue} />
+                        <Ionicons name="call-outline" size={14} color={TEMA.forte} />
                         <Text style={styles.lugarBotaoTexto}>Ligar</Text>
                       </TouchableOpacity>
                     )}
@@ -220,50 +238,44 @@ export default function ChatBot({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.cabecalho}>
-        {/* A tela vive na barra de abas, mas também pode ser aberta pelo Perfil: a seta
-            de voltar só aparece quando existe para onde voltar. */}
-        {navigation.canGoBack() && (
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.voltar}>
-            <Ionicons name="chevron-back" size={24} color="#FFF" />
+      <HeaderComCurvas
+        aba="Assistente"
+        onVoltar={navigation.canGoBack() && navigation.getState()?.type === 'stack' ? () => navigation.goBack() : undefined}
+        direita={
+          <TouchableOpacity onPress={() => setSobreVisivel(true)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Sobre a inteligência artificial da Lia">
+            <Ionicons name="information-circle-outline" size={22} color={TEMA.forte} />
           </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.cabecalhoLia}
-          onPress={() => setSobreVisivel(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Sobre a inteligência artificial da Lia"
-        >
-          <View style={styles.avatarCabecalho}>
-            <LiaAvatar size={50} reaction={reacaoLia} />
-          </View>
+        }
+      >
+        <View style={styles.cabecalhoLia}>
+          <LiaAvatar size={44} reaction={reacaoLia} showRing={false} showBadge={false} />
           <View style={styles.cabecalhoTextos}>
             <Text style={styles.cabecalhoNome}>Lia</Text>
-            <Text style={styles.cabecalhoStatus}>Assistente virtual do Ampara · IA da Mauá</Text>
+            <Text style={styles.cabecalhoStatus}>Assistente do Ampara · IA da Mauá</Text>
           </View>
-          <Ionicons name="information-circle-outline" size={20} color="#FFF" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Consentimento: sem a chave ligada, nenhum dado da usuária vai para a IA. */}
-      <View style={styles.personalizar}>
-        <Ionicons name={personalizar ? 'location' : 'location-outline'} size={18} color={Brand.blue} />
-        <View style={styles.flex}>
-          <Text style={styles.personalizarTitulo}>Personalizar com meus dados</Text>
-          <Text style={styles.personalizarTexto}>
-            {personalizar ? 'Localização, risco, rotina e histórico vão junto com a pergunta' : 'Ligue para eu considerar onde você está e sua rotina'}
-          </Text>
         </View>
-        <Switch
-          value={personalizar}
-          onValueChange={alternarPersonalizar}
-          trackColor={{ false: '#E6DCE0', true: Brand.blue }}
-          thumbColor="#FFF"
-          accessibilityLabel="Personalizar as respostas da Lia com meus dados"
-        />
-      </View>
+
+        {/* Consentimento: sem a chave ligada, nenhum dado da usuária vai para a IA. */}
+        <View style={styles.personalizar}>
+          <Ionicons name={personalizar ? 'location' : 'location-outline'} size={18} color={TEMA.forte} />
+          <View style={styles.flex}>
+            <Text style={styles.personalizarTitulo}>Personalizar com meus dados</Text>
+            <Text style={styles.personalizarTexto}>
+              {personalizar ? 'Localização, risco, rotina e histórico vão junto com a pergunta' : 'Ligue para eu considerar onde você está e sua rotina'}
+            </Text>
+          </View>
+          <Switch
+            value={personalizar}
+            onValueChange={alternarPersonalizar}
+            trackColor={{ false: '#E6DCE0', true: TEMA.forte }}
+            thumbColor="#FFF"
+            accessibilityLabel="Personalizar as respostas da Lia com meus dados"
+          />
+        </View>
+      </HeaderComCurvas>
 
       <LiaHelpModal
+        aba="Assistente"
         visible={sobreVisivel}
         title="Sobre a IA da Lia"
         message={SOBRE_A_IA}
@@ -293,7 +305,7 @@ export default function ChatBot({ navigation }) {
                   <LiaAvatar size={34} reaction="pensando" showRing={false} showBadge={false} />
                 </View>
                 <View style={[styles.balao, styles.balaoBot, styles.balaoDigitando]}>
-                  <ActivityIndicator size="small" color="#5A8FAF" />
+                  <ActivityIndicator size="small" color={TEMA.forte} />
                   <Text style={styles.textoDigitando}>digitando...</Text>
                 </View>
               </View>
@@ -317,7 +329,7 @@ export default function ChatBot({ navigation }) {
           <TextInput
             style={styles.campo}
             placeholder="Escreva sua dúvida..."
-            placeholderTextColor="#A0B8C8"
+            placeholderTextColor="#A69CB5"
             value={texto}
             onChangeText={setTexto}
             onSubmitEditing={() => enviar()}
@@ -331,7 +343,7 @@ export default function ChatBot({ navigation }) {
               style={styles.botaoTeclado}
               onPress={() => Keyboard.dismiss()}
             >
-              <Ionicons name="chevron-down" size={22} color="#5A8FAF" />
+              <Ionicons name="chevron-down" size={22} color={TEMA.forte} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -351,91 +363,49 @@ export default function ChatBot({ navigation }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: Brand.canvas },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
 
-  cabecalho: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: Brand.rose,
-    paddingTop: 54,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-  },
-  voltar: { padding: 4 },
-  avatarCabecalho: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cabecalhoLia: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cabecalhoLia: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   cabecalhoTextos: { flex: 1 },
-  cabecalhoNome: { color: '#FFF', fontSize: 19, fontWeight: '700' },
-  cabecalhoStatus: { color: '#F9DEE6', fontSize: 12, marginTop: 1 },
+  cabecalhoNome: { color: TEMA.forte, fontSize: 28, lineHeight: 32, fontFamily: FonteDaLia },
+  cabecalhoStatus: { color: '#776C73', fontSize: 12, marginTop: 1 },
+
+  personalizar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  personalizarTitulo: { fontSize: 13, fontWeight: '700', color: Brand.ink },
+  personalizarTexto: { fontSize: 12, color: '#776C73', marginTop: 1 },
 
   listaConteudo: { padding: 16, gap: 12 },
   linha: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '100%' },
   linhaUsuaria: { justifyContent: 'flex-end' },
-  avatarBot: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Brand.line,
-  },
+  avatarBot: { width: 34, height: 34, borderRadius: 17, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
 
-  balao: { maxWidth: '78%', paddingVertical: 12, paddingHorizontal: 15, borderRadius: 18 },
-  balaoBot: { backgroundColor: Brand.blueSoft, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#DDEAF2' },
-  balaoUsuaria: { backgroundColor: Brand.rose, borderBottomRightRadius: 4 },
+  balao: { maxWidth: '78%', paddingVertical: 12, paddingHorizontal: 15, borderRadius: 20 },
+  balaoBot: { backgroundColor: '#F4F1F8', borderBottomLeftRadius: 4 },
+  balaoUsuaria: { backgroundColor: TEMA.forte, borderBottomRightRadius: 4 },
   balaoDigitando: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
-  textoBalao: { fontSize: 15, color: Brand.ink, lineHeight: 21 },
+  textoBalao: { fontSize: 15, color: '#3A3150', lineHeight: 21 },
   textoBalaoUsuaria: { color: '#FFF' },
-  textoDigitando: { fontSize: 13, color: '#5A8FAF' },
-
-  personalizar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Brand.blueSoft, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#DDEAF2' },
-  personalizarTitulo: { fontSize: 13, fontWeight: '700', color: Brand.ink },
-  personalizarTexto: { fontSize: 12, color: Brand.muted, marginTop: 1 },
+  textoDigitando: { fontSize: 13, color: TEMA.forte },
 
   lugares: { marginTop: 10, gap: 8 },
-  lugar: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#DDEAF2', padding: 10, gap: 2 },
+  lugar: { backgroundColor: TEMA.fundo, borderRadius: 16, padding: 11, gap: 2 },
   lugarNome: { fontSize: 14, fontWeight: '700', color: Brand.ink },
-  lugarDetalhe: { fontSize: 12, color: Brand.muted },
-  lugarAcoes: { flexDirection: 'row', gap: 8, marginTop: 6 },
-  lugarBotao: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: Brand.line, borderRadius: 14, paddingVertical: 5, paddingHorizontal: 10 },
-  lugarBotaoTexto: { fontSize: 12, color: Brand.blue, fontWeight: '600' },
-  lugaresFonte: { fontSize: 10, color: Brand.muted, textAlign: 'right' },
+  lugarDetalhe: { fontSize: 12, color: '#776C73' },
+  lugarAcoes: { flexDirection: 'row', gap: 14, marginTop: 6 },
+  lugarBotao: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3 },
+  lugarBotaoTexto: { fontSize: 12.5, color: TEMA.forte, fontWeight: '700' },
+  lugaresFonte: { fontSize: 10, color: '#8A8590', textAlign: 'right' },
 
   sugestoes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 12 },
-  sugestao: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: Brand.line,
-    borderRadius: 20,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-  },
-  sugestaoTexto: { fontSize: 13, color: '#5A8FAF', fontWeight: '600' },
+  sugestao: { backgroundColor: TEMA.fundo, borderRadius: 20, paddingVertical: 9, paddingHorizontal: 14 },
+  sugestaoTexto: { fontSize: 13, color: TEMA.forte, fontWeight: '600' },
 
-  barraEnvio: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    padding: 12,
-    backgroundColor: '#FFF',
-    borderTopWidth: 1,
-    borderTopColor: Brand.line,
-  },
+  barraEnvio: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 12, backgroundColor: '#FFF' },
   campo: {
     flex: 1,
     maxHeight: 110,
     minHeight: 44,
-    backgroundColor: Brand.surfaceSoft,
+    backgroundColor: '#F4F1F8',
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -443,19 +413,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Brand.ink,
   },
-  botaoEnviar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Brand.rose,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  botaoTeclado: {
-    width: 40,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  botaoEnviarInativo: { backgroundColor: '#D8C4C9' },
+  botaoEnviar: { width: 44, height: 44, borderRadius: 22, backgroundColor: TEMA.forte, alignItems: 'center', justifyContent: 'center' },
+  botaoTeclado: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  botaoEnviarInativo: { backgroundColor: '#CFC6DD' },
 })
