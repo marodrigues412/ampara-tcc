@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react'
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  FlatList, Keyboard, KeyboardAvoidingView, Platform, ActivityIndicator
+  FlatList, Keyboard, KeyboardAvoidingView, Platform, ActivityIndicator, Switch, Linking,
 } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
-import { perguntarAIA } from '../services/chatService'
+import { conversarComLia } from '../services/chatService'
+import { montarContextoDaLia, esquecerContextoDaLia } from '../services/contextoDaLia'
 import { Brand } from '../constants/brandTheme'
 
 // Aberto ao tocar na Lia do cabeçalho. O modelo é o mesmo configurado em
@@ -48,7 +51,20 @@ const BASE_RESPOSTAS = [
 const RESPOSTA_PADRAO =
   'Ainda não sei responder isso. Posso ajudar com: como acionar o SOS, cadastrar contatos de emergência, entender o mapa de risco, locais seguros, dicas de segurança e como denunciar.\n\nEm situação de emergência, ligue 190.'
 
+// O modelo às vezes responde em Markdown (**negrito**, listas com *), e o balão mostra
+// texto puro: sem esta limpeza, os asteriscos apareciam na conversa.
+const semMarkdown = (texto) => texto
+  .replace(/\*\*(.+?)\*\*/g, '$1')
+  .replace(/__(.+?)__/g, '$1')
+  .replace(/^\s*[*-]\s+/gm, '• ')
+  .replace(/^#+\s*/gm, '')
+
+// Guarda a escolha de "Personalizar com meus dados" entre uma conversa e outra.
+const CHAVE_PERSONALIZAR = 'ampara:liaPersonalizar'
+
 const SUGESTOES = [
+  'Onde fica a delegacia da mulher mais perto?',
+  'A região onde estou é tranquila?',
   'Como funciona o SOS?',
   'Dicas para andar à noite',
   'Como denunciar assédio?',
@@ -78,6 +94,9 @@ export default function ChatBot({ navigation }) {
   const [digitando, setDigitando] = useState(false)
   const [sobreVisivel, setSobreVisivel] = useState(false)
   const [tecladoVisivel, setTecladoVisivel] = useState(false)
+  // Com a chave ligada, cada pergunta vai com a localização, o risco, a rotina e o
+  // histórico resumido. Desligada (o padrão), vai só a pergunta.
+  const [personalizar, setPersonalizar] = useState(false)
   const listaRef = useRef(null)
   const reacaoLia = digitando ? 'pensando' : texto.trim() ? 'ouvindo' : mensagens.length === 1 ? 'oi' : 'ociosa'
 
@@ -97,6 +116,28 @@ export default function ChatBot({ navigation }) {
     listaRef.current?.scrollToEnd({ animated: true })
   }, [mensagens, digitando])
 
+  useEffect(() => {
+    AsyncStorage.getItem(CHAVE_PERSONALIZAR).then((v) => setPersonalizar(v === 'sim')).catch(() => {})
+  }, [])
+
+  const alternarPersonalizar = async (ligar) => {
+    if (ligar) {
+      // A localização é o dado mais sensível: pede a permissão na hora em que ela liga.
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') {
+        setMensagens((atual) => [...atual, {
+          id: `b${Date.now()}`,
+          autor: 'bot',
+          texto: 'Sem acesso à localização, eu ainda uso seu risco, sua rotina e seu histórico, mas não consigo buscar lugares perto de você.',
+        }])
+      }
+    } else {
+      esquecerContextoDaLia()
+    }
+    setPersonalizar(ligar)
+    AsyncStorage.setItem(CHAVE_PERSONALIZAR, ligar ? 'sim' : 'nao').catch(() => {})
+  }
+
   const enviar = async (pergunta) => {
     const conteudo = (pergunta ?? texto).trim()
     if (!conteudo || digitando) return
@@ -109,10 +150,11 @@ export default function ChatBot({ navigation }) {
     setDigitando(true)
 
     try {
-      const resposta = await perguntarAIA(conteudo)
+      const contexto = personalizar ? await montarContextoDaLia().catch(() => null) : null
+      const { resposta, lugares } = await conversarComLia(conteudo, contexto)
       setMensagens((atual) => [
         ...atual,
-        { id: `b${Date.now()}`, autor: 'bot', texto: resposta },
+        { id: `b${Date.now()}`, autor: 'bot', texto: semMarkdown(resposta), lugares },
       ])
     } catch {
       setMensagens((atual) => [
@@ -141,6 +183,36 @@ export default function ChatBot({ navigation }) {
           <Text style={[styles.textoBalao, daUsuaria && styles.textoBalaoUsuaria]}>
             {item.texto}
           </Text>
+          {/* Lugares buscados pela função (não pela IA): nome, distância e as ações. */}
+          {item.lugares?.length > 0 && (
+            <View style={styles.lugares}>
+              {item.lugares.map((lugar) => (
+                <View key={`${lugar.nome}${lugar.distanciaKm}`} style={styles.lugar}>
+                  <Text style={styles.lugarNome}>{lugar.nome}</Text>
+                  <Text style={styles.lugarDetalhe}>
+                    {String(lugar.distanciaKm).replace('.', ',')} km
+                    {lugar.abertoAgora === true ? ' · aberto agora' : lugar.abertoAgora === false ? ' · fechado agora' : ''}
+                  </Text>
+                  {!!lugar.endereco && <Text style={styles.lugarDetalhe} numberOfLines={2}>{lugar.endereco}</Text>}
+                  <View style={styles.lugarAcoes}>
+                    {!!lugar.mapsUrl && (
+                      <TouchableOpacity style={styles.lugarBotao} onPress={() => Linking.openURL(lugar.mapsUrl)} accessibilityRole="button">
+                        <Ionicons name="map-outline" size={14} color={Brand.blue} />
+                        <Text style={styles.lugarBotaoTexto}>Abrir no mapa</Text>
+                      </TouchableOpacity>
+                    )}
+                    {!!lugar.telefone && (
+                      <TouchableOpacity style={styles.lugarBotao} onPress={() => Linking.openURL(`tel:${lugar.telefone.replace(/[^\d+]/g, '')}`)} accessibilityRole="button">
+                        <Ionicons name="call-outline" size={14} color={Brand.blue} />
+                        <Text style={styles.lugarBotaoTexto}>Ligar</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ))}
+              <Text style={styles.lugaresFonte}>Dados: Google</Text>
+            </View>
+          )}
         </View>
       </View>
     )
@@ -171,6 +243,24 @@ export default function ChatBot({ navigation }) {
           </View>
           <Ionicons name="information-circle-outline" size={20} color="#FFF" />
         </TouchableOpacity>
+      </View>
+
+      {/* Consentimento: sem a chave ligada, nenhum dado da usuária vai para a IA. */}
+      <View style={styles.personalizar}>
+        <Ionicons name={personalizar ? 'location' : 'location-outline'} size={18} color={Brand.blue} />
+        <View style={styles.flex}>
+          <Text style={styles.personalizarTitulo}>Personalizar com meus dados</Text>
+          <Text style={styles.personalizarTexto}>
+            {personalizar ? 'Localização, risco, rotina e histórico vão junto com a pergunta' : 'Ligue para eu considerar onde você está e sua rotina'}
+          </Text>
+        </View>
+        <Switch
+          value={personalizar}
+          onValueChange={alternarPersonalizar}
+          trackColor={{ false: '#E6DCE0', true: Brand.blue }}
+          thumbColor="#FFF"
+          accessibilityLabel="Personalizar as respostas da Lia com meus dados"
+        />
       </View>
 
       <LiaHelpModal
@@ -307,6 +397,19 @@ const styles = StyleSheet.create({
   textoBalao: { fontSize: 15, color: Brand.ink, lineHeight: 21 },
   textoBalaoUsuaria: { color: '#FFF' },
   textoDigitando: { fontSize: 13, color: '#5A8FAF' },
+
+  personalizar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Brand.blueSoft, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#DDEAF2' },
+  personalizarTitulo: { fontSize: 13, fontWeight: '700', color: Brand.ink },
+  personalizarTexto: { fontSize: 12, color: Brand.muted, marginTop: 1 },
+
+  lugares: { marginTop: 10, gap: 8 },
+  lugar: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#DDEAF2', padding: 10, gap: 2 },
+  lugarNome: { fontSize: 14, fontWeight: '700', color: Brand.ink },
+  lugarDetalhe: { fontSize: 12, color: Brand.muted },
+  lugarAcoes: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  lugarBotao: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: Brand.line, borderRadius: 14, paddingVertical: 5, paddingHorizontal: 10 },
+  lugarBotaoTexto: { fontSize: 12, color: Brand.blue, fontWeight: '600' },
+  lugaresFonte: { fontSize: 10, color: Brand.muted, textAlign: 'right' },
 
   sugestoes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 12 },
   sugestao: {

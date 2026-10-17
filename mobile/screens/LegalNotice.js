@@ -76,6 +76,7 @@ const SECOES = [
       'As respostas são geradas por inteligência artificial (Barô, a IA do Instituto Mauá) e podem conter erros.',
       'A Lia dá orientações gerais. Não substitui orientação jurídica, médica, psicológica ou atendimento de emergência.',
       'Não envie à Lia dados pessoais, endereços, senhas ou informações de saúde.',
+      'Com "Personalizar com meus dados" ligado no chat, cada pergunta vai com seu bairro, seu risco atual, seu próximo compromisso e um resumo do seu histórico. Sua localização exata vai só até o servidor do Ampara, para buscar lugares próximos (pelo Google), e não é enviada à IA. Desligado, vai só a pergunta.',
       'Se a IA estiver fora do ar, a Lia responde só com um conjunto pequeno de respostas prontas.',
     ],
   },
