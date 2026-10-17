@@ -77,6 +77,9 @@ const getHeartRateSignalMessage = (sensorStatus) => {
 // De quanto em quanto tempo a Home confere se começou ou acabou um horário programado
 // de atividade. Meio minuto basta: ninguém percebe o modo ligar 30 s depois das 8h.
 const CHECAGEM_HORARIO_MS = 30_000
+// Quanto esperar, depois de uma posição nova, para gravar o score dela no histórico: o
+// tempo de a contagem de crimes do lugar novo chegar (costuma levar menos de 2 s).
+const ESPERA_SCORE_DO_LUGAR_MS = 4_000
 
 
 const getTimeLabel = () => {
@@ -360,10 +363,26 @@ export default function Home({ navigation }) {
     return () => clearInterval(intervalo)
   }, [horariosAtividade, activityMode])
 
-  // Grava histórico de localização (já throttled a 50m/5min no hook) para alimentar os dashboards
+  // Score da tela Proteção para gravar no histórico (coluna risco). Nulo com o
+  // monitoramento pausado ou antes de o score ficar pronto: um 0 nessas horas puxaria a
+  // média do relatório para baixo sem a usuária ter estado segura.
+  const riscoParaHistoricoRef = useRef(null)
+  useEffect(() => {
+    riscoParaHistoricoRef.current = monitoramentoAtivo && resumoPronto ? riskScore : null
+  }, [riskScore, monitoramentoAtivo, resumoPronto])
+
+  // Grava histórico de localização (já throttled a 50m/5min no hook) para alimentar os dashboards.
+  //
+  // Espera alguns segundos antes de gravar: a posição nova dispara a busca dos crimes em
+  // volta dela, e o score só reflete o lugar novo quando essa busca volta. Gravar na hora
+  // salvaria o score do lugar anterior.
   useEffect(() => {
     if (!location || !userId) return
-    saveLocationPoint(userId, location.coords.latitude, location.coords.longitude, location.coords.speed, currentScore)
+    const { latitude, longitude, speed } = location.coords
+    const scoreAntigo = currentScore
+    setTimeout(() => {
+      saveLocationPoint(userId, latitude, longitude, speed, scoreAntigo, "gps", riscoParaHistoricoRef.current)
+    }, ESPERA_SCORE_DO_LUGAR_MS)
   }, [location, userId])
 
   const latestSavedRiskAtRef = useRef(0)
@@ -384,7 +403,13 @@ export default function Home({ navigation }) {
       return;
     }
     if (!location || !userId) return;
-    saveLocationPoint(userId, location.coords.latitude, location.coords.longitude, location.coords.speed, currentScore, "recalculo");
+    // Um instante de espera para o score já refletir a mudança (ele é recalculado no
+    // render seguinte ao do modo atividade).
+    const { latitude, longitude, speed } = location.coords;
+    const scoreAntigo = currentScore;
+    setTimeout(() => {
+      saveLocationPoint(userId, latitude, longitude, speed, scoreAntigo, "recalculo", riscoParaHistoricoRef.current);
+    }, 1_500);
   }, [insideSafeZone, activityMode])
 
   // Movimento brusco — dispara imediatamente ao detectar pico
