@@ -9,14 +9,17 @@ import {
   FlatList,
   Modal,
   ScrollView,
-  Keyboard,
-  Image
+  Keyboard
 } from 'react-native'
 import * as Location from 'expo-location'
 import MapView, { Marker, Circle } from 'react-native-maps'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+// Cores da seção de onde a tela é aberta.
+const TEMA = TemaDaAba.Perfil
 
 export default function SafeLocations({ navigation }) {
   const [locations, setLocations] = useState([])
@@ -341,13 +344,13 @@ export default function SafeLocations({ navigation }) {
 
       <View style={styles.locationActions}>
         <TouchableOpacity onPress={() => handleEdit(item)}>
-          <Ionicons name="create-outline" size={22} color="#5A8FAF" />
+          <Ionicons name="create-outline" size={22} color={TEMA.forte} />
         </TouchableOpacity>
 
         <View style={styles.divider} />
 
         <TouchableOpacity onPress={() => handleDelete(item.id)}>
-          <Ionicons name="trash-outline" size={22} color={Brand.rose} />
+          <Ionicons name="trash-outline" size={22} color={TEMA.forte} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -355,16 +358,13 @@ export default function SafeLocations({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 6 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="chevron-back" size={20} color={Brand.blue} />
-          <Text style={styles.back}>Voltar</Text>
-        </TouchableOpacity>
-        <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
-      </View>
-
-      <Text style={styles.title}>Locais Seguros</Text>
-      <Text style={styles.subtitle}>Salve lugares importantes para você</Text>
+      <HeaderComCurvas
+        aba="Perfil"
+        onVoltar={() => navigation.goBack()}
+        titulo="Locais seguros"
+        subtitulo="Salve lugares importantes para você"
+        style={styles.header}
+      />
 
       <View style={styles.mapContainer}>
         <MapView
@@ -384,7 +384,7 @@ export default function SafeLocations({ navigation }) {
                 longitude: currentLocation.longitude
               }}
               title="Você"
-              pinColor={Brand.blue}
+              pinColor={TEMA.forte}
             />
           )}
 
@@ -405,7 +405,7 @@ export default function SafeLocations({ navigation }) {
                   longitude: Number(loc.longitude)
                 }}
                 radius={80}
-                strokeColor={Brand.blue}
+                strokeColor={TEMA.forte}
                 fillColor="rgba(107, 43, 56, 0.14)"
               />
             </React.Fragment>
@@ -413,7 +413,7 @@ export default function SafeLocations({ navigation }) {
         </MapView>
 
         <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}>
-          <Ionicons name="locate" size={22} color={Brand.blue} />
+          <Ionicons name="locate" size={22} color={TEMA.forte} />
         </TouchableOpacity>
       </View>
 
@@ -426,7 +426,7 @@ export default function SafeLocations({ navigation }) {
 
       <TouchableOpacity style={styles.secondaryButton} onPress={openManualMode}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <Ionicons name="create-outline" size={18} color={Brand.blue} />
+          <Ionicons name="create-outline" size={18} color={TEMA.forte} />
           <Text style={styles.secondaryText}>Inserir manualmente</Text>
         </View>
       </TouchableOpacity>
@@ -537,27 +537,29 @@ export default function SafeLocations({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // O header vai de ponta a ponta: as margens negativas desfazem o padding da tela.
+  header: { marginHorizontal: -20, marginTop: -20, marginBottom: 12 },
   container: {
     flex: 1,
-    backgroundColor: Brand.canvas,
+    backgroundColor: '#FFFFFF',
     padding: 20
   },
 
   back: {
     fontSize: 16,
-    color: Brand.blue,
+    color: TEMA.forte,
     fontWeight: '600',
   },
 
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: Brand.blue,
+    color: TEMA.forte,
     marginTop: 8,
   },
 
   subtitle: {
-    color: '#5A8FAF',
+    color: TEMA.forte,
     marginBottom: 14
   },
 
@@ -594,9 +596,9 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    backgroundColor: Brand.rose,
+    backgroundColor: TEMA.forte,
     padding: 15,
-    borderRadius: 14,
+    borderRadius: 20,
     marginBottom: 10
   },
 
@@ -608,14 +610,14 @@ const styles = StyleSheet.create({
 
   secondaryButton: {
     borderWidth: 1,
-    borderColor: Brand.rose,
+    borderColor: TEMA.forte,
     padding: 15,
-    borderRadius: 14,
+    borderRadius: 20,
     marginBottom: 18
   },
 
   secondaryText: {
-    color: Brand.rose,
+    color: TEMA.forte,
     textAlign: 'center',
     fontWeight: '600'
   },
@@ -625,10 +627,7 @@ const styles = StyleSheet.create({
   },
 
   locationCard: {
-    backgroundColor: Brand.blueSoft,
-    padding: 16,
-    borderRadius: 18,
-    marginBottom: 12,
+    paddingVertical: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'
@@ -647,7 +646,7 @@ const styles = StyleSheet.create({
 
   locationType: {
     fontSize: 15,
-    color: Brand.blue,
+    color: TEMA.forte,
     marginTop: 2
   },
 
@@ -701,7 +700,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: Brand.blue,
+    color: TEMA.forte,
     fontSize: 15,
     fontWeight: '600',
     marginTop: 14,
@@ -709,19 +708,17 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    borderWidth: 1,
-    borderColor: '#D8D0CC',
-    borderRadius: 14,
+    backgroundColor: '#F7F4F5',
+    borderRadius: 18,
     padding: 14,
     fontSize: 16
   },
 
   gpsAddressBox: {
-    backgroundColor: Brand.canvas,
-    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#E1D7D2'
+    borderWidth: 0
   },
 
   gpsAddressText: {
@@ -731,9 +728,7 @@ const styles = StyleSheet.create({
 
   suggestionsBox: {
     backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: '#E1D7D2',
-    borderRadius: 14,
+    borderRadius: 18,
     marginTop: 8,
     overflow: 'hidden'
   },
@@ -758,14 +753,13 @@ const styles = StyleSheet.create({
   typeButton: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#D8D0CC'
+    borderRadius: 20,
+    borderWidth: 0
   },
 
   typeSelected: {
-    backgroundColor: Brand.blue,
-    borderColor: Brand.blue
+    backgroundColor: TEMA.forte,
+    borderColor: TEMA.forte
   },
 
   typeText: {
@@ -778,9 +772,9 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    backgroundColor: Brand.rose,
+    backgroundColor: TEMA.forte,
     padding: 15,
-    borderRadius: 14,
+    borderRadius: 20,
     marginTop: 22,
     alignItems: 'center'
   },
@@ -793,7 +787,7 @@ const styles = StyleSheet.create({
 
   cancelText: {
     textAlign: 'center',
-    color: '#5A8FAF',
+    color: TEMA.forte,
     fontSize: 16,
     marginTop: 14
   }

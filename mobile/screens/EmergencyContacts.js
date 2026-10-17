@@ -8,15 +8,17 @@ TouchableOpacity,
 ScrollView,
 Alert,
 Modal,
-FlatList,
-Image
+FlatList
 } from 'react-native'
 
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
 import { getPhoneContacts } from '../services/contactService'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+// Cores da seção de onde a tela é aberta.
+const TEMA = TemaDaAba.Perfil
 
 const PAISES = [
   { codigo: '55',  bandeira: '🇧🇷', nome: 'Brasil' },
@@ -245,19 +247,16 @@ const filteredConfirmDdi = confirmDdiSearch.trim() === ''
     )
 
 return (
-<SafeAreaView style={styles.container}>
+<View style={styles.container}>
 <ScrollView contentContainerStyle={{ padding: 20 }}>
 
-  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-    <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 }}>
-      <Ionicons name="chevron-back" size={20} color={Brand.blue} />
-      <Text style={styles.back}>Voltar</Text>
-    </TouchableOpacity>
-    <Image source={require('../assets/images/maos-ampara-azul.png')} style={{ width: 36, height: 36 }} resizeMode="contain" />
-  </View>
-
-  <Text style={styles.title}>Contatos de Emergência</Text>
-  <Text style={styles.subtitle}>{textoInfo}</Text>
+  <HeaderComCurvas
+    aba="Perfil"
+    onVoltar={() => navigation.goBack()}
+    titulo="Contatos de emergência"
+    subtitulo={textoInfo}
+    style={styles.header}
+  />
 
   <View style={styles.card}>
 
@@ -319,10 +318,10 @@ return (
       </View>
       <View style={styles.actions}>
         <TouchableOpacity onPress={() => openEditModal(item)}>
-          <Ionicons name="create-outline" size={22} color="#5A8FAF" />
+          <Ionicons name="create-outline" size={22} color={TEMA.forte} />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleDelete(item.id)}>
-          <Ionicons name="trash-outline" size={22} color={Brand.rose} />
+          <Ionicons name="trash-outline" size={22} color={TEMA.forte} />
         </TouchableOpacity>
       </View>
     </View>
@@ -331,9 +330,9 @@ return (
 
   {/* ── MODAL AGENDA ── */}
   <Modal visible={contactsModalVisible} animationType="slide">
-    <ScrollView style={{ paddingTop: 80, paddingHorizontal: 20, backgroundColor: Brand.canvas }}>
+    <ScrollView style={{ paddingTop: 80, paddingHorizontal: 20, backgroundColor: '#FFFFFF' }}>
       <TouchableOpacity onPress={() => setContactsModalVisible(false)}>
-        <Text style={{ color: Brand.blue, fontSize: 18, marginBottom: 25 }}>← Voltar</Text>
+        <Text style={{ color: TEMA.forte, fontSize: 18, marginBottom: 25 }}>← Voltar</Text>
       </TouchableOpacity>
       <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Selecionar contato</Text>
       <TextInput
@@ -430,7 +429,7 @@ return (
           pendingContact.rawNumber.replace(/\D/g, '').length < 10 && (
           <View style={{ marginTop: 12 }}>
             <Text style={[styles.label, { marginTop: 0, marginBottom: 6 }]}>
-              DDD <Text style={{ color: Brand.rose }}>*</Text>
+              DDD <Text style={{ color: TEMA.forte }}>*</Text>
             </Text>
             <TextInput
               style={styles.input}
@@ -494,25 +493,27 @@ return (
   </Modal>
 
 </ScrollView>
-</SafeAreaView>
+</View>
 )
 }
 
 const styles = StyleSheet.create({
+  // O header vai de ponta a ponta: as margens negativas desfazem o padding da tela.
+  header: { marginHorizontal: -20, marginTop: -20, marginBottom: 16 },
 
-container: { flex: 1, backgroundColor: Brand.canvas },
+container: { flex: 1, backgroundColor: '#FFFFFF' },
 
-back: { color: Brand.blue, marginBottom: 10 },
+back: { color: TEMA.forte, marginBottom: 10 },
 
-title: { fontSize: 30, fontWeight: 'bold', color: Brand.blue },
+title: { fontSize: 30, fontWeight: 'bold', color: TEMA.forte },
 
-subtitle: { color: '#5A8FAF', marginBottom: 20 },
+subtitle: { color: TEMA.forte, marginBottom: 20 },
 
-card: { backgroundColor: '#FFF', padding: 20, borderRadius: 20, marginBottom: 20, elevation: 2, shadowColor: Brand.blue, shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8 },
+card: { paddingVertical: 4, marginBottom: 20 },
 
-label: { marginTop: 10, color: '#5A8FAF', fontSize: 16 },
+label: { marginTop: 10, color: TEMA.forte, fontSize: 16 },
 
-input: { borderWidth: 1, borderColor: '#DDD', borderRadius: 12, padding: 14, marginTop: 5 },
+input: { backgroundColor: '#F7F4F5', borderRadius: 18, padding: 14, marginTop: 5 },
 
 phoneRow: { flexDirection: 'row', gap: 8, marginTop: 5 },
 
@@ -520,12 +521,10 @@ ddiButton: {
   flexDirection: 'row',
   alignItems: 'center',
   gap: 4,
-  borderWidth: 1,
-  borderColor: '#DDD',
-  borderRadius: 12,
+  backgroundColor: '#F7F4F5',
+  borderRadius: 18,
   paddingHorizontal: 12,
-  paddingVertical: 14,
-  backgroundColor: '#F9F9F9'
+  paddingVertical: 14
 },
 
 ddiButtonText: { fontSize: 15, color: '#333', fontWeight: '600' },
@@ -534,16 +533,15 @@ ddiChevron: { fontSize: 12, color: '#999' },
 
 phoneInput: {
   flex: 1,
-  borderWidth: 1,
-  borderColor: '#DDD',
-  borderRadius: 12,
+  backgroundColor: '#F7F4F5',
+  borderRadius: 18,
   padding: 14,
   fontSize: 15
 },
 
-selectButton: { backgroundColor: Brand.rose, padding: 16, borderRadius: 14, marginTop: 25, alignItems: 'center' },
+selectButton: { backgroundColor: TEMA.forte, padding: 16, borderRadius: 20, marginTop: 25, alignItems: 'center' },
 
-button: { backgroundColor: Brand.blue, padding: 16, borderRadius: 14, marginTop: 14, alignItems: 'center' },
+button: { backgroundColor: TEMA.forte, padding: 16, borderRadius: 20, marginTop: 14, alignItems: 'center' },
 
 selectButtonText: { color: '#FFF', fontWeight: 'bold' },
 
@@ -551,19 +549,19 @@ buttonText: { color: '#FFF', fontWeight: 'bold' },
 
 clearText: { textAlign: 'center', marginTop: 14, color: '#999' },
 
-contact: { backgroundColor: Brand.surfaceRose, padding: 15, borderRadius: 15, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between' },
+contact: { paddingVertical: 10, flexDirection: 'row', justifyContent: 'space-between' },
 
 name: { fontWeight: 'bold', fontSize: 18 },
 
 phone: { color: '#666' },
 
-relacao: { color: Brand.blue },
+relacao: { color: TEMA.forte },
 
 actions: { flexDirection: 'row', gap: 15 },
 
 icon: { fontSize: 22 },
 
-searchInput: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, fontSize: 16, marginBottom: 12, borderWidth: 1, borderColor: '#DDD' },
+searchInput: { backgroundColor: '#FFF', borderRadius: 20, padding: 14, fontSize: 16, marginBottom: 12, borderWidth: 0 },
 
 emptySearch: { textAlign: 'center', color: '#999', marginTop: 30, fontSize: 16 },
 
@@ -581,12 +579,12 @@ modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
 
 confirmHint: { fontSize: 14, color: '#555', marginBottom: 12, lineHeight: 20 },
 
-ddiItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+ddiItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4 },
 
-ddiItemSelected: { backgroundColor: Brand.blueSoft },
+ddiItemSelected: { backgroundColor: TEMA.fundo },
 
 ddiItemText: { fontSize: 16, color: '#333' },
 
-ddiItemCode: { fontSize: 15, color: Brand.blue, fontWeight: '700' },
+ddiItemCode: { fontSize: 15, color: TEMA.forte, fontWeight: '700' },
 
 })

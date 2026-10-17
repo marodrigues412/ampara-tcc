@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, Alert,
-  ActivityIndicator, Image, Platform, Keyboard, KeyboardAvoidingView,
+  ActivityIndicator, Platform, Keyboard, KeyboardAvoidingView,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
@@ -10,7 +10,11 @@ import { salvarCompromisso, excluirCompromisso, listarLocaisSeguros, criarLocalS
 import { useAddressSearch } from '../hooks/useAddressSearch'
 import { TIPOS_COMPROMISSO, TRANSPORTES, COMPROMISSO_VAZIO, dataLocal, abrirNoMapa } from '../utils/rotina'
 import { DIAS_SEMANA } from '../utils/activitySchedule'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+
+// Cores da seção de onde a tela é aberta.
+const TEMA = TemaDaAba['Proteção']
 
 // Cadastro e edição de um compromisso da rotina.
 //
@@ -162,16 +166,14 @@ export default function RoutineCommitment({ navigation, route }) {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.topo}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.voltar}>
-          <Ionicons name="chevron-back" size={20} color={Brand.blue} />
-          <Text style={styles.voltarTexto}>Voltar</Text>
-        </TouchableOpacity>
-        <Image source={require('../assets/images/maos-ampara-azul.png')} style={styles.logo} resizeMode="contain" />
-      </View>
+      <HeaderComCurvas
+        aba="Proteção"
+        onVoltar={() => navigation.goBack()}
+        titulo={original ? 'Editar compromisso' : 'Novo compromisso'}
+        style={styles.header}
+      />
 
       <ScrollView contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text style={styles.titulo}>{original ? 'Editar compromisso' : 'Novo compromisso'}</Text>
 
         <Text style={styles.rotulo}>Nome</Text>
         <TextInput
@@ -189,7 +191,7 @@ export default function RoutineCommitment({ navigation, route }) {
             const ativo = form.tipo === tipo.id
             return (
               <TouchableOpacity key={tipo.id} style={[styles.chip, ativo && styles.chipAtivo]} onPress={() => atualizar({ tipo: tipo.id })}>
-                <Ionicons name={tipo.icone} size={15} color={ativo ? '#FFF' : Brand.blue} />
+                <Ionicons name={tipo.icone} size={15} color={ativo ? '#FFF' : TEMA.forte} />
                 <Text style={[styles.chipTexto, ativo && styles.chipTextoAtivo]}>{tipo.rotulo}</Text>
               </TouchableOpacity>
             )
@@ -200,7 +202,7 @@ export default function RoutineCommitment({ navigation, route }) {
         {temLocal ? (
           <>
             <View style={styles.localEscolhido}>
-              <Ionicons name={form.safe_location_id ? 'shield-checkmark-outline' : 'location-outline'} size={20} color={Brand.rose} />
+              <Ionicons name={form.safe_location_id ? 'shield-checkmark-outline' : 'location-outline'} size={20} color={TEMA.forte} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.localNome}>{form.local_nome}</Text>
                 {!!form.endereco && <Text style={styles.localEndereco} numberOfLines={1}>{form.endereco}</Text>}
@@ -210,12 +212,12 @@ export default function RoutineCommitment({ navigation, route }) {
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.verRegiao} onPress={() => abrirNoMapa(navigation, form)} accessibilityRole="button">
-              <Ionicons name="map-outline" size={16} color={Brand.blue} />
+              <Ionicons name="map-outline" size={16} color={TEMA.forte} />
               <Text style={styles.verRegiaoTexto}>Ver como está a região no mapa</Text>
             </TouchableOpacity>
             {!form.safe_location_id && (
               <TouchableOpacity style={styles.marcar} onPress={() => setSalvarComoSeguro((v) => !v)} accessibilityRole="checkbox" accessibilityState={{ checked: salvarComoSeguro }}>
-                <Ionicons name={salvarComoSeguro ? 'checkbox' : 'square-outline'} size={22} color={salvarComoSeguro ? Brand.rose : Brand.muted} />
+                <Ionicons name={salvarComoSeguro ? 'checkbox' : 'square-outline'} size={22} color={salvarComoSeguro ? TEMA.forte : Brand.muted} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.marcarTexto}>Salvar também como local seguro</Text>
                   <Text style={styles.ajuda}>Só marque se você se sente segura lá sempre. Local seguro reduz o score.</Text>
@@ -238,7 +240,7 @@ export default function RoutineCommitment({ navigation, route }) {
             </View>
             {sugestoes.map((item) => (
               <TouchableOpacity key={item.id} style={styles.sugestao} onPress={() => escolherEndereco(item)}>
-                <Ionicons name="location-outline" size={16} color={Brand.rose} />
+                <Ionicons name="location-outline" size={16} color={TEMA.forte} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sugestaoNome} numberOfLines={1}>{item.nome}</Text>
                   {!!item.endereco && <Text style={styles.sugestaoTexto} numberOfLines={1}>{item.endereco}</Text>}
@@ -251,7 +253,7 @@ export default function RoutineCommitment({ navigation, route }) {
                 <View style={styles.chips}>
                   {locaisSeguros.map((local) => (
                     <TouchableOpacity key={local.id} style={styles.chip} onPress={() => escolherLocalSeguro(local)}>
-                      <Ionicons name="shield-checkmark-outline" size={15} color={Brand.blue} />
+                      <Ionicons name="shield-checkmark-outline" size={15} color={TEMA.forte} />
                       <Text style={styles.chipTexto}>{local.nome}</Text>
                     </TouchableOpacity>
                   ))}
@@ -272,7 +274,7 @@ export default function RoutineCommitment({ navigation, route }) {
         </View>
         {form.data ? (
           <TouchableOpacity style={[styles.campoHora, escolhendo === 'data' && styles.campoHoraAberto]} onPress={() => setEscolhendo(escolhendo === 'data' ? null : 'data')}>
-            <Ionicons name="calendar-outline" size={18} color={Brand.blue} />
+            <Ionicons name="calendar-outline" size={18} color={TEMA.forte} />
             <Text style={styles.campoHoraTexto}>{dataPorExtenso(form.data)}</Text>
           </TouchableOpacity>
         ) : (
@@ -322,7 +324,7 @@ export default function RoutineCommitment({ navigation, route }) {
             // usaria texto branco e sumiria no fundo branco.
             themeVariant="light"
             textColor={Brand.ink}
-            accentColor={Brand.rose}
+            accentColor={TEMA.forte}
           />
         )}
 
@@ -332,7 +334,7 @@ export default function RoutineCommitment({ navigation, route }) {
             const ativo = form.transporte === t.id
             return (
               <TouchableOpacity key={t.id} style={[styles.chip, ativo && styles.chipAtivo]} onPress={() => atualizar({ transporte: t.id })}>
-                <Ionicons name={t.icone} size={15} color={ativo ? '#FFF' : Brand.blue} />
+                <Ionicons name={t.icone} size={15} color={ativo ? '#FFF' : TEMA.forte} />
                 <Text style={[styles.chipTexto, ativo && styles.chipTextoAtivo]}>{t.rotulo}</Text>
               </TouchableOpacity>
             )
@@ -348,7 +350,7 @@ export default function RoutineCommitment({ navigation, route }) {
           <Switch
             value={form.avisar_atraso}
             onValueChange={(avisar_atraso) => atualizar({ avisar_atraso })}
-            trackColor={{ false: '#E6DCE0', true: Brand.rose }}
+            trackColor={{ false: '#E6DCE0', true: TEMA.forte }}
             thumbColor="#FFF"
           />
         </View>
@@ -374,7 +376,7 @@ export default function RoutineCommitment({ navigation, route }) {
             <Switch
               value={form.liga_modo_atividade}
               onValueChange={(liga_modo_atividade) => atualizar({ liga_modo_atividade })}
-              trackColor={{ false: '#E6DCE0', true: Brand.rose }}
+              trackColor={{ false: '#E6DCE0', true: TEMA.forte }}
               thumbColor="#FFF"
             />
           </View>
@@ -394,53 +396,55 @@ export default function RoutineCommitment({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Brand.canvas, paddingHorizontal: 22 },
+  // O header vai de ponta a ponta: as margens negativas desfazem o padding da tela.
+  header: { marginHorizontal: -22, marginBottom: 14 },
+  container: { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 22 },
   topo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 6 },
   voltar: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  voltarTexto: { color: Brand.blue, fontSize: 15, fontWeight: '600' },
+  voltarTexto: { color: TEMA.forte, fontSize: 15, fontWeight: '600' },
   logo: { width: 36, height: 36 },
   conteudo: { paddingBottom: 60 },
-  titulo: { fontSize: 26, fontWeight: '700', color: Brand.rose, marginTop: 8, marginBottom: 4 },
+  titulo: { fontSize: 26, fontWeight: '700', color: TEMA.forte, marginTop: 8, marginBottom: 4 },
 
   rotulo: { fontSize: 12, fontWeight: '700', color: Brand.muted, textTransform: 'uppercase', marginTop: 20, marginBottom: 8 },
   ajuda: { fontSize: 12, color: Brand.muted, lineHeight: 17, marginTop: 4 },
-  input: { borderWidth: 1, borderColor: Brand.line, borderRadius: 12, padding: 13, fontSize: 15, color: Brand.ink },
+  input: { backgroundColor: '#F7F4F5', borderRadius: 18, padding: 13, fontSize: 15, color: Brand.ink },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1, borderColor: Brand.line, backgroundColor: '#FFF' },
-  chipAtivo: { backgroundColor: Brand.blue, borderColor: Brand.blue },
-  chipTexto: { fontSize: 13, color: Brand.blue, fontWeight: '600' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 18, borderWidth: 0, backgroundColor: '#FFF' },
+  chipAtivo: { backgroundColor: TEMA.forte, borderColor: TEMA.forte },
+  chipTexto: { fontSize: 13, color: TEMA.forte, fontWeight: '600' },
   chipTextoAtivo: { color: '#FFF' },
 
-  buscaCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: Brand.line, borderRadius: 12, paddingHorizontal: 12, height: 48 },
+  buscaCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F7F4F5', borderRadius: 18, paddingHorizontal: 12, height: 48 },
   buscaInput: { flex: 1, fontSize: 15, color: Brand.ink },
-  sugestao: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: Brand.line },
+  sugestao: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 },
   sugestaoNome: { fontSize: 14, color: Brand.ink, fontWeight: '600' },
   sugestaoTexto: { fontSize: 12, color: Brand.muted, marginTop: 1 },
-  localEscolhido: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: Brand.line, borderRadius: 12, padding: 12 },
+  localEscolhido: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F7F4F5', borderRadius: 18, padding: 12 },
   localNome: { fontSize: 15, color: Brand.ink, fontWeight: '600' },
   localEndereco: { fontSize: 12, color: Brand.muted, marginTop: 2 },
   verRegiao: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
-  verRegiaoTexto: { color: Brand.blue, fontSize: 14, fontWeight: '600' },
+  verRegiaoTexto: { color: TEMA.forte, fontSize: 14, fontWeight: '600' },
   marcar: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 12 },
   marcarTexto: { fontSize: 14, color: Brand.ink, fontWeight: '600' },
 
   dias: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  dia: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: Brand.line, alignItems: 'center', justifyContent: 'center' },
-  diaMarcado: { backgroundColor: Brand.rose, borderColor: Brand.rose },
+  dia: { width: 40, height: 40, borderRadius: 20, borderWidth: 0, alignItems: 'center', justifyContent: 'center' },
+  diaMarcado: { backgroundColor: TEMA.forte, borderColor: TEMA.forte },
   diaTexto: { color: Brand.muted, fontWeight: '700' },
   diaTextoMarcado: { color: '#FFF' },
-  campoHora: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: Brand.line, borderRadius: 12, padding: 13, marginTop: 10 },
-  campoHoraAberto: { borderColor: Brand.rose, backgroundColor: Brand.surfaceSoft },
+  campoHora: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F7F4F5', borderRadius: 18, padding: 13, marginTop: 10 },
+  campoHoraAberto: { borderColor: TEMA.forte, backgroundColor: TEMA.fundo },
   campoHoraTexto: { fontSize: 15, color: Brand.ink, fontWeight: '600' },
 
   horas: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  hora: { flex: 1, borderWidth: 1, borderColor: Brand.line, borderRadius: 14, paddingVertical: 10, alignItems: 'center' },
+  hora: { flex: 1, backgroundColor: '#F7F4F5', borderRadius: 18, paddingVertical: 10, alignItems: 'center' },
   valorHora: { fontSize: 26, color: Brand.ink, marginTop: 2, fontVariant: ['tabular-nums'] },
 
   linhaSwitch: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 22 },
 
-  botaoSalvar: { backgroundColor: Brand.rose, borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 28 },
+  botaoSalvar: { backgroundColor: TEMA.forte, borderRadius: 20, paddingVertical: 15, alignItems: 'center', marginTop: 28 },
   botaoSalvarTexto: { color: '#FFF', fontWeight: '700', fontSize: 16 },
   excluir: { alignItems: 'center', paddingVertical: 16 },
   excluirTexto: { color: Brand.danger, fontWeight: '600', fontSize: 15 },

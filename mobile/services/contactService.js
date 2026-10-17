@@ -1,4 +1,6 @@
-import * as Contacts from 'expo-contacts'
+// API antiga (funções soltas): no SDK 57 ela saiu da entrada principal do pacote e
+// continua disponível em expo-contacts/legacy.
+import * as Contacts from 'expo-contacts/legacy'
 
 export async function getPhoneContacts(){
 

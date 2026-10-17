@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './services/supabase'
+import { useFonts } from 'expo-font'
+import { Fraunces_500Medium_Italic } from '@expo-google-fonts/fraunces'
 
 import LoginScreen from './screens/LoginScreen'
 import OnboardingScreen from './screens/OnboardingScreen'
@@ -18,6 +20,7 @@ import HelpGuide from './screens/HelpGuide'
 import ChatBot from './screens/ChatBot'
 
 import { NavigationContainer } from '@react-navigation/native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
@@ -31,8 +34,7 @@ function Tabs() {
   return (
     <Tab.Navigator
       screenOptions={{ headerShown: false }}
-      // Barra própria no estilo "bolha": a aba selecionada sobe num círculo com o ícone
-      // azul do app. Os ícones de cada aba ficam definidos dentro do componente.
+      // Barra própria: ícone e nome na cor de cada aba. Os ícones ficam no componente.
       tabBar={(props) => <AmparaTabBar {...props} />}
     >
       <Tab.Screen name="Proteção" component={Home} />
@@ -48,6 +50,8 @@ function Tabs() {
 export default function App() {
   const [session, setSession] = useState(null)
   const [onboardingSeen, setOnboardingSeen] = useState(false)
+  // Fonte do nome da Lia. Se não carregar, o texto aparece na fonte do sistema.
+  useFonts({ Fraunces_500Medium_Italic })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -63,11 +67,18 @@ export default function App() {
     }
   }, [])
 
+  // O provedor fica por fora de tudo: login e onboarding também usam o header com
+  // as margens da área segura (notch e barra de status).
   if (!onboardingSeen) {
-    return <OnboardingScreen onDone={() => setOnboardingSeen(true)} />
+    return (
+      <SafeAreaProvider>
+        <OnboardingScreen onDone={() => setOnboardingSeen(true)} />
+      </SafeAreaProvider>
+    )
   }
 
   return (
+    <SafeAreaProvider>
     <NavigationContainer>
       {!session ? (
         <LoginScreen onLogin={setSession} />
@@ -92,5 +103,6 @@ export default function App() {
         </Stack.Navigator>
       )}
     </NavigationContainer>
+    </SafeAreaProvider>
   )
 }

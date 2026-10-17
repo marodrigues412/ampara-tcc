@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  StyleSheet, Text, View, Image, ScrollView, ActivityIndicator, Pressable, TouchableOpacity, Platform,
+  StyleSheet, Text, View, ScrollView, ActivityIndicator, Pressable, TouchableOpacity, Platform,
 } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
@@ -22,7 +21,9 @@ import { getDailyRiskAssessmentReport } from '../services/riskAssessmentService'
 import { listarCompromissos, listarLocaisSeguros } from '../services/routineService'
 import { buscarResumoCrimes } from '../services/crimesService'
 import { resumoDaLia } from '../services/resumoDaLia'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
+import HeaderComCurvas from '../components/HeaderComCurvas'
+import PopupAmpara, { LinhaDoPopup } from '../components/PopupAmpara'
 import LiaHelpModal from '../components/LiaHelpModal'
 import LiaAvatar from '../components/LiaAvatar'
 
@@ -34,6 +35,7 @@ import LiaAvatar from '../components/LiaAvatar'
 // emergência e, resumindo, como foi. Números que só assustam (contagem de crimes) ou
 // que não levam a nenhuma decisão (velocidade do GPS) ficaram de fora.
 
+const TEMA = TemaDaAba.Dashboard
 const PERIODOS = [7, 30]
 const SECOES = [
   { id: 'resumo', rotulo: 'Resumo', icone: 'pie-chart-outline' },
@@ -57,7 +59,7 @@ function Titulo({ titulo, explicacao, onExplicar }) {
       <Text style={styles.tituloSecao}>{titulo}</Text>
       {explicacao && (
         <Pressable onPress={() => onExplicar(titulo, explicacao)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`O que é ${titulo}?`}>
-          <Ionicons name="help-circle-outline" size={18} color={Brand.blue} />
+          <Ionicons name="help-circle-outline" size={18} color={TEMA.forte} />
         </Pressable>
       )}
     </View>
@@ -78,12 +80,15 @@ function Numero({ valor, rotulo }) {
 }
 
 export default function Dashboard({ navigation }) {
-  const insets = useSafeAreaInsets()
   const [carregando, setCarregando] = useState(true)
   const [ajuda, setAjuda] = useState(null)
   const [dias, setDias] = useState(7)
   const [secao, setSecao] = useState('resumo')
   const [tecnicosAbertos, setTecnicosAbertos] = useState(false)
+  // Popup aberto ao tocar num gráfico ou num alerta: { tipo: 'dia' | 'horario' | 'alerta', ... }
+  const [detalhe, setDetalhe] = useState(null)
+  // Endereço do alerta aberto no popup (buscado na hora, só para o alerta tocado).
+  const [enderecoAlerta, setEnderecoAlerta] = useState(null)
 
   const [userId, setUserId] = useState(null)
   const [historico, setHistorico] = useState([])
@@ -238,33 +243,141 @@ export default function Dashboard({ navigation }) {
   }, [chaveResumo])
   const textoLia = resumoLia?.chave === chaveResumo ? resumoLia.texto : undefined
 
+  const pontosComRisco = historico.filter((p) => p.risco != null)
+  const horaDe = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+  const abrirAlerta = async (alerta) => {
+    setEnderecoAlerta(null)
+    setDetalhe({ tipo: 'alerta', alerta })
+    if (alerta.latitude == null || alerta.longitude == null) return
+    try {
+      const [e] = await Location.reverseGeocodeAsync({ latitude: Number(alerta.latitude), longitude: Number(alerta.longitude) })
+      const texto = [e?.street && `${e.street}${e.streetNumber ? `, ${e.streetNumber}` : ''}`, e?.district, e?.city].filter(Boolean).join(' · ')
+      setEnderecoAlerta({ id: alerta.id, texto: texto || null })
+    } catch {
+      setEnderecoAlerta({ id: alerta.id, texto: null })
+    }
+  }
+
+  // Conteúdo do popup de acordo com o que foi tocado.
+  let popup = null
+  if (detalhe?.tipo === 'dia') {
+    const { d } = detalhe
+    const doDia = pontosComRisco.filter((p) => new Date(p.created_at).toDateString() === d.data.toDateString())
+    const pico = doDia.reduce((maior, p) => (!maior || p.risco > maior.risco ? p : maior), null)
+    const nivel = nivelDoRisco(d.risco)
+    popup = {
+      icone: 'calendar-outline',
+      titulo: `${DIAS_SEMANA[d.data.getDay()].nome}, ${d.data.getDate()}/${d.data.getMonth() + 1}`,
+      subtitulo: d.risco == null ? 'Sem registros neste dia' : `Risco médio ${formatarRisco(d.risco)} · ${nivel.rotulo.toLowerCase()}`,
+      conteudo: d.risco == null ? (
+        <Text style={styles.popupTexto}>Não há risco registrado neste dia. O histórico só é gravado com o monitoramento ativo.</Text>
+      ) : (
+        <>
+          <LinhaDoPopup icone="speedometer-outline" rotulo="Risco médio" valor={`${formatarRisco(d.risco)} de 10 (${nivel.rotulo.toLowerCase()})`} cor={nivel.cor} />
+          {pico && <LinhaDoPopup icone="trending-up-outline" rotulo="Maior risco do dia" valor={`${formatarRisco(pico.risco)} às ${horaDe(pico.created_at)}`} />}
+          <LinhaDoPopup icone="pulse-outline" rotulo="Registros" valor={`${doDia.length} ${doDia.length === 1 ? 'registro' : 'registros'} de risco`} />
+        </>
+      ),
+      acoes: [
+        { texto: 'Ver horários', icone: 'time-outline', onPress: () => { setDetalhe(null); setSecao('deslocamentos') } },
+        { texto: 'Fechar', principal: true, onPress: () => setDetalhe(null) },
+      ],
+    }
+  } else if (detalhe?.tipo === 'horario') {
+    const { dia, periodo, risco } = detalhe
+    const nivel = nivelDoRisco(risco)
+    const doHorario = pontosComRisco.filter((p) => {
+      const data = new Date(p.created_at)
+      return data.getDay() === dia && data.getHours() >= periodo.de && data.getHours() < periodo.ate
+    })
+    popup = {
+      icone: 'time-outline',
+      titulo: `${DIAS_SEMANA[dia].nome} · ${periodo.rotulo.toLowerCase()}`,
+      subtitulo: `Das ${String(periodo.de).padStart(2, '0')}h às ${String(periodo.ate % 24).padStart(2, '0')}h`,
+      conteudo: risco == null ? (
+        <Text style={styles.popupTexto}>Você não teve registros nesse horário no período.</Text>
+      ) : (
+        <>
+          <LinhaDoPopup icone="speedometer-outline" rotulo="Risco médio" valor={`${formatarRisco(risco)} de 10 (${nivel.rotulo.toLowerCase()})`} cor={nivel.cor} />
+          <LinhaDoPopup icone="pulse-outline" rotulo="Registros" valor={`${doHorario.length} ${doHorario.length === 1 ? 'registro' : 'registros'} nesse horário`} />
+          <Text style={styles.popupTexto}>É a média do que foi registrado nesse dia da semana e parte do dia, durante o período escolhido.</Text>
+        </>
+      ),
+    }
+  } else if (detalhe?.tipo === 'alerta') {
+    const { alerta } = detalhe
+    // nivel_risco é o rótulo gravado no envio ("Crítico", "Moderado", "Baixo").
+    const corDoNivel = { 'crítico': Brand.danger, moderado: Brand.amber, baixo: Brand.green }[String(alerta.nivel_risco ?? '').toLowerCase()]
+    const temLocal = alerta.latitude != null && alerta.longitude != null
+    const destinatarios = (alerta.recipient_names ?? '').split(',').map((t) => t.trim()).filter(Boolean).map((tel) => nomePorTelefone[tel] || tel)
+    const endereco = enderecoAlerta?.id === alerta.id ? enderecoAlerta.texto : undefined
+    popup = {
+      icone: 'alert-circle-outline',
+      titulo: 'Alerta SOS',
+      subtitulo: formatarDataHora(alerta.created_at),
+      conteudo: (
+        <>
+          {temLocal && (
+            <LinhaDoPopup icone="location-outline" rotulo="Onde foi acionado" valor={endereco === undefined ? 'Buscando endereço…' : endereco ?? `${Number(alerta.latitude).toFixed(5)}, ${Number(alerta.longitude).toFixed(5)}`} />
+          )}
+          {!!alerta.nivel_risco && <LinhaDoPopup icone="speedometer-outline" rotulo="Risco no momento" valor={alerta.nivel_risco} cor={corDoNivel} />}
+          {destinatarios.length > 0 && <LinhaDoPopup icone="people-outline" rotulo="Enviado para" valor={destinatarios.join(', ')} />}
+          {!!alerta.message && <LinhaDoPopup icone="chatbox-ellipses-outline" rotulo="Mensagem enviada" valor={alerta.message} />}
+        </>
+      ),
+      acoes: temLocal ? [
+        { texto: 'Fechar', onPress: () => setDetalhe(null) },
+        {
+          texto: 'Ver no mapa',
+          icone: 'map-outline',
+          principal: true,
+          onPress: () => { setDetalhe(null); abrirNoMapa(navigation, { latitude: Number(alerta.latitude), longitude: Number(alerta.longitude), local_nome: 'Local do alerta' }) },
+        },
+      ] : undefined,
+    }
+  }
+
   if (carregando) {
     return (
-      <SafeAreaView style={[styles.container, styles.centro]}>
-        <ActivityIndicator size="large" color={Brand.rose} />
-      </SafeAreaView>
+      <View style={[styles.container, styles.centro]}>
+        <ActivityIndicator size="large" color={TEMA.forte} />
+      </View>
     )
   }
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: Math.max(insets.top - 30, 10) }]}>
-      <ScrollView contentContainerStyle={styles.conteudo} showsVerticalScrollIndicator={false}>
-        <View style={styles.topo}>
-          <View>
-            <Text style={styles.titulo}>Seu relatório</Text>
-            <Text style={styles.subtitulo}>Últimos {dias} dias</Text>
-          </View>
-          <Image source={require('../assets/images/maos-ampara-azul.png')} style={styles.logo} resizeMode="contain" />
-        </View>
-
-        <View style={styles.periodos}>
-          {PERIODOS.map((p) => (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <HeaderComCurvas
+          aba="Dashboard"
+          direita={PERIODOS.map((p) => (
             <Pressable key={p} onPress={() => setDias(p)} style={[styles.periodo, dias === p && styles.periodoAtivo]} accessibilityRole="button" accessibilityState={{ selected: dias === p }}>
               <Text style={[styles.periodoTexto, dias === p && styles.periodoTextoAtivo]}>{p} dias</Text>
             </Pressable>
           ))}
-        </View>
+        >
+          <Text style={styles.titulo}>Relatório</Text>
+          {semHistorico ? (
+            <Text style={styles.subtitulo}>Últimos {dias} dias</Text>
+          ) : (
+            <View style={styles.destaque}>
+              <Text style={[styles.destaqueValor, { color: nivelMedio.cor }]}>{formatarRisco(media)}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.destaqueNivel}>risco médio · {nivelMedio.rotulo.toLowerCase()}</Text>
+                {variacao && !variacao.igual ? (
+                  <Text style={[styles.tendenciaTexto, { color: variacao.melhorou ? Brand.green : Brand.amber }]}>
+                    <Ionicons name={variacao.melhorou ? 'trending-down' : 'trending-up'} size={13} /> {Math.abs(variacao.variacao)}% {variacao.melhorou ? 'menor' : 'maior'} que no período anterior
+                  </Text>
+                ) : (
+                  <Text style={styles.subtitulo}>Últimos {dias} dias</Text>
+                )}
+              </View>
+            </View>
+          )}
+        </HeaderComCurvas>
 
+        <View style={styles.conteudo}>
         <View style={styles.abas} accessibilityRole="tablist">
           {SECOES.map((s) => (
             <Pressable
@@ -274,7 +387,7 @@ export default function Dashboard({ navigation }) {
               accessibilityRole="tab"
               accessibilityState={{ selected: secao === s.id }}
             >
-              <Ionicons name={s.icone} size={16} color={secao === s.id ? Brand.rose : Brand.muted} />
+              <Ionicons name={s.icone} size={15} color={secao === s.id ? '#FFF' : TEMA.forte} />
               <Text style={[styles.abaTexto, secao === s.id && styles.abaTextoAtiva]}>{s.rotulo}</Text>
             </Pressable>
           ))}
@@ -284,36 +397,18 @@ export default function Dashboard({ navigation }) {
           <>
             {semHistorico ? (
               <View style={styles.aviso}>
-                <Ionicons name="time-outline" size={20} color={Brand.blue} />
+                <Ionicons name="time-outline" size={20} color={TEMA.forte} />
                 <Text style={styles.avisoTexto}>
                   Ainda não há histórico no período. O relatório usa o mesmo risco da tela Proteção, registrado enquanto o monitoramento está ativo.
                 </Text>
               </View>
             ) : (
               <>
-                <View style={[styles.destaque, { backgroundColor: nivelMedio.fundo }]}>
-                  <View>
-                    <Text style={[styles.destaqueRotulo, { color: nivelMedio.cor }]}>Risco médio</Text>
-                    <Text style={[styles.destaqueValor, { color: nivelMedio.cor }]}>
-                      {formatarRisco(media)}<Text style={styles.destaqueMax}>/10</Text>
-                    </Text>
-                    <Text style={[styles.destaqueNivel, { color: nivelMedio.cor }]}>{nivelMedio.rotulo}</Text>
-                  </View>
-                  {variacao && !variacao.igual && (
-                    <View style={styles.tendencia}>
-                      <Ionicons name={variacao.melhorou ? 'trending-down' : 'trending-up'} size={18} color={variacao.melhorou ? Brand.green : Brand.amber} />
-                      <Text style={[styles.tendenciaTexto, { color: variacao.melhorou ? Brand.green : Brand.amber }]}>
-                        {Math.abs(variacao.variacao)}% {variacao.melhorou ? 'menor' : 'maior'}{'\n'}que no período anterior
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
                 {/* Resumo em uma frase, escrito pela Lia a partir dos números acima. */}
                 {textoLia !== null && (
                   <View style={styles.lia}>
-                    <LiaAvatar size={44} reaction="oi" showRing={false} showBadge={false} />
-                    <View style={{ flex: 1 }}>
+                    <LiaAvatar size={36} reaction="oi" showRing={false} showBadge={false} />
+                    <View style={styles.liaBalao}>
                       <Text style={styles.liaRotulo}>Lia resume</Text>
                       {textoLia === undefined ? (
                         <Text style={styles.liaCarregando}>Lia está escrevendo…</Text>
@@ -329,21 +424,27 @@ export default function Dashboard({ navigation }) {
             <View style={styles.secao}>
               <Titulo
                 titulo="Risco por dia"
-                explicacao="Média do risco de cada dia, na mesma escala da tela Proteção: quanto maior, mais risco. Dias sem registro aparecem vazios. É um resumo do seu histórico no app, não uma previsão."
+                explicacao="Média do risco de cada dia, na mesma escala da tela Proteção: quanto maior, mais risco. Dias sem registro aparecem vazios. Toque numa barra para ver o dia. É um resumo do seu histórico no app, não uma previsão."
                 onExplicar={explicar}
               />
               <View style={styles.barras} accessibilityLabel="Gráfico do risco por dia">
                 {porDia.map((d) => {
                   const nivel = nivelDoRisco(d.risco)
                   return (
-                    <View key={d.data.toISOString()} style={styles.barraDia}>
+                    <Pressable
+                      key={d.data.toISOString()}
+                      style={styles.barraDia}
+                      onPress={() => setDetalhe({ tipo: 'dia', d })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${DIAS_SEMANA[d.data.getDay()].nome}, ${d.data.getDate()}/${d.data.getMonth() + 1}: ${d.risco == null ? 'sem registros' : `risco ${formatarRisco(d.risco)}`}. Ver detalhes`}
+                    >
                       <View style={[
                         styles.barraDiaPreenchida,
                         d.risco == null
                           ? styles.barraDiaVazia
                           : { height: Math.max(6, (d.risco / 10) * ALTURA_BARRAS), backgroundColor: nivel.cor },
                       ]} />
-                    </View>
+                    </Pressable>
                   )
                 })}
               </View>
@@ -373,7 +474,7 @@ export default function Dashboard({ navigation }) {
                   <>
                     <Ionicons name={item.feito ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={item.feito ? Brand.green : Brand.muted} />
                     <Text style={[styles.preparoTexto, !item.feito && styles.preparoPendente]}>{item.texto}</Text>
-                    {!item.feito && item.tela && <Ionicons name="chevron-forward" size={16} color={Brand.rose} />}
+                    {!item.feito && item.tela && <Ionicons name="chevron-forward" size={16} color={TEMA.forte} />}
                   </>
                 )
                 return !item.feito && item.tela ? (
@@ -432,10 +533,12 @@ export default function Dashboard({ navigation }) {
                         {ORDEM_SEMANA.map((dia) => {
                           const risco = expostos.grade[periodo.id][dia]
                           return (
-                            <View
+                            <Pressable
                               key={dia}
+                              onPress={() => setDetalhe({ tipo: 'horario', dia, periodo, risco })}
                               style={[styles.gradeCelula, risco == null ? styles.gradeVazia : { backgroundColor: nivelDoRisco(risco).cor, opacity: 0.35 + (risco / 10) * 0.65 }]}
-                              accessibilityLabel={`${DIAS_SEMANA[dia].nome}, ${periodo.rotulo}: ${risco == null ? 'sem registros' : `risco ${formatarRisco(risco)}`}`}
+                              accessibilityRole="button"
+                              accessibilityLabel={`${DIAS_SEMANA[dia].nome}, ${periodo.rotulo}: ${risco == null ? 'sem registros' : `risco ${formatarRisco(risco)}`}. Ver detalhes`}
                             />
                           )
                         })}
@@ -459,9 +562,9 @@ export default function Dashboard({ navigation }) {
               />
               {compromissos.length === 0 ? (
                 <TouchableOpacity style={styles.convite} onPress={() => navigation.navigate('Routine')}>
-                  <Ionicons name="calendar-outline" size={20} color={Brand.rose} />
+                  <Ionicons name="calendar-outline" size={20} color={TEMA.forte} />
                   <Text style={styles.conviteTexto}>Cadastre sua rotina para ver o risco dos seus trajetos.</Text>
-                  <Ionicons name="chevron-forward" size={18} color={Brand.rose} />
+                  <Ionicons name="chevron-forward" size={18} color={TEMA.forte} />
                 </TouchableOpacity>
               ) : trajetos.length === 0 ? (
                 <Vazio texto="Cadastre sua Casa nos locais seguros e mais de um compromisso para ver os trajetos." />
@@ -470,7 +573,7 @@ export default function Dashboard({ navigation }) {
                   const nivel = nivelDoRisco(t.risco)
                   return (
                     <View key={t.chave} style={styles.linhaLista}>
-                      <Ionicons name={transporteDe(t.transporte).icone} size={18} color={Brand.blue} />
+                      <Ionicons name={transporteDe(t.transporte).icone} size={18} color={TEMA.forte} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.linhaNome} numberOfLines={1}>{t.origem} → {t.destino}</Text>
                         <Text style={styles.linhaDetalhe}>Sai às {horaDosMinutos(t.saida)}</Text>
@@ -507,7 +610,7 @@ export default function Dashboard({ navigation }) {
                       accessibilityRole="button"
                       accessibilityLabel={`${detalhe?.nome ?? 'Lugar frequente'}, ${descreverTempo(lugar.minutos)}. Ver no mapa`}
                     >
-                      <Ionicons name={detalhe?.icone ?? 'location-outline'} size={18} color={Brand.rose} />
+                      <Ionicons name={detalhe?.icone ?? 'location-outline'} size={18} color={TEMA.forte} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.linhaNome} numberOfLines={1}>{detalhe?.nome ?? '…'}</Text>
                         <Text style={styles.linhaDetalhe}>{descreverTempo(lugar.minutos)} no período</Text>
@@ -533,12 +636,12 @@ export default function Dashboard({ navigation }) {
             </View>
 
             <View style={styles.secao}>
-              <Titulo titulo="Histórico" explicacao="Os alertas SOS enviados no período e quem recebeu cada um." onExplicar={explicar} />
+              <Titulo titulo="Histórico" explicacao="Os alertas SOS enviados no período e quem recebeu cada um. Toque num alerta para ver onde ele foi acionado e a mensagem enviada." onExplicar={explicar} />
               {alertas.length === 0 ? (
                 <Vazio texto="Nenhum alerta enviado no período." />
               ) : (
                 alertas.slice(-10).reverse().map((alerta) => (
-                  <View key={alerta.id} style={styles.linhaLista}>
+                  <TouchableOpacity key={alerta.id} style={styles.linhaLista} onPress={() => abrirAlerta(alerta)} accessibilityRole="button" accessibilityLabel={`Alerta SOS de ${formatarDataHora(alerta.created_at)}. Ver detalhes`}>
                     <Ionicons name="alert-circle" size={20} color={Brand.danger} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.linhaNome}>SOS enviado</Text>
@@ -549,7 +652,8 @@ export default function Dashboard({ navigation }) {
                       )}
                     </View>
                     <Text style={styles.alertaData}>{formatarDataHora(alerta.created_at)}</Text>
-                  </View>
+                    <Ionicons name="chevron-forward" size={16} color="#C9C2C6" />
+                  </TouchableOpacity>
                 ))
               )}
             </View>
@@ -558,78 +662,87 @@ export default function Dashboard({ navigation }) {
               <View style={styles.secao}>
                 <Titulo titulo="Quem mais recebeu seus alertas" onExplicar={explicar} />
                 {rankingContatos.map((c) => (
-                  <View key={c.telefone} style={styles.contato}>
+                  <TouchableOpacity key={c.telefone} style={styles.contato} onPress={() => navigation.navigate('EmergencyContacts')} accessibilityRole="button" accessibilityLabel={`${c.nome}, ${c.count} ${c.count === 1 ? 'alerta' : 'alertas'}. Ver contatos cadastrados`}>
                     <View style={styles.avatar}><Text style={styles.avatarTexto}>{c.nome?.charAt(0)?.toUpperCase()}</Text></View>
                     <Text style={styles.contatoNome}>{c.nome}</Text>
                     <Text style={styles.contatoContagem}>{c.count} {c.count === 1 ? 'alerta' : 'alertas'}</Text>
-                  </View>
+                    <Ionicons name="chevron-forward" size={16} color="#C9C2C6" />
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
           </>
         )}
+        </View>
       </ScrollView>
 
-      <LiaHelpModal visible={Boolean(ajuda)} title={ajuda?.title} message={ajuda?.message} onClose={() => setAjuda(null)} />
-    </SafeAreaView>
+      <PopupAmpara
+        aba="Dashboard"
+        visible={Boolean(popup)}
+        onClose={() => setDetalhe(null)}
+        icone={popup?.icone}
+        titulo={popup?.titulo}
+        subtitulo={popup?.subtitulo}
+        acoes={popup?.acoes}
+      >
+        {popup?.conteudo}
+      </PopupAmpara>
+
+      <LiaHelpModal aba="Dashboard" visible={Boolean(ajuda)} title={ajuda?.title} message={ajuda?.message} onClose={() => setAjuda(null)} />
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Brand.canvas },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   centro: { justifyContent: 'center', alignItems: 'center' },
-  conteudo: { paddingHorizontal: 20, paddingBottom: 40 },
+  conteudo: { paddingHorizontal: 20 },
 
-  topo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 14 },
-  titulo: { fontSize: 26, fontWeight: '700', color: Brand.rose },
-  subtitulo: { fontSize: 13, color: Brand.muted, marginTop: 2 },
-  logo: { width: 40, height: 40 },
+  titulo: { fontSize: 22, fontWeight: '800', color: TEMA.forte },
+  subtitulo: { fontSize: 13, color: '#776C73', marginTop: 2 },
 
-  periodos: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  periodo: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: Brand.line },
-  periodoAtivo: { backgroundColor: Brand.blue, borderColor: Brand.blue },
-  periodoTexto: { fontSize: 13, fontWeight: '600', color: Brand.blue },
+  periodo: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 16, backgroundColor: '#FFFFFF' },
+  periodoAtivo: { backgroundColor: TEMA.forte },
+  periodoTexto: { fontSize: 12, fontWeight: '700', color: TEMA.forte },
   periodoTextoAtivo: { color: '#FFF' },
 
-  abas: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Brand.line, marginBottom: 16 },
-  aba: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  abaAtiva: { borderBottomColor: Brand.rose },
-  abaTexto: { color: Brand.muted, fontSize: 12, fontWeight: '600' },
-  abaTextoAtiva: { color: Brand.rose },
+  abas: { flexDirection: 'row', gap: 8, marginTop: 16, marginBottom: 6 },
+  aba: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 20, backgroundColor: TEMA.fundo },
+  abaAtiva: { backgroundColor: TEMA.forte },
+  abaTexto: { color: TEMA.forte, fontSize: 12, fontWeight: '700' },
+  abaTextoAtiva: { color: '#FFF' },
 
-  destaque: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 22, padding: 18 },
-  destaqueRotulo: { fontSize: 13, fontWeight: '700' },
-  destaqueValor: { fontSize: 44, fontWeight: '800', lineHeight: 50, fontVariant: ['tabular-nums'] },
-  destaqueMax: { fontSize: 18, fontWeight: '500' },
-  destaqueNivel: { fontSize: 15, fontWeight: '700' },
-  tendencia: { alignItems: 'flex-end', gap: 2, maxWidth: '45%' },
-  tendenciaTexto: { fontSize: 12, fontWeight: '600', textAlign: 'right' },
+  destaque: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
+  destaqueValor: { fontSize: 34, fontWeight: '800', lineHeight: 40, fontVariant: ['tabular-nums'] },
+  destaqueNivel: { fontSize: 14, color: Brand.ink },
+  tendenciaTexto: { fontSize: 12, fontWeight: '600', marginTop: 1 },
 
-  lia: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: Brand.surfaceSoft, borderRadius: 18, padding: 14, marginTop: 12 },
-  liaRotulo: { fontSize: 12, fontWeight: '700', color: Brand.rose, marginBottom: 3 },
+  lia: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 14 },
+  liaBalao: { flex: 1, backgroundColor: '#F1F6F1', borderRadius: 18, borderTopLeftRadius: 4, paddingVertical: 11, paddingHorizontal: 14 },
+  liaRotulo: { fontSize: 12, fontWeight: '700', color: TEMA.forte, marginBottom: 3 },
   liaTexto: { fontSize: 14, color: Brand.ink, lineHeight: 21 },
   liaCarregando: { fontSize: 13, color: Brand.muted, fontStyle: 'italic' },
 
-  aviso: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: Brand.blueSoft, borderRadius: 16, padding: 14 },
-  avisoTexto: { flex: 1, color: Brand.blue, fontSize: 13, lineHeight: 19 },
+  aviso: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: TEMA.fundo, borderRadius: 20, padding: 14, marginTop: 10 },
+  avisoTexto: { flex: 1, color: TEMA.forte, fontSize: 13, lineHeight: 19 },
 
-  secao: { paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: Brand.line },
+  secao: { paddingVertical: 14 },
   tituloLinha: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  tituloSecao: { fontSize: 16, fontWeight: '700', color: Brand.ink },
+  tituloSecao: { fontSize: 12, letterSpacing: 0.7, textTransform: 'uppercase', fontWeight: '700', color: '#8A8590' },
   vazio: { fontSize: 13, color: Brand.muted, lineHeight: 19 },
   nota: { fontSize: 12, color: Brand.muted, marginTop: 10, lineHeight: 17 },
 
   barras: { height: ALTURA_BARRAS, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   barraDia: { flex: 1, height: ALTURA_BARRAS, justifyContent: 'flex-end' },
   barraDiaPreenchida: { borderTopLeftRadius: 5, borderTopRightRadius: 5 },
-  barraDiaVazia: { height: 4, backgroundColor: Brand.line, borderRadius: 2 },
+  barraDiaVazia: { height: 4, backgroundColor: '#E4EDE5', borderRadius: 2 },
   barrasRotulos: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   barraDiaRotulo: { flex: 1, textAlign: 'center', fontSize: 11, color: Brand.muted, fontWeight: '600' },
 
   preparoTopo: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  preparoContagem: { fontSize: 22, fontWeight: '800', color: Brand.rose },
+  preparoContagem: { fontSize: 22, fontWeight: '800', color: TEMA.forte },
   preparoTrilha: { flex: 1, height: 8, borderRadius: 4, backgroundColor: '#F3EFF1', overflow: 'hidden' },
-  preparoBarra: { height: 8, borderRadius: 4, backgroundColor: Brand.rose },
+  preparoBarra: { height: 8, borderRadius: 4, backgroundColor: TEMA.forte },
   preparoItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 },
   preparoTexto: { flex: 1, fontSize: 14, color: Brand.ink },
   preparoPendente: { color: Brand.muted },
@@ -642,26 +755,27 @@ const styles = StyleSheet.create({
   gradeVazia: { backgroundColor: '#F5F1F3' },
 
   numeros: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
-  numero: { flexBasis: '47%', flexGrow: 1, backgroundColor: Brand.surfaceSoft, borderRadius: 16, padding: 14 },
-  numeroValor: { fontSize: 22, fontWeight: '800', color: Brand.ink },
+  numero: { flexBasis: '47%', flexGrow: 1, paddingVertical: 8 },
+  numeroValor: { fontSize: 26, fontWeight: '800', color: TEMA.forte },
   numeroRotulo: { fontSize: 12, color: Brand.muted, marginTop: 2 },
 
   tecnicosCabecalho: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18, paddingVertical: 10 },
   tecnicosTitulo: { flex: 1, fontSize: 13, color: Brand.muted, fontWeight: '600' },
   tecnicos: { paddingBottom: 10 },
 
-  convite: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Brand.surfaceSoft, borderRadius: 14, padding: 14 },
+  convite: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: TEMA.fundo, borderRadius: 20, padding: 14 },
   conviteTexto: { flex: 1, color: Brand.ink, fontSize: 13 },
-  linhaLista: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F5EEF1' },
+  linhaLista: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
   linhaNome: { fontSize: 14, color: Brand.ink, fontWeight: '600' },
   linhaDetalhe: { fontSize: 12, color: Brand.muted, marginTop: 1 },
   selo: { borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4 },
   seloTexto: { fontSize: 11, fontWeight: '700' },
 
   alertaData: { fontSize: 11, color: Brand.muted },
+  popupTexto: { fontSize: 13, color: '#776C73', lineHeight: 19, paddingVertical: 6 },
   contato: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Brand.surfaceRose, alignItems: 'center', justifyContent: 'center' },
-  avatarTexto: { color: Brand.rose, fontWeight: '700' },
+  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: TEMA.fundo, alignItems: 'center', justifyContent: 'center' },
+  avatarTexto: { color: TEMA.forte, fontWeight: '700' },
   contatoNome: { flex: 1, fontSize: 14, color: Brand.ink },
   contatoContagem: { fontSize: 13, color: Brand.muted },
 })

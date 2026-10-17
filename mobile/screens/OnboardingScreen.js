@@ -4,32 +4,36 @@ import {
   Image, Dimensions, FlatList
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Brand } from '../constants/brandTheme'
+import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
 
 const { width, height } = Dimensions.get('window')
 
 const slides = [
-  { id: '1', welcome: true },
+  { id: '1', welcome: true, aba: 'Proteção' },
   {
     id: '2',
     fullBg: true,
+    aba: 'Assistente',
     title: 'Você não\nestá sozinha',
     desc: 'Mulheres frequentemente modificam hábitos, trajetos e horários por receio de sofrer algum tipo de violência, especialmente durante deslocamentos urbanos.',
   },
   {
     id: '3',
+    aba: 'Proteção',
     title: 'Monitoramento em\ntempo real',
     desc: 'O Ampara analisa sua localização e detecta situações de risco com base em dados de segurança pública, te protegendo a cada passo.',
     image: require('../assets/images/sensores_info.png'),
   },
   {
     id: '4',
+    aba: 'Perfil',
     title: 'SOS com\num único toque',
-    desc: 'Cadastre seus contatos de emergência e dispare um alerta SOS segurando o botão — sua localização é enviada automaticamente por SMS.',
+    desc: 'Cadastre seus contatos de emergência e dispare um alerta SOS segurando o botão — sua localização é enviada automaticamente por WhatsApp.',
     image: require('../assets/images/sos_info.png'),
   },
   {
     id: '5',
+    aba: 'Mapa',
     title: 'Mapeie seus\nlocais seguros',
     desc: 'Salve pontos de confiança, consulte o índice de segurança da sua região e tome decisões mais seguras no dia a dia.',
     image: require('../assets/images/contatos_info.png'),
@@ -50,7 +54,10 @@ export default function OnboardingScreen({ onDone }) {
     }
   }
 
+  const temaAtual = TemaDaAba[slides[currentIndex].aba]
+
   const renderSlide = ({ item }) => {
+    const tema = TemaDaAba[item.aba]
     if (item.welcome) {
       return (
         <View style={styles.slide}>
@@ -60,7 +67,7 @@ export default function OnboardingScreen({ onDone }) {
             resizeMode="cover"
           />
           <View style={styles.welcomeBottom}>
-            <Text style={styles.welcomeLabel}>bem vinda ao</Text>
+            <Text style={[styles.welcomeLabel, { color: tema.forte }]}>bem-vinda ao</Text>
             <Text style={styles.welcomeBrand}>Ampara</Text>
           </View>
         </View>
@@ -89,7 +96,7 @@ export default function OnboardingScreen({ onDone }) {
               </View>
               {/* Texto centralizado no espaço restante */}
               <View style={styles.fullBgTextArea}>
-                <Text style={styles.fullBgTitle}>{item.title}</Text>
+                <Text style={[styles.fullBgTitle, { color: tema.forte }]}>{item.title}</Text>
                 <Text style={styles.fullBgDesc}>{item.desc}</Text>
               </View>
             </View>
@@ -111,10 +118,10 @@ export default function OnboardingScreen({ onDone }) {
         </View>
 
         {/* Título grande no topo */}
-        <Text style={styles.slideTitle}>{item.title}</Text>
+        <Text style={[styles.slideTitle, { color: tema.forte }]}>{item.title}</Text>
 
-        {/* Imagem grande central */}
-        <View style={styles.imageWrap}>
+        {/* Imagem grande central, sobre um fundo arredondado na cor do slide */}
+        <View style={[styles.imageWrap, { backgroundColor: tema.fundo }]}>
           {item.image
             ? <Image source={item.image} style={styles.slideInfoImage} resizeMode="contain" />
             : <Image source={require('../assets/images/maos-ampara-azul.png')} style={styles.slideFallback} resizeMode="contain" />
@@ -148,10 +155,10 @@ export default function OnboardingScreen({ onDone }) {
       <View style={[styles.footer, currentIndex === 1 && styles.fullBgFooter]}>
         <View style={styles.dots}>
           {slides.map((_, i) => (
-            <View key={i} style={[styles.dot, i === currentIndex && styles.dotActive]} />
+            <View key={i} style={[styles.dot, i === currentIndex && [styles.dotActive, { backgroundColor: temaAtual.forte }]]} />
           ))}
         </View>
-        <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
+        <TouchableOpacity style={[styles.nextBtn, { backgroundColor: temaAtual.forte }]} onPress={goNext}>
           <Text style={styles.nextBtnText}>
             {currentIndex === slides.length - 1 ? 'Entrar' : 'Avançar'}
           </Text>
@@ -174,8 +181,8 @@ const styles = StyleSheet.create({
   // Slide 1 — boas-vindas
   bigLogo: { width, flex: 1 },
   welcomeBottom: { paddingBottom: 36, paddingLeft: 32 },
-  welcomeLabel: { fontSize: 18, color: Brand.rose, fontWeight: '600' },
-  welcomeBrand: { fontSize: 56, fontWeight: '600', color: Brand.ink, lineHeight: 64 },
+  welcomeLabel: { fontSize: 22, fontFamily: FonteDaLia },
+  welcomeBrand: { fontSize: 56, fontWeight: '800', color: '#273963', lineHeight: 64 },
 
   // Slide 2 — fullBg
   fullBgWhite: {
@@ -216,11 +223,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 24,
-    paddingTop: 48,
-    paddingBottom: 12,
+    paddingTop: 28,
+    paddingBottom: 18,
   },
-  headerLogo: { width: 64, height: 64 },
-  headerBrand: { fontSize: 36, fontWeight: '500', color: Brand.blue },
+  headerLogo: { width: 34, height: 34 },
+  headerBrand: { fontSize: 20, fontWeight: '800', color: '#273963' },
 
   slideTitle: {
     fontSize: 28,
@@ -236,11 +243,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    marginHorizontal: 24,
+    marginVertical: 14,
+    borderRadius: 44,
+    overflow: 'hidden',
   },
   slideInfoImage: {
-    width: width * 0.88,
-    height: width * 0.88,
+    width: width * 0.74,
+    height: width * 0.74,
   },
   slideFallback: {
     width: width * 0.55,
@@ -267,11 +277,10 @@ const styles = StyleSheet.create({
   fullBgFooter: { backgroundColor: Brand.surface },
   dots: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 4 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E7D5DC' },
-  dotActive: { backgroundColor: Brand.rose, width: 24, borderRadius: 8 },
+  dotActive: { width: 24, borderRadius: 8 },
   nextBtn: {
-    backgroundColor: Brand.rose,
     paddingVertical: 16,
-    borderRadius: 22,
+    borderRadius: 28,
     alignItems: 'center',
   },
   nextBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },

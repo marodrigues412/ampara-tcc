@@ -1,7 +1,7 @@
 import React from 'react'
 import { Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Brand } from '../constants/brandTheme'
+import { Brand, TemaDaAba } from '../constants/brandTheme'
 import LiaAvatar from './LiaAvatar'
 
 // Altura da Lia e do logo opcional, para os dois ficarem do mesmo tamanho.
@@ -9,7 +9,9 @@ const TAMANHO_ICONE = 68
 
 // image é opcional: um logo mostrado na ponta direita do card, à frente da Lia. Com ele,
 // o título desce para a linha de baixo, porque não sobra largura entre os dois.
-export default function LiaHelpModal({ visible, title, message, image, imageLabel, onClose }) {
+// aba escolhe a cor (a da tela de onde a explicação foi aberta).
+export default function LiaHelpModal({ visible, title, message, image, imageLabel, onClose, aba = 'Proteção' }) {
+  const tema = TemaDaAba[aba] ?? TemaDaAba['Proteção']
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -19,21 +21,21 @@ export default function LiaHelpModal({ visible, title, message, image, imageLabe
           accessibilityRole="button"
           accessibilityLabel="Fechar explicação"
         />
-        <View style={styles.panel}>
+        <View style={[styles.panel, { borderTopColor: tema.fundo }]}>
           {image ? (
             <>
               <View style={styles.headerIcones}>
                 <LiaAvatar size={TAMANHO_ICONE} reaction="oi" showRing={false} showBadge={false} transparentBackground />
                 <Image source={image} style={styles.image} resizeMode="contain" accessibilityLabel={imageLabel} />
               </View>
-              <Text style={[styles.eyebrow, styles.eyebrowAbaixo]}>Lia explica</Text>
+              <Text style={[styles.eyebrow, styles.eyebrowAbaixo, { color: tema.forte }]}>Lia explica</Text>
               <Text style={styles.title}>{title}</Text>
             </>
           ) : (
             <View style={styles.header}>
               <LiaAvatar size={TAMANHO_ICONE} reaction="oi" showRing={false} showBadge={false} transparentBackground />
               <View style={styles.headerText}>
-                <Text style={styles.eyebrow}>Lia explica</Text>
+                <Text style={[styles.eyebrow, { color: tema.forte }]}>Lia explica</Text>
                 <Text style={styles.title}>{title}</Text>
               </View>
               <TouchableOpacity
@@ -47,7 +49,7 @@ export default function LiaHelpModal({ visible, title, message, image, imageLabe
             </View>
           )}
           <Text style={styles.message}>{message}</Text>
-          <TouchableOpacity style={styles.dismissButton} onPress={onClose} accessibilityRole="button">
+          <TouchableOpacity style={[styles.dismissButton, { backgroundColor: tema.forte }]} onPress={onClose} accessibilityRole="button">
             <Text style={styles.dismissText}>Entendi</Text>
           </TouchableOpacity>
         </View>
@@ -58,7 +60,7 @@ export default function LiaHelpModal({ visible, title, message, image, imageLabe
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: 'rgba(42, 29, 35, 0.48)' },
-  panel: { width: '100%', maxWidth: 420, padding: 22, borderRadius: 24, backgroundColor: Brand.surface, shadowColor: '#291D23', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.16, shadowRadius: 24, elevation: 12 },
+  panel: { width: '100%', maxWidth: 420, padding: 22, borderRadius: 30, borderTopWidth: 10, backgroundColor: Brand.surface, shadowColor: '#291D23', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.16, shadowRadius: 24, elevation: 12 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerText: { flex: 1, minWidth: 0 },
   eyebrow: { color: Brand.rose, fontSize: 12, fontWeight: '700' },

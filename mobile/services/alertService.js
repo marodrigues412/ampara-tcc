@@ -15,7 +15,7 @@ export async function getRecentAlerts(userId, days = 7) {
 
   const { data, error } = await supabase
     .from("alert_logs")
-    .select("id, created_at, message, recipient_names, status")
+    .select("id, created_at, message, recipient_names, status, latitude, longitude, nivel_risco")
     .eq("user_id", userId)
     .in("status", ["enviado", "legado"])
     .gte("created_at", desde.toISOString())
