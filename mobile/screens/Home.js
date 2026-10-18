@@ -21,10 +21,12 @@ import {
 
 import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import { useContextLayer } from '../hooks/useContextLayer'
+import { LOCAIS_DE_DEMONSTRACAO } from '../constants/demonstracao'
 import { buscarResumoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
@@ -55,6 +57,9 @@ import { FRACAO_DO_ANO } from '../utils/mapaCalor'
 // aba Mapa usa para resumir uma região.
 const RAIO_INICIAL_KM = 1
 const SHOW_PRESENTATION_MODE = false
+// Modo demonstração (estande): simula só o bairro da Camada 1. Aparece no build de
+// desenvolvimento; para um build de release, troque por true.
+const MOSTRAR_DEMONSTRACAO = __DEV__
 const LIVE_HEART_RATE_MS = 10_000
 const SOS_HOLD_MS = 3_000
 const HEART_RATE_STATUS_MAX_AGE_MS = 30_000
@@ -169,7 +174,10 @@ export default function Home({ navigation }) {
   const { data, location, riskStatus, currentScore, phoneMotionWindow, gpsSpeedDeltaMps } = useRiskDetection({ insideSafeZone, activityMode })
   const smartwatch = useSmartwatch(userId)
   // Camada 1 do score de 3 camadas: faixa do mapa bairro × dia × período (SSP).
-  const { contexto: contextoDaRegiao, local: localDoContexto } = useContextLayer({ location, insideSafeZone })
+  // Não é guardado entre aberturas do app: ninguém fica preso numa simulação sem saber.
+  const [localSimulado, setLocalSimulado] = useState(null)
+  const insets = useSafeAreaInsets()
+  const { contexto: contextoDaRegiao, local: localDoContexto, simulado: contextoSimulado } = useContextLayer({ location, insideSafeZone, localSimulado })
   const textoDaCamadaContexto = !contextoDaRegiao
     ? 'calculando'
     : contextoDaRegiao.disponivel
@@ -1022,6 +1030,21 @@ export default function Home({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {contextoSimulado && (
+        <View
+          style={[styles.simulacaoFaixa, { top: insets.top + 4 }]}
+          accessibilityRole="alert"
+          accessibilityLabel={`Simulação de localização ativa: ${localSimulado.rotulo}, ${localSimulado.cidade}`}
+        >
+          <Ionicons name="flask" size={14} color="#FFFFFF" />
+          <Text style={styles.simulacaoFaixaTexto} numberOfLines={1}>
+            SIMULAÇÃO · {localSimulado.rotulo}, {localSimulado.cidade}
+          </Text>
+          <TouchableOpacity onPress={() => setLocalSimulado(null)} accessibilityRole="button" accessibilityLabel="Encerrar simulação" hitSlop={10}>
+            <Text style={styles.simulacaoFaixaSair}>Encerrar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
 
         {/* ── HEADER: a Lia no anel de risco ── */}
@@ -1192,7 +1215,7 @@ export default function Home({ navigation }) {
                 </View>
               )}
               <Text style={styles.experimentalScoreDetail}>
-                Contexto da região{localDoContexto?.bairro ? ` (${localDoContexto.bairro})` : ''}: {textoDaCamadaContexto}
+                Contexto da região{localDoContexto?.bairro ? ` (${localDoContexto.bairro})` : ''}: {textoDaCamadaContexto}{contextoSimulado ? ' · SIMULAÇÃO' : ''}
               </Text>
               <Text style={styles.experimentalScoreDisclaimer}>
                 Prévia exploratória. Não validada, não aciona alertas e não substitui avaliação de segurança.
@@ -1296,6 +1319,42 @@ export default function Home({ navigation }) {
         )}
 
         </>
+
+        {MOSTRAR_DEMONSTRACAO && (
+        <View style={styles.demoPanel}>
+          <View style={styles.demoPanelHeader}>
+            <Ionicons name="flask-outline" size={16} color={Brand.blue} />
+            <Text style={styles.demoPanelTitle}>Modo demonstração · simular localização</Text>
+          </View>
+          <Text style={styles.demoSectionLabel}>Bairro usado no contexto da região</Text>
+          <View style={styles.demoBtnRow}>
+            {LOCAIS_DE_DEMONSTRACAO.map((lugar) => {
+              const ativo = localSimulado?.id === lugar.id
+              return (
+                <TouchableOpacity
+                  key={lugar.id}
+                  style={[styles.demoBtn, { borderColor: Brand.blue, borderWidth: ativo ? 2.5 : 1.5 }, ativo && { backgroundColor: Brand.blueSoft }]}
+                  onPress={() => setLocalSimulado(ativo ? null : lugar)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: ativo }}
+                >
+                  <Text style={[styles.demoBtnText, { color: Brand.blue }]}>{lugar.rotulo}</Text>
+                  <Text style={styles.demoBtnSub}>{lugar.cidade}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+          <Text style={styles.demoNota}>
+            Só o bairro é simulado: a faixa vem do mapa da SSP para o dia e o horário reais. O SOS continua enviando o GPS verdadeiro.
+          </Text>
+          {localSimulado && (
+            <TouchableOpacity style={styles.demoResetBtn} onPress={() => setLocalSimulado(null)}>
+              <Ionicons name="refresh-outline" size={14} color={Brand.blue} />
+              <Text style={styles.demoResetText}>Usar minha localização real</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        )}
 
         {/* Mantido oculto para possível reutilização futura; não participa do score real. */}
         {SHOW_PRESENTATION_MODE && (
@@ -1901,6 +1960,10 @@ const styles = StyleSheet.create({
   demoBtnSub: { fontSize: 10, color: '#888' },
   demoEnvActive: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EAF5EC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
   demoEnvActiveText: { fontSize: 11, color: '#27AE60', fontWeight: '600', flex: 1 },
+  demoNota: { fontSize: 11, color: Brand.muted, marginTop: 10, lineHeight: 15 },
+  simulacaoFaixa: { position: 'absolute', left: 16, right: 16, zIndex: 20, elevation: 6, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Brand.blue, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14 },
+  simulacaoFaixaTexto: { flex: 1, color: '#FFFFFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
+  simulacaoFaixaSair: { color: '#FFFFFF', fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
   demoResetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 12 },
   demoResetText: { fontSize: 12, color: '#5A8FAF', fontWeight: '600' },
 })

@@ -14,11 +14,16 @@ function chaveDoMomento(data) {
   return `${diaDaSemana(data)}|${periodoDoHorario(data)}`
 }
 
-// Camada 1 (contexto) para a posição atual. `contexto` é null enquanto ainda não houve
+// Camada 1 (contexto) para a posição atual. Com `localSimulado` (modo demonstração),
+// usa esse município/bairro no lugar do endereço reverso; o GPS real segue intacto para
+// o SOS e o mapa. `contexto` é null enquanto ainda não houve
 // uma primeira resposta ("calculando"); depois é sempre o resultado de avaliarContexto,
 // que pode ser indisponível ("sem dados da região").
-export function useContextLayer({ location, insideSafeZone }) {
-  const [local, setLocal] = useState(null)
+export function useContextLayer({ location, insideSafeZone, localSimulado = null }) {
+  const [localReal, setLocal] = useState(null)
+  const local = localSimulado
+    ? { municipio: localSimulado.municipio, bairro: localSimulado.bairro }
+    : localReal
   // Guarda a chave junto da célula: resposta de outro bairro/período não conta, e a
   // tela volta a "calculando" até chegar a da posição e do horário atuais.
   const [resposta, setResposta] = useState(null)
@@ -39,7 +44,7 @@ export function useContextLayer({ location, insideSafeZone }) {
 
     let cancelado = false
     Location.reverseGeocodeAsync({ latitude, longitude })
-      .then((enderecos) => { if (!cancelado) setLocal(localDoEndereco(enderecos?.[0])) })
+      .then((enderecos) => { if (!cancelado) setLocal(localDoEndereco(enderecos)) })
       .catch((erro) => {
         console.log('Camada 1: endereço reverso falhou:', erro?.message)
         // Deixa tentar de novo no próximo ponto, e mostra "sem dados" em vez de travar.
@@ -49,19 +54,23 @@ export function useContextLayer({ location, insideSafeZone }) {
     return () => { cancelado = true }
   }, [location])
 
-  useEffect(() => {
-    if (!local) return
-    let cancelado = false
-    const chave = `${local.municipio}|${local.bairro}|${momento}`
-    buscarCelulaDeContexto({ municipio: local.municipio, bairro: local.bairro })
-      .then(({ celula }) => { if (!cancelado) setResposta({ chave, celula }) })
-    return () => { cancelado = true }
-  }, [local, momento])
+  const temLocal = Boolean(local)
+  const municipio = local?.municipio ?? null
+  const bairro = local?.bairro ?? null
+  const chaveAtual = `${municipio}|${bairro}|${momento}`
 
-  const atual = local && resposta?.chave === `${local.municipio}|${local.bairro}|${momento}`
+  useEffect(() => {
+    if (!temLocal) return
+    let cancelado = false
+    buscarCelulaDeContexto({ municipio, bairro })
+      .then(({ celula }) => { if (!cancelado) setResposta({ chave: chaveAtual, celula }) })
+    return () => { cancelado = true }
+  }, [temLocal, municipio, bairro, chaveAtual])
+
+  const atual = temLocal && resposta?.chave === chaveAtual
   const contexto = atual
-    ? avaliarContexto({ municipio: local.municipio, bairro: local.bairro, celula: resposta.celula, emLocalSeguro: insideSafeZone })
+    ? avaliarContexto({ municipio, bairro, celula: resposta.celula, emLocalSeguro: insideSafeZone })
     : null
 
-  return { contexto, local }
+  return { contexto, local, simulado: Boolean(localSimulado) }
 }
