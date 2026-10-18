@@ -307,8 +307,9 @@ export default function Dashboard({ navigation }) {
     }
   } else if (detalhe?.tipo === 'alerta') {
     const { alerta } = detalhe
-    // nivel_risco é o rótulo gravado no envio ("Crítico", "Moderado", "Baixo").
-    const corDoNivel = { 'crítico': Brand.danger, moderado: Brand.amber, baixo: Brand.green }[String(alerta.nivel_risco ?? '').toLowerCase()]
+    // nivel_risco é o rótulo gravado no envio: "Alto", "Moderado", "Baixo" (ou "Crítico"
+    // nos alertas de antes do score de 3 camadas).
+    const corDoNivel = { 'crítico': Brand.danger, alto: Brand.danger, moderado: Brand.amber, baixo: Brand.green }[String(alerta.nivel_risco ?? '').toLowerCase()]
     const temLocal = alerta.latitude != null && alerta.longitude != null
     const destinatarios = (alerta.recipient_names ?? '').split(',').map((t) => t.trim()).filter(Boolean).map((tel) => nomePorTelefone[tel] || tel)
     const endereco = enderecoAlerta?.id === alerta.id ? enderecoAlerta.texto : undefined

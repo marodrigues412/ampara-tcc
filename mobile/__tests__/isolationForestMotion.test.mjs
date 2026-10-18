@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs'
 import {
   classifyScoreBand,
   extractPhoneMotionFeatures,
-  fuseExperimentalRiskLayers,
   normalizeHeartRateAnomaly,
   scoreIsolationForest,
 } from '../services/isolationForestMotion.js'
@@ -53,14 +52,10 @@ test('loads the committed UCI model artifact in the app inference format', () =>
   assert.ok(score.anomalyScore >= 0 && score.anomalyScore <= 1)
 })
 
-test('uses the professor thresholds and matrix for the final risk band', () => {
+test('uses the professor thresholds for body bands', () => {
   assert.equal(classifyScoreBand(0.33), 'baixo')
   assert.equal(classifyScoreBand(0.34), 'medio')
   assert.equal(classifyScoreBand(0.67), 'alto')
   assert.equal(normalizeHeartRateAnomaly(0.5), 0)
   assert.equal(normalizeHeartRateAnomaly(2.5), 1)
-  assert.equal(fuseExperimentalRiskLayers({ contextScore: 0, heartRateZScore: 2.5, motionAnomalyScore: 1 }).level, 'Moderado')
-  assert.equal(fuseExperimentalRiskLayers({ contextScore: 5, heartRateZScore: 2.5, motionAnomalyScore: 1 }).level, 'Alto')
-  assert.equal(fuseExperimentalRiskLayers({ contextScore: 10, heartRateZScore: 0, motionAnomalyScore: 0 }).level, 'Moderado')
-  assert.equal(fuseExperimentalRiskLayers({ contextScore: null, heartRateZScore: 1 }), null)
 })

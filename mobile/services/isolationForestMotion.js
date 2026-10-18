@@ -53,6 +53,7 @@ export function scoreIsolationForest(features, model) {
 }
 
 export function classifyScoreBand(score) {
+  if (score === null || score === undefined || score === '') return null
   const value = Number(score)
   if (!Number.isFinite(value)) return null
   if (value <= 0.33) return 'baixo'
@@ -61,36 +62,9 @@ export function classifyScoreBand(score) {
 }
 
 export function normalizeHeartRateAnomaly(heartRateZScore) {
+  // Number(null) é 0: sem esta checagem, "sem BPM" viraria "BPM normal".
+  if (heartRateZScore === null || heartRateZScore === undefined || heartRateZScore === '') return null
   const zScore = Number(heartRateZScore)
   if (!Number.isFinite(zScore)) return null
   return clamp((zScore - 0.5) / 2)
-}
-
-const FUSION_MATRIX = {
-  baixo: { baixo: 'Baixo', medio: 'Baixo', alto: 'Moderado' },
-  medio: { baixo: 'Baixo', medio: 'Moderado', alto: 'Alto' },
-  alto: { baixo: 'Moderado', medio: 'Alto', alto: 'Alto' },
-}
-
-export function fuseExperimentalRiskLayers({ contextScore, heartRateZScore, motionAnomalyScore }) {
-  if (contextScore === null || contextScore === undefined || contextScore === '') return null
-  const context = Number(contextScore)
-  const heartRateAnomaly = normalizeHeartRateAnomaly(heartRateZScore)
-  if (!Number.isFinite(context) || heartRateAnomaly === null) return null
-
-  const motion = motionAnomalyScore === null || motionAnomalyScore === undefined || motionAnomalyScore === ''
-    ? null
-    : Number(motionAnomalyScore)
-  const bodyScore = Number.isFinite(motion)
-    ? (0.7 * heartRateAnomaly) + (0.3 * clamp(motion))
-    : heartRateAnomaly
-  const contextBand = classifyScoreBand(clamp(context / 10))
-  const bodyBand = classifyScoreBand(bodyScore)
-
-  return {
-    bodyScore: Math.round(bodyScore * 1000) / 1000,
-    contextBand,
-    bodyBand,
-    level: FUSION_MATRIX[contextBand][bodyBand],
-  }
 }
