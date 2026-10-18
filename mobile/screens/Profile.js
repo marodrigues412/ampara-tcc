@@ -87,6 +87,16 @@ export default function Profile({ navigation }) {
 
       <View style={{ height: 8 }} />
 
+      <SecaoRecolhida icone="person-outline" titulo="Seus dados" resumo="Nome, e-mail e telefone" cor={TEMA.forte} fundo={TEMA.fundo}>
+        {[['Nome', profile?.nome], ['E-mail', user?.email], ['Telefone', profile?.telefone]].map(([rotulo, valor]) => (
+          <View key={rotulo} style={styles.dado}>
+            <Text style={styles.dadoRotulo}>{rotulo}</Text>
+            <Text style={styles.linhaTitulo}>{valor || 'Não informado'}</Text>
+          </View>
+        ))}
+        {link('Editar perfil', 'EditProfile', 'create-outline')}
+      </SecaoRecolhida>
+
       <SecaoRecolhida icone="people-outline" titulo="Rede de apoio" resumo={contatos.length ? plural(contatos.length, 'contato', 'contatos') : 'Nenhum contato cadastrado'} cor={TEMA.forte} fundo={TEMA.fundo}>
         {contatos.map((c, k) => (
           <View key={c.id} style={styles.linha}>
@@ -122,16 +132,6 @@ export default function Profile({ navigation }) {
       <SecaoRecolhida icone="color-palette-outline" titulo="Sua Lia" resumo="Personalize a aparência da assistente" cor={TEMA.forte} fundo={TEMA.fundo}>
         <Text style={styles.nota}>Escolha o tom de pele, o cabelo e os olhos da Lia.</Text>
         {link('Personalizar a Lia', 'LiaAppearance', 'sparkles-outline')}
-      </SecaoRecolhida>
-
-      <SecaoRecolhida icone="person-outline" titulo="Seus dados" resumo="Nome, e-mail e telefone" cor={TEMA.forte} fundo={TEMA.fundo}>
-        {[['Nome', profile?.nome], ['E-mail', user?.email], ['Telefone', profile?.telefone]].map(([rotulo, valor]) => (
-          <View key={rotulo} style={styles.dado}>
-            <Text style={styles.dadoRotulo}>{rotulo}</Text>
-            <Text style={styles.linhaTitulo}>{valor || 'Não informado'}</Text>
-          </View>
-        ))}
-        {link('Editar perfil', 'EditProfile', 'create-outline')}
       </SecaoRecolhida>
 
       <SecaoRecolhida icone="information-circle-outline" titulo="Sobre o Ampara" resumo="Avisos e limitações" cor={TEMA.forte} fundo={TEMA.fundo}>
