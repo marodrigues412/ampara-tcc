@@ -1036,15 +1036,7 @@ export default function Home({ navigation }) {
 
         {/* ── CÁLCULO DO RISCO ── */}
         {monitoramentoAtivo && (
-          <CamadasDoRisco
-            contexto={contextoDaRegiao}
-            corpo={corpo}
-            resultado={resultadoDoRisco}
-            rotuloDoNivel={calculandoScore ? 'calculando' : displayLevel.toLowerCase()}
-            corDoNivel={riskAccent}
-            corDaAba={TEMA.forte}
-            monitoramentoReforcado={monitoramentoReforcado}
-          />
+          <CamadasDoRisco contexto={contextoDaRegiao} corpo={corpo} corDaAba={TEMA.forte} />
         )}
 
         {/* ── MODOS ── */}

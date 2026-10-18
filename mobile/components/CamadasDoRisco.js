@@ -3,84 +3,58 @@ import { LayoutAnimation, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { Ionicons } from '@expo/vector-icons'
 import { Brand } from '../constants/brandTheme'
 
-// "Por que seu risco está assim", no score de 3 camadas: contexto da região (mapa SSP
-// por bairro, dia e período), corpo (sensores disponíveis agora) e o cruzamento das
-// duas na matriz 3×3. Fechada, mostra as duas faixas numa linha só.
-// "Corpo baixo", mas "região baixa": a concordância muda com o substantivo.
-const ROTULO_DA_FAIXA = { baixo: 'baixo', medio: 'médio', alto: 'alto' }
-const ROTULO_DA_REGIAO = { baixo: 'baixa', medio: 'média', alto: 'alta' }
-const COR_DA_FAIXA = { baixo: Brand.green, medio: Brand.amber, alto: Brand.danger }
-const MOTIVO_SEM_CONTEXTO = {
-  fora_da_cobertura: 'Município fora do mapa',
-  bairro_nao_identificado: 'Bairro não identificado e sem estimativa da cidade',
-  sem_celula: 'Sem dados deste bairro nem da cidade neste período',
-}
-const MOTIVO_DA_ESTIMATIVA = {
-  bairro_nao_identificado: 'bairro não identificado',
-  sem_celula: 'bairro com poucos registros',
-}
-const PERIODO = { madrugada: 'madrugada', manha: 'manhã', tarde: 'tarde', noite: 'noite' }
-
-// O corpo em palavras simples, sem números técnicos.
-function descreverCorpo(corpo) {
-  const s = corpo.sinais ?? {}
-  const partes = []
-  if (s.bpm != null) {
-    partes.push(s.bpm > 0.66 ? 'batimento bem acima do seu normal' : s.bpm > 0.33 ? 'batimento um pouco acima do seu normal' : 'batimento normal')
-  }
-  if (s.movimentoRelogio != null) {
-    partes.push(s.movimentoRelogio >= 1 ? 'movimento brusco no relógio' : s.movimentoRelogio >= 0.5 ? 'movimento agitado no relógio' : 'movimento normal no relógio')
-  }
-  if (s.movimentoCelular != null) {
-    partes.push(corpo.movimentoSustentado ? 'movimento agitado há mais de 10 segundos' : 'movimento normal')
-  }
-  const texto = partes.join(', ')
-  const frase = texto.charAt(0).toUpperCase() + texto.slice(1)
-  return corpo.modo === 'so_celular' ? `${frase}. Sem o relógio, o corpo vai no máximo a médio.` : `${frase}.`
+// "Por que seu risco está assim": só o que está pesando, em palavras do dia a dia. Como o
+// cálculo funciona (camadas, matriz, modelo, regras dos sensores) fica para o artigo e a
+// banca (docs/score_bpm_ml.md), não para a usuária.
+const REGIAO = {
+  baixo: { texto: 'poucas ocorrências', cor: Brand.green },
+  medio: { texto: 'algumas ocorrências', cor: Brand.amber },
+  alto: { texto: 'muitas ocorrências', cor: Brand.danger },
 }
 
-function Linha({ icone, cor, fundo, nome, detalhe, faixa, rotulos = ROTULO_DA_FAIXA }) {
-  return (
-    <View style={styles.linha}>
-      <View style={[styles.icone, { backgroundColor: fundo }]}>
-        <Ionicons name={icone} size={16} color={cor} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.nome}>{nome}</Text>
-        {!!detalhe && <Text style={styles.detalhe}>{detalhe}</Text>}
-      </View>
-      <Text style={[styles.faixa, { color: faixa ? COR_DA_FAIXA[faixa] : '#8A8590' }]}>
-        {faixa ? rotulos[faixa] : ''}
-      </Text>
-    </View>
-  )
+function linhas(contexto, corpo) {
+  const itens = []
+  if (contexto?.emLocalSeguro) {
+    itens.push({ id: 'local', icone: 'home-outline', nome: 'Local seguro', valor: 'você está nele', cor: Brand.green })
+  } else if (!contexto) {
+    itens.push({ id: 'regiao', icone: 'map-outline', nome: 'Região', valor: 'calculando', cor: Brand.muted })
+  } else if (!contexto.disponivel) {
+    itens.push({ id: 'regiao', icone: 'map-outline', nome: 'Região', valor: 'sem dados', cor: Brand.muted })
+  } else {
+    itens.push({ id: 'regiao', icone: 'map-outline', nome: 'Região', valor: REGIAO[contexto.faixa].texto, cor: REGIAO[contexto.faixa].cor, pesa: contexto.faixa !== 'baixo' })
+  }
+
+  const s = corpo?.sinais ?? {}
+  if (!corpo?.disponivel) {
+    itens.push({ id: 'movimento', icone: 'walk-outline', nome: 'Movimento', valor: 'calculando', cor: Brand.muted })
+  } else {
+    const agitado = Boolean(corpo.movimentoSustentado) || (s.movimentoRelogio != null && s.movimentoRelogio >= 0.5)
+    itens.push({ id: 'movimento', icone: 'walk-outline', nome: 'Movimento', valor: agitado ? 'agitado' : 'normal', cor: agitado ? Brand.amber : Brand.green, pesa: agitado })
+    if (s.bpm != null) {
+      const acelerado = s.bpm > 0.33
+      itens.push({ id: 'batimento', icone: 'heart-outline', nome: 'Batimento', valor: acelerado ? 'acelerado' : 'normal', cor: acelerado ? Brand.amber : Brand.green, pesa: acelerado })
+    }
+  }
+  return itens
 }
 
-export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNivel, corDoNivel, corDaAba, monitoramentoReforcado }) {
+// Fechada: uma linha com o que está pesando agora.
+function resumir(contexto, itens) {
+  if (contexto?.emLocalSeguro) return 'Você está em um local seguro'
+  const pesando = itens.filter((i) => i.pesa)
+  if (!pesando.length) return itens.some((i) => i.valor === 'calculando') ? 'Calculando' : 'Nada pesando agora'
+  return pesando.map((i) => (i.id === 'regiao' ? `Região com ${i.valor} agora` : `${i.nome} ${i.valor}`)).join(' · ')
+}
+
+export default function CamadasDoRisco({ contexto, corpo, corDaAba }) {
   const [aberta, setAberta] = useState(false)
-  const textoContexto = !contexto
-    ? 'calculando'
-    : contexto.disponivel
-      ? `${ROTULO_DA_REGIAO[contexto.faixa]}${contexto.emLocalSeguro ? ' (local seguro)' : contexto.origem === 'cidade' ? ' (estimativa da cidade)' : ''}`
-      : 'sem dados'
-  const textoCorpo = !corpo?.disponivel ? 'calculando' : ROTULO_DA_FAIXA[corpo.faixa]
-  const resumo = `Região ${textoContexto} · corpo ${textoCorpo}`
+  const itens = linhas(contexto, corpo)
+  const resumo = resumir(contexto, itens)
 
   const alternar = () => {
     LayoutAnimation.configureNext(LayoutAnimation.create(240, 'easeInEaseOut', 'opacity'))
     setAberta((a) => !a)
   }
-
-  const celula = contexto?.celula
-  const detalheContexto = !contexto
-    ? 'Buscando o bairro…'
-    : !contexto.disponivel
-      ? MOTIVO_SEM_CONTEXTO[contexto.motivo]
-      : `${contexto.origem === 'cidade' ? `Estimativa da cidade (${MOTIVO_DA_ESTIMATIVA[contexto.motivo]})` : celula.bairro.toLowerCase()} · ${PERIODO[celula.periodo]}${contexto.emLocalSeguro ? ' · local seguro' : ''}`
-
-  const detalheCorpo = corpo?.disponivel
-    ? descreverCorpo(corpo)
-    : 'Aguardando os primeiros segundos de movimento'
 
   return (
     <View style={styles.secao}>
@@ -98,22 +72,13 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
         <Ionicons name={aberta ? 'chevron-up' : 'chevron-down'} size={18} color={corDaAba} />
       </TouchableOpacity>
 
-      {aberta && (
-        <View>
-          <Linha icone="map-outline" cor="#3F6A86" fundo="#E9EFF2" nome="Região e horário" detalhe={detalheContexto} faixa={contexto?.disponivel ? contexto.faixa : null} rotulos={ROTULO_DA_REGIAO} />
-          <Linha icone="pulse-outline" cor={Brand.amber} fundo={Brand.amberSoft} nome="Corpo" detalhe={detalheCorpo} faixa={corpo?.disponivel ? corpo.faixa : null} />
-          <View style={styles.linha}>
-            <Text style={[styles.nome, styles.total]}>Resultado</Text>
-            <Text style={[styles.faixa, styles.totalValor, { color: corDoNivel }]}>{rotuloDoNivel}</Text>
-          </View>
-          {monitoramentoReforcado && (
-            <Text style={styles.nota}>Monitoramento reforçado: o app registra sua posição com mais frequência, sem alertas.</Text>
-          )}
-          <Text style={styles.nota}>
-            O resultado cruza as duas faixas numa matriz 3×3 e só muda depois de alguns segundos estável, para não piscar. A região vem de registros públicos da SSP; o movimento do celular é avaliado por um modelo de detecção de anomalia, e o relógio, por limites fixos. É uma estimativa, não um diagnóstico.
-          </Text>
+      {aberta && itens.map((i) => (
+        <View key={i.id} style={styles.linha}>
+          <Ionicons name={i.icone} size={18} color={Brand.muted} />
+          <Text style={styles.nome}>{i.nome}</Text>
+          <Text style={[styles.valor, { color: i.cor }]}>{i.valor}</Text>
         </View>
-      )}
+      ))}
     </View>
   )
 }
@@ -123,12 +88,7 @@ const styles = StyleSheet.create({
   cabecalho: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   titulo: { fontSize: 15, fontWeight: '700', color: Brand.ink },
   resumo: { fontSize: 12, color: '#8A8590', marginTop: 2 },
-  linha: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7 },
-  icone: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  nome: { fontSize: 14, color: Brand.ink },
-  detalhe: { fontSize: 12, color: '#8A8590', marginTop: 2 },
-  faixa: { fontSize: 14, fontWeight: '700' },
-  total: { flex: 1, fontWeight: '700' },
-  totalValor: { fontSize: 15 },
-  nota: { fontSize: 12, color: '#8A8590', marginTop: 4 },
+  linha: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  nome: { flex: 1, fontSize: 14, color: Brand.ink },
+  valor: { fontSize: 14, fontWeight: '700' },
 })
