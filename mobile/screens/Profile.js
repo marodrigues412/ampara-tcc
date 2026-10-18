@@ -7,10 +7,20 @@ import { listarCompromissos, listarLocaisSeguros } from '../services/routineServ
 import HeaderComCurvas from '../components/HeaderComCurvas'
 import SecaoRecolhida from '../components/SecaoRecolhida'
 import { Brand, TemaDaAba } from '../constants/brandTheme'
+import LiaAvatar from '../components/LiaAvatar'
 
 const TEMA = TemaDaAba.Perfil
 const CORES_DA_REDE = [['#BD5574', '#F7E7EC'], ['#6E5A9E', '#EFEAF5'], ['#3F6A86', '#E9EFF2']]
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
+// Cada seção com a sua cor (ícone forte sobre fundo claro), como as abas do app.
+const COR_DA_SECAO = {
+  dados: ['#273963', '#E8ECF4'],
+  rede: ['#BD5574', '#F7E7EC'],
+  locais: [Brand.green, Brand.mint],
+  rotina: ['#3F6A86', '#E9EFF2'],
+  lia: ['#6E5A9E', '#EFEAF5'],
+  sobre: ['#756670', '#F3EFF1'],
+}
 
 // Perfil em seções recolhidas: fechadas, cada uma mostra só um resumo ("3 contatos").
 export default function Profile({ navigation }) {
@@ -63,6 +73,17 @@ export default function Profile({ navigation }) {
 
   const nome = profile?.nome || 'Usuária'
   const ativos = compromissos.filter((c) => c.ativo !== false)
+  const temCasa = locais.some((l) => String(l.tipo ?? l.nome ?? '').toLowerCase().includes('casa'))
+
+  // O que deixa o Ampara pronto para agir; o primeiro que falta vira o próximo passo.
+  const passos = [
+    { feito: contatos.length > 0, texto: 'Cadastre quem deve receber seu alerta SOS', tela: 'EmergencyContacts' },
+    { feito: temCasa, texto: 'Cadastre sua casa como local seguro', tela: 'SafeLocations' },
+    { feito: ativos.length > 0, texto: 'Cadastre sua rotina para eu acompanhar seus trajetos', tela: 'Routine' },
+  ]
+  const feitos = passos.filter((p) => p.feito).length
+  const proximo = passos.find((p) => !p.feito)
+  const primeiroNome = nome.split(' ')[0]
 
   const link = (texto, tela, icone = 'add') => (
     <TouchableOpacity style={styles.linha} onPress={() => navigation.navigate(tela)} accessibilityRole="button">
@@ -83,11 +104,46 @@ export default function Profile({ navigation }) {
             <Text style={styles.email} numberOfLines={1}>{user?.email}</Text>
           </View>
         </View>
+        <View style={styles.pilulas}>
+          {[
+            ['people', plural(contatos.length, 'contato', 'contatos'), COR_DA_SECAO.rede],
+            ['location', plural(locais.length, 'local seguro', 'locais seguros'), COR_DA_SECAO.locais],
+            ['calendar', plural(ativos.length, 'compromisso', 'compromissos'), COR_DA_SECAO.rotina],
+          ].map(([icone, texto, [cor, fundo]]) => (
+            <View key={icone} style={[styles.pilula, { backgroundColor: fundo }]}>
+              <Ionicons name={icone} size={13} color={cor} />
+              <Text style={[styles.pilulaTexto, { color: cor }]}>{texto}</Text>
+            </View>
+          ))}
+        </View>
       </HeaderComCurvas>
 
-      <View style={{ height: 8 }} />
+      {/* A Lia conta quanto o Ampara está pronto e qual é o próximo passo. */}
+      <TouchableOpacity
+        style={styles.preparo}
+        onPress={proximo ? () => navigation.navigate(proximo.tela) : undefined}
+        disabled={!proximo}
+        accessibilityRole={proximo ? 'button' : undefined}
+        accessibilityLabel={proximo ? `${feitos} de ${passos.length} passos prontos. Próximo: ${proximo.texto}` : 'Tudo pronto'}
+      >
+        <LiaAvatar size={56} reaction={proximo ? 'oi' : 'feliz'} showRing={false} showBadge={false} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.preparoTitulo}>
+            {proximo ? `${primeiroNome}, faltam ${passos.length - feitos} ${passos.length - feitos === 1 ? 'passo' : 'passos'}` : `Tudo pronto, ${primeiroNome}!`}
+          </Text>
+          <Text style={styles.preparoTexto}>
+            {proximo ? proximo.texto : 'Sua rede, seus lugares e sua rotina estão cadastrados. Eu sigo de olho.'}
+          </Text>
+          <View style={styles.preparoTrilha}>
+            <View style={[styles.preparoBarra, { width: `${(feitos / passos.length) * 100}%` }]} />
+          </View>
+        </View>
+        {proximo && <Ionicons name="chevron-forward" size={20} color={TEMA.forte} />}
+      </TouchableOpacity>
 
-      <SecaoRecolhida icone="person-outline" titulo="Seus dados" resumo="Nome, e-mail e telefone" cor={TEMA.forte} fundo={TEMA.fundo}>
+      <View style={{ height: 4 }} />
+
+      <SecaoRecolhida icone="person-outline" titulo="Seus dados" resumo={profile?.telefone ? 'Nome, e-mail e telefone' : 'Falta o telefone'} pendente={!profile?.telefone} cor={COR_DA_SECAO.dados[0]} fundo={COR_DA_SECAO.dados[1]}>
         {[['Nome', profile?.nome], ['E-mail', user?.email], ['Telefone', profile?.telefone]].map(([rotulo, valor]) => (
           <View key={rotulo} style={styles.dado}>
             <Text style={styles.dadoRotulo}>{rotulo}</Text>
@@ -97,7 +153,7 @@ export default function Profile({ navigation }) {
         {link('Editar perfil', 'EditProfile', 'create-outline')}
       </SecaoRecolhida>
 
-      <SecaoRecolhida icone="people-outline" titulo="Rede de apoio" resumo={contatos.length ? plural(contatos.length, 'contato', 'contatos') : 'Nenhum contato cadastrado'} cor={TEMA.forte} fundo={TEMA.fundo}>
+      <SecaoRecolhida icone="people-outline" titulo="Rede de apoio" resumo={contatos.length ? contatos.map((c) => (c.nome ?? '').split(' ')[0]).filter(Boolean).join(', ') : 'Nenhum contato cadastrado'} pendente={!contatos.length} cor={COR_DA_SECAO.rede[0]} fundo={COR_DA_SECAO.rede[1]}>
         {contatos.map((c, k) => (
           <View key={c.id} style={styles.linha}>
             <View style={[styles.inicial, { backgroundColor: CORES_DA_REDE[k % 3][1] }]}>
@@ -112,7 +168,7 @@ export default function Profile({ navigation }) {
         {link(contatos.length ? 'Gerenciar contatos' : 'Adicionar contato', 'EmergencyContacts', contatos.length ? 'create-outline' : 'add')}
       </SecaoRecolhida>
 
-      <SecaoRecolhida icone="location-outline" titulo="Locais seguros" resumo={locais.length ? locais.map((l) => l.nome).join(', ') : 'Nenhum local cadastrado'} cor={TEMA.forte} fundo={TEMA.fundo}>
+      <SecaoRecolhida icone="location-outline" titulo="Locais seguros" resumo={locais.length ? locais.map((l) => l.nome).join(', ') : 'Nenhum local cadastrado'} pendente={!locais.length} cor={COR_DA_SECAO.locais[0]} fundo={COR_DA_SECAO.locais[1]}>
         {locais.map((l) => (
           <View key={l.id} style={styles.linha}>
             <View style={{ flex: 1 }}>
@@ -124,17 +180,17 @@ export default function Profile({ navigation }) {
         {link(locais.length ? 'Gerenciar locais' : 'Adicionar local', 'SafeLocations', locais.length ? 'create-outline' : 'add')}
       </SecaoRecolhida>
 
-      <SecaoRecolhida icone="calendar-outline" titulo="Rotina" resumo={ativos.length ? `${plural(ativos.length, 'compromisso', 'compromissos')} na semana` : 'Nenhum compromisso cadastrado'} cor={TEMA.forte} fundo={TEMA.fundo}>
+      <SecaoRecolhida icone="calendar-outline" titulo="Rotina" resumo={ativos.length ? `${plural(ativos.length, 'compromisso', 'compromissos')} na semana` : 'Nenhum compromisso cadastrado'} pendente={!ativos.length} cor={COR_DA_SECAO.rotina[0]} fundo={COR_DA_SECAO.rotina[1]}>
         <Text style={styles.nota}>Os compromissos de exercício ligam o modo atividade sozinhos.</Text>
         {link('Abrir minha rotina', 'Routine', 'arrow-forward')}
       </SecaoRecolhida>
 
-      <SecaoRecolhida icone="color-palette-outline" titulo="Sua Lia" resumo="Personalize a aparência da assistente" cor={TEMA.forte} fundo={TEMA.fundo}>
+      <SecaoRecolhida icone="color-palette-outline" titulo="Sua Lia" resumo="Personalize a aparência da assistente" cor={COR_DA_SECAO.lia[0]} fundo={COR_DA_SECAO.lia[1]}>
         <Text style={styles.nota}>Escolha o tom de pele, o cabelo e os olhos da Lia.</Text>
         {link('Personalizar a Lia', 'LiaAppearance', 'sparkles-outline')}
       </SecaoRecolhida>
 
-      <SecaoRecolhida icone="information-circle-outline" titulo="Sobre o Ampara" resumo="Avisos e limitações" cor={TEMA.forte} fundo={TEMA.fundo}>
+      <SecaoRecolhida icone="information-circle-outline" titulo="Sobre o Ampara" resumo="Avisos e limitações" cor={COR_DA_SECAO.sobre[0]} fundo={COR_DA_SECAO.sobre[1]}>
         {link('Avisos e limitações', 'LegalNotice', 'document-text-outline')}
       </SecaoRecolhida>
 
@@ -163,6 +219,14 @@ const styles = StyleSheet.create({
   nota: { fontSize: 13, color: '#8A8590', paddingVertical: 4 },
   dado: { paddingVertical: 6 },
   dadoRotulo: { fontSize: 11, color: '#8A8590', fontWeight: '700', textTransform: 'uppercase' },
+  pilulas: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
+  pilula: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999 },
+  pilulaTexto: { fontSize: 12, fontWeight: '700' },
+  preparo: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 20, marginTop: 16, padding: 14, borderRadius: 20, backgroundColor: '#FFF3F6', borderWidth: 1, borderColor: '#F3DDE5' },
+  preparoTitulo: { fontSize: 15, fontWeight: '800', color: Brand.ink },
+  preparoTexto: { fontSize: 13, color: '#776C73', marginTop: 2, lineHeight: 18 },
+  preparoTrilha: { height: 6, borderRadius: 3, backgroundColor: '#F1DCE3', marginTop: 10, overflow: 'hidden' },
+  preparoBarra: { height: 6, borderRadius: 3, backgroundColor: Brand.rose },
   sair: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginTop: 22, paddingVertical: 10 },
   sairTexto: { color: Brand.danger, fontWeight: '700', fontSize: 15 },
 })
