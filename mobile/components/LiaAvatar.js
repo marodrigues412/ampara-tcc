@@ -10,17 +10,20 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated'
-import Svg, { Circle, Ellipse, G, Path, Rect } from 'react-native-svg'
+import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg'
+import { APARENCIA_PADRAO_LIA, carregarAparenciaLia, observarAparenciaLia } from '../services/liaAppearance'
+import { BRAIDS, HAIR_STYLES } from './liaHairStyles'
 
 const AnimatedView = Animated.View
+const portraitLayerStyle = { position: 'absolute', width: '100%', height: '100%', left: 0, top: 0 }
 const COLORS = {
   background: '#F6F1E9',
   skin: '#C98B6B',
   hair: '#2A1D1A',
   blush: '#D9968F',
-  mouth: '#8E3B3B',
   blue: '#273963',
 }
+const EYE_COLOR = '#231816'
 
 const ICONS = {
   sparkle: 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6',
@@ -48,8 +51,8 @@ const BROWS = {
 }
 const MOUTHS = {
   soft: { d: 'M186,231 Q200,243 214,231', fill: 'none', width: 4 },
-  open: { d: 'M183,229 Q200,251 217,229 Q200,236 183,229 Z', fill: COLORS.mouth, width: 2 },
-  big: { d: 'M180,227 Q200,257 220,227 Q200,234 180,227 Z', fill: COLORS.mouth, width: 2 },
+  open: { d: 'M183,229 Q200,251 217,229 Q200,236 183,229 Z', fill: 'lip', width: 2 },
+  big: { d: 'M180,227 Q200,257 220,227 Q200,234 180,227 Z', fill: 'lip', width: 2 },
   flat: { d: 'M191,236 Q200,239 209,236', fill: 'none', width: 4 },
   worried: { d: 'M189,240 Q200,233 211,240', fill: 'none', width: 4 },
 }
@@ -71,17 +74,62 @@ const REACTIONS = {
 
 const OLD_EXPRESSIONS = { acolhedora: 'oi', tranquila: 'seguro', atenta: 'checagem' }
 
-function SvgPortrait({ reaction, skin, hair, part, reduceMotion, transparentBackground }) {
+const rgb = (color) => [1, 3, 5].map((index) => parseInt(color.slice(index, index + 2), 16))
+const shadeColor = (color, factor) => `#${rgb(color).map((value) => Math.round(value * factor).toString(16).padStart(2, '0')).join('')}`
+const mixWithWhite = (color, factor) => `#${rgb(color).map((value) => Math.round(value + (255 - value) * factor).toString(16).padStart(2, '0')).join('')}`
+
+function SvgPortrait({ reaction, skin, hair, hairStyle, eyeShape, part, reduceMotion, transparentBackground, size }) {
   const face = REACTIONS[reaction] || REACTIONS.ociosa
-  const shade = `#${[1, 3, 5].map((i) => Math.round(parseInt(skin.slice(i, i + 2), 16) * 0.84).toString(16).padStart(2, '0')).join('')}`
+  const penteado = HAIR_STYLES[hairStyle] || HAIR_STYLES.cacheado
+  const skinLuminance = rgb(skin).reduce((sum, value, index) => sum + value * [0.299, 0.587, 0.114][index], 0) / 255
+  const shade = shadeColor(skin, skinLuminance > 0.4 ? 0.84 : 0.78)
+  const lip = skinLuminance > 0.72 ? '#B4545C' : skinLuminance > 0.58 ? '#9E4646' : skinLuminance > 0.45 ? '#8E3B3B' : skinLuminance > 0.32 ? '#6E2B29' : '#47191A'
+  const blush = skinLuminance > 0.4 ? '#D9968F' : '#B5705F'
+  const blushOpacity = skinLuminance > 0.4 ? (face.eyes === 'happy' ? 0.6 : 0.38) : (face.eyes === 'happy' ? 0.65 : 0.5)
+  const hairLuminance = [1, 3, 5].reduce((sum, i, index) => sum + parseInt(hair.slice(i, i + 2), 16) * [0.299, 0.587, 0.114][index], 0) / 255
+  const browColor = hairLuminance > 0.35
+    ? `#${[1, 3, 5].map((i) => Math.round(parseInt(hair.slice(i, i + 2), 16) * 0.62).toString(16).padStart(2, '0')).join('')}`
+    : hair
   const mouth = MOUTHS[face.mouth]
+  const braidDark = shadeColor(hair, hairLuminance > 0.35 ? 0.62 : 0.55)
+  const braidBack = shadeColor(hair, hairLuminance > 0.35 ? 0.86 : 0.85)
+  const braidLine = shadeColor(hair, hairLuminance > 0.35 ? 0.55 : 0.45)
+  const braidShine = mixWithWhite(hair, hairLuminance > 0.35 ? 0.3 : 0.22)
+  const detailColor = hairLuminance > 0.35 ? shadeColor(hair, 0.72) : mixWithWhite(hair, 0.2)
+
+  if (part === 'hairBack') {
+    return (
+      <Svg width="100%" height="100%" viewBox="0 0 400 400">
+        {hairStyle === 'trancas' ? (
+          <>
+            <Path d={BRAIDS.cap} fill={braidDark} />
+            <Path d={BRAIDS.backBase} fill="none" stroke={braidLine} strokeWidth="17" strokeLinecap="round" />
+            <Path d={BRAIDS.backSegs} fill={braidBack} stroke={braidLine} strokeWidth="1.6" />
+            <Path d={BRAIDS.backShine} fill="none" stroke={braidShine} strokeWidth="1.6" strokeLinecap="round" />
+          </>
+        ) : (
+          <>
+            {!!penteado.back && <Path d={penteado.back} fill={hair} />}
+            {!!penteado.detail && <Path d={penteado.detail} fill="none" stroke={detailColor} strokeWidth="2.5" strokeLinecap="round" />}
+          </>
+        )}
+      </Svg>
+    )
+  }
 
   if (part === 'body') {
     return (
       <Svg width="100%" height="100%" viewBox="0 0 400 400">
-        {!transparentBackground && <Rect width="400" height="400" fill={COLORS.background} />}
         <Path d="M58,440 L58,400 C68,332 120,298 200,298 C280,298 332,332 342,400 L342,440 Z" fill={COLORS.blue} />
-        <Path d="M174,250 L174,300 Q200,316 226,300 L226,250 Z" fill={shade} />
+      </Svg>
+    )
+  }
+
+  if (part === 'neckFront') {
+    return (
+      <Svg width="100%" height="100%" viewBox="0 0 400 400" pointerEvents="none">
+        {/* O pescoço desce um pouco por baixo do decote para não abrir fresta azul entre as duas curvas. */}
+        <Path d="M174,250 L174,304 Q200,322 226,304 L226,250 Z" fill={shade} />
         <Path d="M166,300 Q200,313 234,300 L200,348 Z" fill={skin} />
         <Path d="M166,300 L200,348 L234,300" fill="none" stroke={COLORS.background} strokeWidth="5" strokeLinejoin="round" />
         <Circle cx="200" cy="332" r="5" fill={COLORS.blush} />
@@ -92,42 +140,53 @@ function SvgPortrait({ reaction, skin, hair, part, reduceMotion, transparentBack
   return (
     <View style={{ width: '100%', height: '100%' }}>
       <Svg width="100%" height="100%" viewBox="0 0 400 400">
-      <G>
-        <Circle cx="200" cy="170" r="104" fill={hair} />
-        <Circle cx="122" cy="225" r="58" fill={hair} />
-        <Circle cx="278" cy="225" r="58" fill={hair} />
-        <Circle cx="128" cy="286" r="44" fill={hair} />
-        <Circle cx="272" cy="286" r="44" fill={hair} />
-      </G>
       <Ellipse cx="133" cy="200" rx="12" ry="17" fill={skin} />
       <Ellipse cx="267" cy="200" rx="12" ry="17" fill={skin} />
       <Circle cx="131" cy="222" r="5" fill={COLORS.blush} />
       <Circle cx="269" cy="222" r="5" fill={COLORS.blush} />
       <Ellipse cx="200" cy="190" rx="68" ry="80" fill={skin} />
-      <Circle cx="162" cy="217" r="12" fill={COLORS.blush} opacity={face.eyes === 'happy' ? 0.6 : 0.38} />
-      <Circle cx="238" cy="217" r="12" fill={COLORS.blush} opacity={face.eyes === 'happy' ? 0.6 : 0.38} />
-      <Path d={BROWS[face.brows][0]} fill="none" stroke={hair} strokeWidth="4.5" strokeLinecap="round" />
-      <Path d={BROWS[face.brows][1]} fill="none" stroke={hair} strokeWidth="4.5" strokeLinecap="round" />
+      <Circle cx="162" cy="217" r="12" fill={blush} opacity={blushOpacity} />
+      <Circle cx="238" cy="217" r="12" fill={blush} opacity={blushOpacity} />
+      <Path d={BROWS[face.brows][0]} fill="none" stroke={browColor} strokeWidth="4.5" strokeLinecap="round" />
+      <Path d={BROWS[face.brows][1]} fill="none" stroke={browColor} strokeWidth="4.5" strokeLinecap="round" />
       <Path d="M200,200 Q195,213 203,216" fill="none" stroke={shade} strokeWidth="3" strokeLinecap="round" />
-      <Path d={mouth.d} fill={mouth.fill} stroke={COLORS.mouth} strokeWidth={mouth.width} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d={mouth.d} fill={mouth.fill === 'lip' ? lip : mouth.fill} stroke={lip} strokeWidth={mouth.width} strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
-      <AnimatedEyes eyes={face.eyes} hair={hair} reduceMotion={reduceMotion} />
-      {face.talk && <TalkingMouth reduceMotion={reduceMotion} />}
-      <Svg width="100%" height="100%" viewBox="0 0 400 400" pointerEvents="none">
+      <AnimatedEyes eyes={face.eyes} closedColor={browColor} eyeShape={eyeShape} lookUp={!!face.look} size={size} reduceMotion={reduceMotion} />
+      {face.talk && <TalkingMouth color={lip} reduceMotion={reduceMotion} />}
+      <Svg width="100%" height="100%" viewBox="0 0 400 400" pointerEvents="none" style={portraitLayerStyle}>
         <G fill={hair}>
-          <Circle cx="155" cy="118" r="26" />
-          <Circle cx="245" cy="118" r="26" />
-          <Circle cx="200" cy="100" r="30" />
-          <Path d="M130,195 C118,120 160,92 205,94 C252,96 288,128 270,192 C266,160 252,138 228,130 C214,146 180,152 150,150 C140,160 134,175 130,195 Z" />
+          {!!penteado.top && <Path d={penteado.top} />}
+          {!!penteado.front && <Path d={penteado.front} />}
         </G>
+        {hairStyle === 'trancas' && (
+          <>
+            <Path d={BRAIDS.crown} fill={braidDark} />
+            <Path d={BRAIDS.frontBase} fill="none" stroke={braidLine} strokeWidth="19" strokeLinecap="round" />
+            <Path d={BRAIDS.frontSegs} fill={hair} stroke={braidLine} strokeWidth="1.8" />
+            <Path d={BRAIDS.frontShine} fill="none" stroke={braidShine} strokeWidth="1.8" strokeLinecap="round" />
+            <Path d={BRAIDS.parts} fill="none" stroke={shade} strokeWidth="3" strokeLinecap="round" />
+            <Path d={BRAIDS.acc} fill="none" stroke="#C9963F" strokeWidth="7" strokeLinecap="round" />
+            <Path d={BRAIDS.acc} fill="none" stroke="#E8C474" strokeWidth="2.5" strokeLinecap="round" transform="translate(0,-1.5)" />
+          </>
+        )}
       </Svg>
     </View>
   )
 }
 
-function AnimatedEyes({ eyes, hair, reduceMotion }) {
+function AnimatedEyes({ eyes, closedColor, eyeShape, lookUp, size = 400, reduceMotion }) {
   const scaleY = useSharedValue(1)
-  const style = useAnimatedStyle(() => ({ transform: [{ scaleY: scaleY.value }] }))
+  const look = useSharedValue(lookUp ? 1 : 0)
+  const scale = size / 400
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: look.value * 5 * scale }, { translateY: look.value * -6 * scale }, { scaleY: scaleY.value }],
+  }))
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
+    look.value = withTiming(lookUp ? 1 : 0, { duration: 350, easing: Easing.ease })
+  }, [lookUp, look])
   const open = eyes === 'open'
 
   useEffect(() => {
@@ -151,13 +210,15 @@ function AnimatedEyes({ eyes, hair, reduceMotion }) {
         {[175, 225].map((x) => (
           <React.Fragment key={x}>
             <Path
-              d={EYES[eyes](x)}
-              fill={open ? hair : 'none'}
-              stroke={hair}
+            d={eyes === 'open' && eyeShape === 'amendoado'
+              ? `M${x + (x === 175 ? -9 : 9)},188 Q${x},179 ${x + (x === 175 ? 9 : -9)},191 Q${x},199 ${x + (x === 175 ? -9 : 9)},188 Z`
+              : EYES[eyes](x)}
+              fill={open ? EYE_COLOR : 'none'}
+              stroke={open ? 'none' : closedColor}
               strokeWidth={open ? 0 : 4}
               strokeLinecap="round"
             />
-            {open && <Circle cx={x + (x === 175 ? 2 : 2)} cy="187" r="2.2" fill="#FFF" />}
+            {open && <Circle cx={x + 2} cy="187" r="2.2" fill="#FFF" />}
           </React.Fragment>
         ))}
       </Svg>
@@ -165,7 +226,7 @@ function AnimatedEyes({ eyes, hair, reduceMotion }) {
   )
 }
 
-function TalkingMouth({ reduceMotion }) {
+function TalkingMouth({ color, reduceMotion }) {
   const opacity = useSharedValue(0)
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }))
   useEffect(() => {
@@ -178,7 +239,7 @@ function TalkingMouth({ reduceMotion }) {
   return (
     <AnimatedView style={[{ position: 'absolute', inset: 0 }, style]} pointerEvents="none">
       <Svg width="100%" height="100%" viewBox="0 0 400 400">
-        <Path d="M189,231 Q200,250 211,231 Q200,227 189,231 Z" fill={COLORS.mouth} stroke={COLORS.mouth} strokeWidth="2" />
+        <Path d="M189,231 Q200,250 211,231 Q200,227 189,231 Z" fill={color} stroke={color} strokeWidth="2" />
       </Svg>
     </AnimatedView>
   )
@@ -236,8 +297,10 @@ export default function LiaAvatar({
   reaction,
   reacao,
   expression,
-  skin = COLORS.skin,
-  hair = COLORS.hair,
+  skin,
+  hair,
+  hairStyle,
+  eyes,
   showRing = true,
   showBadge = true,
   transparentBackground = false,
@@ -246,6 +309,11 @@ export default function LiaAvatar({
   const requestedReaction = reaction || reacao || OLD_EXPRESSIONS[expression] || expression || 'ociosa'
   const currentReaction = REACTIONS[requestedReaction] ? requestedReaction : 'ociosa'
   const face = REACTIONS[currentReaction]
+  const [aparenciaSalva, setAparenciaSalva] = useState(APARENCIA_PADRAO_LIA)
+  const tomPele = skin || aparenciaSalva.skin
+  const corCabelo = hair || aparenciaSalva.hair
+  const penteado = hairStyle || aparenciaSalva.hairStyle
+  const formatoOlhos = eyes || aparenciaSalva.eyes
   const [reduceMotion, setReduceMotion] = useState(false)
   const [previousReaction, setPreviousReaction] = useState(null)
   const previousReactionRef = useRef(null)
@@ -253,14 +321,19 @@ export default function LiaAvatar({
   const bodyScale = useSharedValue(1)
   const headAngle = useSharedValue(0)
   const headY = useSharedValue(0)
-  const lookX = useSharedValue(0)
-  const lookY = useSharedValue(0)
   const badgeScale = useSharedValue(1)
   const badgeY = useSharedValue(0)
   const faceOpacity = useSharedValue(1)
   const ringScale = useSharedValue(1)
   const ringOpacity = useSharedValue(face.ringMode === 'steady' ? 1 : 0)
   const scale = size / 400
+
+  useEffect(() => {
+    let ativo = true
+    carregarAparenciaLia().then((valor) => { if (ativo) setAparenciaSalva(valor) })
+    const cancelar = observarAparenciaLia(setAparenciaSalva)
+    return () => { ativo = false; cancelar() }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -287,13 +360,11 @@ export default function LiaAvatar({
   }, [currentReaction, faceOpacity])
 
   useEffect(() => {
-    [bodyY, bodyScale, headAngle, headY, lookX, lookY, ringScale, ringOpacity, badgeY].forEach(cancelAnimation)
+    [bodyY, bodyScale, headAngle, headY, ringScale, ringOpacity, badgeY].forEach(cancelAnimation)
     bodyY.value = 0
     bodyScale.value = 1
     headAngle.value = 0
     headY.value = 0
-    lookX.value = face.look ? 5 * scale : 0
-    lookY.value = face.look ? -6 * scale : 0
     ringScale.value = 1
     ringOpacity.value = face.ringMode === 'steady' ? 1 : 0
     badgeY.value = 0
@@ -333,8 +404,8 @@ export default function LiaAvatar({
       ringOpacity.value = withRepeat(withSequence(withTiming(0, { duration, easing: Easing.out(Easing.quad) }), withTiming(0.9, { duration: 0 })), -1, false)
     }
     if (face.bob) badgeY.value = withRepeat(withSequence(withTiming(-6 * scale, { duration: 600, easing: Easing.inOut(Easing.ease) }), withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) })), -1, false)
-    return () => [bodyY, bodyScale, headAngle, headY, lookX, lookY, ringScale, ringOpacity, badgeY].forEach(cancelAnimation)
-  }, [currentReaction, reduceMotion, size, bodyY, bodyScale, headAngle, headY, lookX, lookY, ringScale, ringOpacity, badgeY, face, scale])
+    return () => [bodyY, bodyScale, headAngle, headY, ringScale, ringOpacity, badgeY].forEach(cancelAnimation)
+  }, [currentReaction, reduceMotion, size, bodyY, bodyScale, headAngle, headY, ringScale, ringOpacity, badgeY, face, scale])
 
   useEffect(() => {
     cancelAnimation(badgeScale)
@@ -345,12 +416,11 @@ export default function LiaAvatar({
     return () => cancelAnimation(badgeScale)
   }, [currentReaction, reduceMotion, badgeScale])
 
-  const bodyStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bodyY.value }, { scale: bodyScale.value }] }))
-  const headStyle = useAnimatedStyle(() => ({
+  const bodyStyle = useAnimatedStyle(() => ({
     transform: [
+      { translateY: bodyY.value }, { scale: bodyScale.value },
       { translateX: 200 * scale }, { translateY: 290 * scale + headY.value },
       { rotate: `${headAngle.value}deg` }, { translateX: -200 * scale }, { translateY: -290 * scale },
-      { translateX: lookX.value }, { translateY: lookY.value },
     ],
   }))
   const currentFaceStyle = useAnimatedStyle(() => ({ opacity: faceOpacity.value }))
@@ -372,14 +442,25 @@ export default function LiaAvatar({
       )}
       <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: transparentBackground ? 'transparent' : COLORS.background }}>
         <AnimatedView style={[{ width: size, height: size, position: 'absolute' }, bodyStyle]}>
-          <SvgPortrait part="body" reaction={currentReaction} skin={skin} hair={hair} reduceMotion={reduceMotion} transparentBackground={transparentBackground} />
+          {/* Blusa antes do cabelo de trás: o cabelo longo (e as tranças) cai por cima dos ombros, como na referência. */}
+          <AnimatedView style={portraitLayerStyle} pointerEvents="none">
+            <SvgPortrait part="body" reaction={currentReaction} skin={tomPele} hair={corCabelo} hairStyle={penteado} eyeShape={formatoOlhos} reduceMotion={reduceMotion} transparentBackground={transparentBackground} />
+          </AnimatedView>
+          <AnimatedView style={portraitLayerStyle} pointerEvents="none">
+            <SvgPortrait part="hairBack" reaction={currentReaction} skin={tomPele} hair={corCabelo} hairStyle={penteado} eyeShape={formatoOlhos} reduceMotion={reduceMotion} />
+          </AnimatedView>
+          <AnimatedView style={portraitLayerStyle} pointerEvents="none">
+            <SvgPortrait part="neckFront" reaction={currentReaction} skin={tomPele} hair={corCabelo} hairStyle={penteado} eyeShape={formatoOlhos} reduceMotion={reduceMotion} />
+          </AnimatedView>
           {previousReaction && (
             <AnimatedView style={[{ position: 'absolute', width: size, height: size, left: 0, top: 0 }, previousFaceStyle]} pointerEvents="none">
-              <SvgPortrait part="head" reaction={previousReaction} skin={skin} hair={hair} reduceMotion={reduceMotion} />
+              <SvgPortrait part="head" reaction={previousReaction} skin={tomPele} hair={corCabelo} hairStyle={penteado} eyeShape={formatoOlhos} reduceMotion={reduceMotion} size={size} />
             </AnimatedView>
           )}
-          <AnimatedView style={[{ position: 'absolute', width: size, height: size, left: 0, top: 0 }, headStyle, currentFaceStyle]} pointerEvents="none">
-            <SvgPortrait part="head" reaction={currentReaction} skin={skin} hair={hair} reduceMotion={reduceMotion} />
+          <AnimatedView style={[{ position: 'absolute', width: size, height: size, left: 0, top: 0 }, currentFaceStyle]} pointerEvents="none">
+            <AnimatedView style={portraitLayerStyle}>
+              <SvgPortrait part="head" reaction={currentReaction} skin={tomPele} hair={corCabelo} hairStyle={penteado} eyeShape={formatoOlhos} reduceMotion={reduceMotion} size={size} />
+            </AnimatedView>
           </AnimatedView>
         </AnimatedView>
         {face.look && face.dots && !reduceMotion && <ThinkingDots size={size} />}

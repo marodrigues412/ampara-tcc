@@ -119,6 +119,11 @@ export default function Profile({ navigation }) {
         {link('Abrir minha rotina', 'Routine', 'arrow-forward')}
       </SecaoRecolhida>
 
+      <SecaoRecolhida icone="color-palette-outline" titulo="Sua Lia" resumo="Personalize a aparência da assistente" cor={TEMA.forte} fundo={TEMA.fundo}>
+        <Text style={styles.nota}>Escolha o tom de pele, o cabelo e os olhos da Lia.</Text>
+        {link('Personalizar a Lia', 'LiaAppearance', 'sparkles-outline')}
+      </SecaoRecolhida>
+
       <SecaoRecolhida icone="person-outline" titulo="Seus dados" resumo="Nome, e-mail e telefone" cor={TEMA.forte} fundo={TEMA.fundo}>
         {[['Nome', profile?.nome], ['E-mail', user?.email], ['Telefone', profile?.telefone]].map(([rotulo, valor]) => (
           <View key={rotulo} style={styles.dado}>

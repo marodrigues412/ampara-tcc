@@ -18,6 +18,7 @@ import RoutineCommitment from './screens/RoutineCommitment'
 import MyReports from './screens/MyReports'
 import HelpGuide from './screens/HelpGuide'
 import ChatBot from './screens/ChatBot'
+import LiaAppearance from './screens/LiaAppearance'
 
 import { NavigationContainer } from '@react-navigation/native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -99,6 +100,7 @@ export default function App() {
           <Stack.Screen name="MyReports" component={MyReports} />
           <Stack.Screen name="HelpGuide" component={HelpGuide} />
           <Stack.Screen name="ChatBot" component={ChatBot} />
+          <Stack.Screen name="LiaAppearance" component={LiaAppearance} />
 
         </Stack.Navigator>
       )}
