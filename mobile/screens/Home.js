@@ -39,6 +39,7 @@ import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
 import { extractPhoneMotionFeatures, scoreIsolationForest } from '../services/isolationForestMotion'
 import { acaoDoNivel, avaliarCorpo, fundirCamadas, movimentoDoRelogio } from '../services/threeLayerRisk'
+import { publicarEstadoDoRisco } from '../services/estadoDoRisco'
 import isolationForestMotionModel from '../models/isolationForestMotionModel.json'
 import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
 import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
@@ -455,6 +456,22 @@ export default function Home({ navigation }) {
       saveLocationPoint(userId, latitude, longitude, speed, null, "recalculo", riscoParaHistoricoRef.current);
     }, 1_500);
   }, [insideSafeZone, activityMode])
+
+  // Último resultado para o contexto da Lia (só rótulos: nível, origem e sensores).
+  const origemDoContexto = contextoDaRegiao?.origem ?? null
+  // Republica a cada 30 s mesmo sem mudança: a Lia só usa leitura de até 2 min.
+  useEffect(() => {
+    const publicar = () => publicarEstadoDoRisco({
+      monitoramentoAtivo,
+      nivel: nivelDoRisco,
+      estado: resultadoDoRisco.estado,
+      origem: origemDoContexto,
+      modo: corpo.modo,
+    })
+    publicar()
+    const intervalo = setInterval(publicar, 30_000)
+    return () => clearInterval(intervalo)
+  }, [monitoramentoAtivo, nivelDoRisco, resultadoDoRisco.estado, origemDoContexto, corpo.modo])
 
   // Nível alto das 3 camadas só conta depois de ALTO_SUSTENTADO_MS seguidos. Os dois
   // caminhos passam por timer (o falso também, com 0 ms) para não mudar estado direto

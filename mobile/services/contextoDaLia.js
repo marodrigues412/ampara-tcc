@@ -5,6 +5,7 @@ import { buscarResumoCrimes } from './crimesService'
 import { listarCompromissos, listarLocaisSeguros } from './routineService'
 import { riscoMedio, nivelDoRisco, tendencia, horariosExpostos, descreverHorario, nivelDaRegiao } from '../utils/relatorio'
 import { linhaDoTempo, proximoNosProximosDias, minutosDoDia, horaDosMinutos } from '../utils/rotina'
+import { estadoDoRiscoParaLia } from './estadoDoRisco'
 
 // Contexto da usuária para a Lia, enviado só quando ela liga "Personalizar com meus
 // dados" no chat. Usa as mesmas contas do Relatório, do Mapa e da Rotina, para a Lia
@@ -85,8 +86,20 @@ function descreverHistorico(semana, semanaAnterior) {
   return partes.join('; ')
 }
 
+// O nível atual muda a qualquer momento: é lido a cada mensagem, fora do guardado.
+// Só rótulos (nível, origem, sensores); nota da célula e bairro não entram.
+function comEstadoAtual(contexto) {
+  const estado = estadoDoRiscoParaLia()
+  return {
+    ...contexto,
+    nivelAtual: estado?.nivelAtual ?? null,
+    origemDoContexto: estado?.origemDoContexto ?? null,
+    modoDosSensores: estado?.modoDosSensores ?? null,
+  }
+}
+
 export async function montarContextoDaLia() {
-  if (guardado && Date.now() - guardado.em < VALIDADE_MS) return guardado.contexto
+  if (guardado && Date.now() - guardado.em < VALIDADE_MS) return comEstadoAtual(guardado.contexto)
 
   const { data } = await supabase.auth.getUser()
   const userId = data?.user?.id
@@ -121,7 +134,7 @@ export async function montarContextoDaLia() {
     dataHora: `${DIAS[agora.getDay()]}, ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
   }
   guardado = { em: Date.now(), contexto }
-  return contexto
+  return comEstadoAtual(contexto)
 }
 
 // Quando ela desliga o compartilhamento, o contexto guardado não pode ser reaproveitado.
