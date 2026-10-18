@@ -41,3 +41,6 @@ mobile/data/ids.txt
 
 # Build do modulo nativo do smartwatch
 mobile/modules/ampara-watch/android/.gradle/
+
+# Estado local da Supabase CLI
+supabase/.temp/
