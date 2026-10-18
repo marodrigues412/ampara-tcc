@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs'
 import {
   avaliarContexto,
   baixarUmaFaixa,
-  diaDaSemana,
   encontrarCelula,
   faixaPorPercentis,
   localDoEndereco,
@@ -18,7 +17,7 @@ const P66 = 0.09242144177449169
 
 function celula(bairro, escore, extra = {}) {
   return {
-    municipio: 'S.PAULO', bairro, dia_semana: 'sexta', periodo: 'noite',
+    municipio: 'S.PAULO', bairro, periodo: 'noite',
     escore_contexto: escore, percentil_33: P33, percentil_66: P66, ...extra,
   }
 }
@@ -33,12 +32,6 @@ test('períodos seguem os cortes do mapa (0–5, 6–11, 12–17, 18–23)', () 
   assert.equal(em(17), 'tarde')
   assert.equal(em(18), 'noite')
   assert.equal(em(23), 'noite')
-})
-
-test('dia da semana sai sem acento, como gravado na tabela', () => {
-  // 18/10/2026 é domingo.
-  const nomes = [18, 19, 20, 21, 22, 23, 24].map((dia) => diaDaSemana(new Date(2026, 9, dia, 12)))
-  assert.deepEqual(nomes, ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'])
 })
 
 test('nomes do geocodificador viram nomes da SSP', () => {
@@ -102,23 +95,78 @@ test('faixa usa os percentis 33/66 da própria tabela', () => {
   assert.equal(faixaPorPercentis(null, P33, P66), null)
 })
 
-test('a regra do app reproduz o nivel_contexto de todas as células do mapa', () => {
-  const csv = readFileSync(new URL('../../data/processed/context_risk_map.csv', import.meta.url), 'utf8')
-  const [cabecalho, ...linhas] = csv.trim().split('\n')
-  const colunas = cabecalho.split(',')
-  const indice = (nome) => colunas.indexOf(nome)
-  assert.equal(linhas.length, 3405)
-  for (const linha of linhas) {
-    // Bairros não têm vírgula; registros_ddm pode ter, mas fica antes das colunas usadas
-    // só quando suprimido ("<5 (suprimido)" não tem vírgula).
-    const campos = linha.split(',')
-    assert.equal(campos.length, colunas.length, linha)
-    assert.equal(
-      faixaPorPercentis(campos[indice('escore_contexto')], campos[indice('percentil_33')], campos[indice('percentil_66')]),
-      campos[indice('nivel_contexto')],
-      linha,
-    )
+// CSV simples com campos entre aspas (o pandas só cita quando há vírgula).
+function lerCsv(caminho) {
+  const texto = readFileSync(new URL(caminho, import.meta.url), 'utf8').trim()
+  const linhas = texto.split('\n').map((linha) => {
+    const campos = []
+    let atual = ''
+    let entreAspas = false
+    for (const c of linha) {
+      if (c === '"') entreAspas = !entreAspas
+      else if (c === ',' && !entreAspas) { campos.push(atual); atual = '' }
+      else atual += c
+    }
+    campos.push(atual)
+    return campos
+  })
+  const [cabecalho, ...dados] = linhas
+  return dados.map((campos) => {
+    assert.equal(campos.length, cabecalho.length, campos.join(','))
+    return Object.fromEntries(cabecalho.map((nome, i) => [nome, campos[i]]))
+  })
+}
+
+for (const [nome, caminho] of [
+  ['bairros', '../../data/processed/context_risk_map.csv'],
+  ['reserva da cidade', '../../data/processed/context_risk_map_cidade.csv'],
+]) {
+  test(`a regra do app reproduz o nivel_contexto do Python em todo o mapa (${nome})`, () => {
+    const linhas = lerCsv(caminho)
+    assert.ok(linhas.length > 0)
+    for (const linha of linhas) {
+      assert.equal(
+        faixaPorPercentis(linha.escore_contexto, linha.percentil_33, linha.percentil_66),
+        linha.nivel_contexto,
+        JSON.stringify(linha),
+      )
+      // O app consulta pelo período com o nome sem acento da tabela.
+      assert.ok(['madrugada', 'manha', 'tarde', 'noite'].includes(linha.periodo), linha.periodo)
+    }
+  })
+}
+
+test('reserva da cidade usa a mesma régua (percentis) do mapa de bairros', () => {
+  const bairros = lerCsv('../../data/processed/context_risk_map.csv')
+  const cidades = lerCsv('../../data/processed/context_risk_map_cidade.csv')
+  for (const cidade of cidades) {
+    assert.equal(cidade.percentil_33, bairros[0].percentil_33)
+    assert.equal(cidade.percentil_66, bairros[0].percentil_66)
   }
+})
+
+test('bairro sem célula usa a estimativa da cidade', () => {
+  const cidade = { municipio: 'S.CAETANO DO SUL', periodo: 'noite', escore_contexto: 0.06, percentil_33: P33, percentil_66: P66 }
+  const semCelula = avaliarContexto({ municipio: 'S.CAETANO DO SUL', bairro: 'MAUA', celula: null, celulaDaCidade: cidade })
+  assert.equal(semCelula.disponivel, true)
+  assert.equal(semCelula.origem, 'cidade')
+  assert.equal(semCelula.motivo, 'sem_celula')
+  assert.equal(semCelula.faixa, 'medio')
+
+  const semBairro = avaliarContexto({ municipio: 'S.CAETANO DO SUL', bairro: null, celula: null, celulaDaCidade: cidade })
+  assert.equal(semBairro.origem, 'cidade')
+  assert.equal(semBairro.motivo, 'bairro_nao_identificado')
+
+  // Com célula do bairro, a da cidade é ignorada.
+  const doBairro = avaliarContexto({ municipio: 'S.PAULO', bairro: 'SE', celula: celula('SE', 0.5), celulaDaCidade: cidade })
+  assert.equal(doBairro.origem, 'bairro')
+  assert.equal(doBairro.faixa, 'alto')
+
+  // Local seguro baixa a estimativa da cidade também.
+  assert.equal(avaliarContexto({ municipio: 'S.CAETANO DO SUL', bairro: 'MAUA', celula: null, celulaDaCidade: cidade, emLocalSeguro: true }).faixa, 'baixo')
+
+  // Município fora do mapa não usa reserva nenhuma.
+  assert.equal(avaliarContexto({ municipio: null, bairro: 'CENTRO', celula: null, celulaDaCidade: cidade }).disponivel, false)
 })
 
 test('célula ausente é indisponível, nunca baixo', () => {

@@ -11,11 +11,14 @@ const ROTULO_DA_FAIXA = { baixo: 'baixo', medio: 'médio', alto: 'alto' }
 const COR_DA_FAIXA = { baixo: Brand.green, medio: Brand.amber, alto: Brand.danger }
 const MOTIVO_SEM_CONTEXTO = {
   fora_da_cobertura: 'Município fora do mapa',
-  bairro_nao_identificado: 'Bairro não identificado',
-  sem_celula: 'Sem dados deste bairro neste horário',
+  bairro_nao_identificado: 'Bairro não identificado e sem estimativa da cidade',
+  sem_celula: 'Sem dados deste bairro nem da cidade neste período',
+}
+const MOTIVO_DA_ESTIMATIVA = {
+  bairro_nao_identificado: 'bairro não identificado',
+  sem_celula: 'bairro com poucos registros',
 }
 const PERIODO = { madrugada: 'madrugada', manha: 'manhã', tarde: 'tarde', noite: 'noite' }
-const DIA = { segunda: 'segunda', terca: 'terça', quarta: 'quarta', quinta: 'quinta', sexta: 'sexta', sabado: 'sábado', domingo: 'domingo' }
 
 const porcento = (valor) => (valor == null ? '—' : `${Math.round(valor * 100)}%`)
 
@@ -38,7 +41,11 @@ function Linha({ icone, cor, fundo, nome, detalhe, faixa }) {
 
 export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNivel, corDoNivel, corDaAba, simulado, monitoramentoReforcado }) {
   const [aberta, setAberta] = useState(false)
-  const textoContexto = !contexto ? 'calculando' : contexto.disponivel ? ROTULO_DA_FAIXA[contexto.faixa] : 'sem dados'
+  const textoContexto = !contexto
+    ? 'calculando'
+    : contexto.disponivel
+      ? `${ROTULO_DA_FAIXA[contexto.faixa]}${contexto.origem === 'cidade' ? ' (estimativa da cidade)' : ''}`
+      : 'sem dados'
   const textoCorpo = !corpo?.disponivel ? 'calculando' : ROTULO_DA_FAIXA[corpo.faixa]
   const resumo = `Região ${textoContexto} · corpo ${textoCorpo}${simulado ? ' · simulação' : ''}`
 
@@ -52,7 +59,7 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
     ? 'Buscando o bairro…'
     : !contexto.disponivel
       ? MOTIVO_SEM_CONTEXTO[contexto.motivo]
-      : `${celula.bairro.toLowerCase()} · ${DIA[celula.dia_semana]}, ${PERIODO[celula.periodo]}${contexto.localSeguroAplicado ? ' · local seguro baixou uma faixa' : ''}${simulado ? ' · SIMULAÇÃO' : ''}`
+      : `${contexto.origem === 'cidade' ? `Estimativa da cidade (${MOTIVO_DA_ESTIMATIVA[contexto.motivo]})` : celula.bairro.toLowerCase()} · ${PERIODO[celula.periodo]}${contexto.localSeguroAplicado ? ' · local seguro baixou uma faixa' : ''}${simulado ? ' · SIMULAÇÃO' : ''}`
 
   const s = corpo?.sinais ?? {}
   const sinais = [
