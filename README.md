@@ -1,346 +1,113 @@
-# 🛡️ Ampara
+# Ampara
 
-Sistema inteligente de apoio à segurança feminina, utilizando dados contextuais, sensores móveis e wearables para identificação de possíveis situações de vulnerabilidade.
+O Ampara é um aplicativo móvel acadêmico criado por estudantes de Ciência da Computação do Instituto Mauá de Tecnologia. O projeto pesquisa como a tecnologia pode apoiar mulheres em seus deslocamentos, reunindo informação, autonomia e uma rede de confiança.
 
----
+O Ampara é um protótipo em desenvolvimento, não um serviço de emergência nem uma garantia de segurança. O índice exibido pelo aplicativo é experimental e não representa uma avaliação validada de risco. Em perigo imediato, ligue para 190. Para orientação e denúncias de violência contra a mulher, ligue para 180.
 
-## 📌 Sobre o Projeto
+## O aplicativo
 
-O Ampara é um sistema desenvolvido como Trabalho de Conclusão de Curso do Instituto Mauá de Tecnologia que busca oferecer suporte preventivo à segurança de mulheres durante deslocamentos e atividades do cotidiano.
+O protótipo reúne:
 
-A solução utiliza informações comportamentais, contextuais e futuramente dados fisiológicos provenientes de smartwatch para identificar situações potencialmente vulneráveis de maneira discreta e não invasiva.
+- **Proteção:** acompanhamento durante o trajeto, checagens com a usuária e acionamento manual de SOS.
+- **Mapa:** busca por endereço e visualização de ocorrências publicadas pela Secretaria da Segurança Pública de São Paulo (SSP-SP), com filtros e área de apoio por perto.
+- **Rede de confiança:** cadastro de contatos de emergência e compartilhamento de alerta e localização quando o envio está disponível.
+- **Rotina e locais seguros:** organização de compromissos e endereços escolhidos pela usuária.
+- **Relatórios:** histórico e indicadores dos registros de acompanhamento.
+- **Lia:** assistente virtual para dúvidas sobre o aplicativo e orientações gerais. Sua aparência pode ser personalizada no perfil.
+- **Smartwatch:** integração experimental com leituras compatíveis de batimentos e movimento. A disponibilidade depende do relógio, do celular e das permissões concedidas.
 
-Diferente de aplicativos tradicionais baseados apenas em acionamentos manuais, o Ampara propõe uma abordagem híbrida: combinação entre análise automática de contexto e validação da usuária, reduzindo falsos positivos.
+O mapa usa registros históricos, sujeitos a atraso e cobertura desigual. Ocorrências não permitem prever crimes nem afirmar que um lugar é seguro ou inseguro. O SOS depende de conexão, permissões e serviços externos; o Ampara não chama a polícia e não garante que uma mensagem seja entregue. No protótipo, algumas funções de acompanhamento podem exigir que o aplicativo permaneça aberto.
 
----
+## Tecnologias
 
-## 🚨 Problema
+- **Aplicativo:** React Native com Expo, React Navigation e módulos nativos para localização, mapas, sensores e smartwatch.
+- **Serviços e dados:** Supabase, PostgreSQL e PostGIS.
+- **Assistente:** função Edge do Supabase integrada à IA da Mauá (Barô); a busca por lugares usa Google Places quando configurada.
+- **Alertas:** função AWS Lambda para encaminhamento a contatos cadastrados.
+- **Site institucional:** Astro.
+- **Processamento de dados:** Python para importar e preparar dados públicos da SSP-SP e gerar agregações utilizadas pelo mapa.
 
-A violência contra a mulher permanece um problema social de grande escala.
+## Estrutura do repositório
 
-Grande parte das soluções existentes:
-
-- dependem exclusivamente da ação manual da usuária
-- utilizam apenas botões de emergência
-- não consideram contexto
-- apresentam alta ocorrência de falsos positivos
-- não personalizam o comportamento individual
-
----
-
-## 💡 Proposta
-
-O Ampara propõe um sistema capaz de:
-
-- analisar informações contextuais e comportamentais
-- identificar situações potencialmente vulneráveis
-- considerar localização, horário e ambiente
-- permitir personalização por atividades e locais seguros
-- validar alertas antes do acionamento
-- atuar de maneira preventiva e não invasiva
-
----
-
-## ⚙️ Como funciona
-
-### 1. Coleta de dados
-
-Atualmente:
-
-- GPS
-- localização em tempo real
-- movimentação do dispositivo
-- informações de contexto
-
-Próxima etapa:
-
-- frequência cardíaca
-- acelerômetro do smartwatch
-- sensores fisiológicos
-
----
-
-### 2. Análise contextual
-
-O sistema considera:
-
-- horário
-- localização
-- proximidade de locais seguros
-- modo alerta
-- atividades informadas
-- dados regionais de criminalidade (SSP-SP)
-
----
-
-### 3. Geração do score de vulnerabilidade
-
-As informações são combinadas para gerar um score contextual que representa possíveis níveis de vulnerabilidade.
-
-Exemplo:
-
-- região com maior incidência criminal
-- horário crítico
-- movimentação incomum
-- distância de locais seguros
-
-→ score aumenta
-
----
-
-### 4. Fluxo de confirmação
-
-Ao detectar um comportamento potencialmente anômalo:
-
-- aplicativo realiza confirmação discreta
-- usuária pode cancelar
-- caso necessário ocorre acionamento do SOS
-
----
-
-### 5. Ação
-
-Em situações críticas:
-
-- envio de localização
-- acionamento de contatos de emergência
-- registro de ocorrência
-
----
-
-## 📱 Funcionalidades implementadas
-
-### Conta e perfil
-
-- cadastro
-- login
-- edição de perfil
-
-### Segurança
-
-- cadastro de até 3 contatos de emergência
-- cadastro de locais seguros
-- modo alerta
-
-### Mapa e contexto
-
-- visualização de crimes próximos
-- integração com dados SSP
-- ocorrências da comunidade
-- análise geográfica contextual
-
-### Alertas
-
-- fluxo de falso alerta
-- cancelamento de alerta
-- orientação pós-SOS
-
----
-
-## 🚧 Em desenvolvimento
-
-- integração com smartwatch (Galaxy Watch)
-- Health Connect
-- sensores fisiológicos
-- envio automático de SMS
-- integração AWS
-- algoritmo refinado de score
-- histórico de eventos
-- simulador de risco
-
----
-
-## ⚠️ Diferenciais
-
-O Ampara utiliza uma abordagem híbrida:
-
-- detecção automática
-- análise contextual
-- confirmação da usuária
-
-Além disso:
-
-- reduz falsos positivos
-- considera comportamento individual
-- utiliza locais seguros
-- adapta-se ao contexto
-- evita experiências invasivas
-
----
-
-## 🧠 Tecnologias
-
-### Mobile
-
-- React Native
-- Expo
-
-### Backend
-
-- Supabase
-- PostgreSQL
-
-### Dados
-
-- SSP-SP
-- PostGIS
-
-### Cloud (em evolução)
-
-- AWS
-- API Gateway
-- Lambda
-- DynamoDB
-- S3
-
-### Futuro
-
-- Health Connect
-- Smartwatch Samsung
-- Machine Learning
-
----
-
-## 🔐 Segurança e privacidade
-
-O sistema lida com dados sensíveis como localização e informações comportamentais.
-
-Princípios considerados:
-
-- LGPD
-- criptografia de dados
-- autenticação segura
-- controle de acesso
-- armazenamento seguro
-
----
-
-## 🚀 Como executar
-
-### Clone:
-
-```bash
-git clone https://github.com/marodrigues412/ampara-tcc.git
+```text
+mobile/          Aplicativo React Native e Expo
+site/            Site institucional Astro
+supabase/        Funções Edge
+aws/             Serviço de encaminhamento de alertas
+data-processing/ Scripts de processamento, importação e testes dos dados
+data/            Arquivos e resultados de dados do projeto
+docs/            Decisões, análises e documentação técnica
+watch/           Aplicativo Android complementar para smartwatch
 ```
 
-### Entre no projeto:
+## Executar o aplicativo
+
+Requisitos: Node.js compatível com a versão do Expo definida em `mobile/package.json`, npm e ambiente nativo Android ou iOS para criar um development build. Recursos que dependem de módulos nativos, incluindo mapas e smartwatch, não estão todos disponíveis no Expo Go.
 
 ```bash
-cd ampara-tcc/mobile
-```
-
-### Instale dependências:
-
-```bash
+cd mobile
 npm install
+npx expo run:android
 ```
 
-### Execute:
+Em um Mac com Xcode configurado, também é possível iniciar no iOS:
 
 ```bash
-npx expo start
+npx expo run:ios
 ```
 
-Abra no:
+Depois da primeira compilação, inicie o servidor de desenvolvimento com `npx expo start --dev-client` e abra o aplicativo compilado no dispositivo ou emulador. O uso do mapa, localização, chat e alertas depende dos serviços e permissões correspondentes.
 
-- Expo Go
-- Emulador Android
-- dispositivo físico
+## Executar o site
 
----
+```bash
+cd site
+npm install
+npm run dev
+```
 
-## 📊 Atualizar dados da SSP-SP no Supabase
+Para gerar e conferir a versão de produção:
 
-O app lê os crimes da tabela `crime_occurrences`. Para atualizar essa tabela automaticamente com os arquivos da SSP-SP:
+```bash
+npm run build
+npm run preview
+```
 
-### 1. Instale as dependências Python
+## Dados da SSP-SP
 
-Na raiz do projeto:
+Os scripts em `data-processing/` baixam, normalizam e agregam dados públicos para as análises do projeto. A importação no banco exige Python, as dependências do arquivo `data-processing/requirements.txt` e credenciais de banco Supabase. Configure os valores localmente em um arquivo `.env` conforme os nomes esperados pelo script; nunca compartilhe nem versione senhas ou chaves privadas.
 
 ```bash
 python3 -m pip install -r data-processing/requirements.txt
+python3 -m unittest discover -s data-processing -p 'test_*.py'
 ```
 
-### 2. Configure a conexão do Supabase
+O processamento e a importação podem alterar dados ou o banco remoto. Leia as opções e confirme o destino antes de executar scripts de carga. Os dados públicos também têm limitações de cobertura, classificação e atualização.
 
-Crie um arquivo `.env` a partir de `.env.example`:
+## Testes
+
+Os testes automatizados disponíveis podem ser executados separadamente:
 
 ```bash
-cp .env.example .env
+cd mobile
+node --test __tests__/*.test.mjs
 ```
-
-Preencha os dados de conexão do Supabase em campos separados. Esse formato evita erro quando a senha tem caracteres especiais:
-
-```text
-SUPABASE_DB_HOST=aws-1-us-east-2.pooler.supabase.com
-SUPABASE_DB_PORT=5432
-SUPABASE_DB_NAME=postgres
-SUPABASE_DB_USER=postgres.hhlxgtwvoxpvyvejvxwt
-SUPABASE_DB_PASSWORD=sua_senha
-SUPABASE_DB_SSLMODE=require
-```
-
-O `.env` não deve ser enviado ao Git, porque contém senha.
-
-### 3. Importe os meses novos
-
-Exemplo para verificar 2026:
 
 ```bash
-python data-processing/importar_ssp_supabase.py --anos 2026
+cd data-processing
+python3 -m unittest discover -p 'test_*.py'
 ```
 
-O script baixa o arquivo mais recente da SSP-SP, aplica os mesmos filtros usados no processamento manual e insere apenas meses ainda não registrados em `ssp_imported_months`.
+## Privacidade e segurança
 
-Se a SSP retificar algum mês e for necessário recarregar:
+O aplicativo pode tratar dados de conta, localização, contatos escolhidos e sinais de sensores quando esses recursos são ativados. Use apenas dados de demonstração ou contas de teste ao desenvolver. Não inclua credenciais em commits, não use dados pessoais reais em testes e revise as permissões e políticas do Supabase e dos serviços externos antes de qualquer implantação.
 
-```bash
-python data-processing/importar_ssp_supabase.py --anos 2026 --replace-existing
-```
+O site institucional descreve os limites do protótipo e os canais de contato. Antes de uma distribuição pública do aplicativo, a equipe deve manter informações de privacidade, retenção de dados e suporte adequadas à versão que será lançada.
 
----
+## Projeto acadêmico
 
-## 📊 Status
+Desenvolvido como Trabalho de Conclusão de Curso em Ciência da Computação no Instituto Mauá de Tecnologia.
 
-🚧 Em desenvolvimento — TCC Instituto Mauá de Tecnologia
-
-Pré-banca: MVP funcional em evolução
-
----
-
-## 👩‍💻 Autoras
-
-<p align="center">
-  <a href="https://github.com/amandaherculano">
-    <img src="https://github.com/amandaherculano.png" width="120px;" alt="Amanda Herculano"/>
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://github.com/marodrigues412">
-    <img src="https://github.com/marodrigues412.png" width="120px;" alt="Maria Eduarda Rodrigues"/>
-  </a>
-</p>
-
-<p align="center">
-  <b>Amanda Herculano</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Maria Eduarda Rodrigues</b>
-</p>
-
-<p align="center">
-  <a href="https://github.com/amandaherculano">GitHub</a> • 
-  <a href="https://www.linkedin.com/in/amanda-herculano/">LinkedIn</a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://github.com/marodrigues412">GitHub</a> • 
-  <a href="https://www.linkedin.com/in/marodrigu3s/">LinkedIn</a>
-</p>
-
-<p align="center">
-Desenvolvido como Trabalho de Conclusão de Curso – Instituto Mauá de Tecnologia (2026)
-</p>
-
----
-
-## 📚 Referências
-
-- Organização Mundial da Saúde (WHO)
-- Fórum Brasileiro de Segurança Pública
-- Secretaria de Segurança Pública do Estado de São Paulo
-- Estudos sobre wearables e detecção de anomalias
+- Site: [ampara.info](https://ampara.info)
+- Instagram: [@amparainfo](https://www.instagram.com/amparainfo/)
+- Contato: [amparainfo2026@gmail.com](mailto:amparainfo2026@gmail.com)
