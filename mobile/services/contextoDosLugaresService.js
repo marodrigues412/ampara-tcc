@@ -1,20 +1,22 @@
-import * as Location from 'expo-location'
+import { buscarEnderecoReverso } from './enderecoReverso'
 import { buscarCelulaDeContexto } from './contextRiskMapService'
 import { avaliarContexto, localDoEndereco } from '../utils/contextLayer'
 import { agruparPorCelula, resumirContextos } from '../utils/contextoDosLugares'
+import { municipioDoMapa } from '../utils/municipioDoMapa'
 
-// Endereço reverso por quadradinho, guardado só na memória desta sessão do app.
+// Bairro por quadradinho, nesta sessão. O endereço em si fica no cache da fila
+// (enderecoReverso.js), que também sobrevive a fechar o app.
 const locaisPorCelula = new Map()
 
 async function localDaCelula(celula) {
   if (locaisPorCelula.has(celula.chave)) return locaisPorCelula.get(celula.chave)
-  let local = { municipio: null, bairro: null }
-  try {
-    local = localDoEndereco(await Location.reverseGeocodeAsync({ latitude: celula.latitude, longitude: celula.longitude }))
-  } catch {
-    // Sem endereço, os pontos desse quadradinho ficam "sem dados".
-  }
-  locaisPorCelula.set(celula.chave, local)
+  // Prioridade do Relatório: espera a tela Proteção e sai espaçado (cota do iPhone).
+  const { enderecos } = await buscarEnderecoReverso({ latitude: celula.latitude, longitude: celula.longitude, prioridade: 'relatorio', prazoMs: 20_000 })
+  const doEndereco = enderecos ? localDoEndereco(enderecos) : { municipio: null, bairro: null }
+  // Município pelo contorno do IBGE, como na tela Proteção; sem bairro, vale a cidade.
+  const local = { municipio: municipioDoMapa(celula.latitude, celula.longitude) ?? doEndereco.municipio, bairro: doEndereco.bairro }
+  // Só guarda quando o endereço veio: sem ele, tenta de novo na próxima abertura.
+  if (enderecos) locaisPorCelula.set(celula.chave, local)
   return local
 }
 

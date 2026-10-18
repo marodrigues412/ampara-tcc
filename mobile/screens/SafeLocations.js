@@ -12,6 +12,7 @@ import {
   Keyboard
 } from 'react-native'
 import * as Location from 'expo-location'
+import { buscarEnderecoReverso } from '../services/enderecoReverso'
 import MapView, { Marker, Circle } from 'react-native-maps'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
@@ -144,10 +145,7 @@ export default function SafeLocations({ navigation }) {
     setLongitude(lng)
     setCurrentLocation(loc.coords)
 
-    const address = await Location.reverseGeocodeAsync({
-      latitude: lat,
-      longitude: lng
-    })
+    const { enderecos: address } = await buscarEnderecoReverso({ latitude: lat, longitude: lng, prioridade: 'protecao', prazoMs: 8_000 })
 
     setEndereco(formatAddressFromExpo(address))
     setModalVisible(true)

@@ -3,7 +3,6 @@ import {
   StyleSheet, Text, View, ScrollView, ActivityIndicator, Pressable, TouchableOpacity, Platform,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
-import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import { tallyContactAlerts } from '../utils/weeklyCalculator'
 import {
@@ -23,6 +22,7 @@ import { listarCompromissos, listarLocaisSeguros } from '../services/routineServ
 import { buscarResumoCrimes } from '../services/crimesService'
 import { resumoDaLia } from '../services/resumoDaLia'
 import { contextoDosLugares } from '../services/contextoDosLugaresService'
+import { buscarEnderecoReverso } from '../services/enderecoReverso'
 import { Brand, TemaDaAba } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 import PopupAmpara, { LinhaDoPopup } from '../components/PopupAmpara'
@@ -262,7 +262,9 @@ export default function Dashboard({ navigation }) {
         let nome = seguro?.nome ?? compromisso?.local_nome ?? null
         if (!nome) {
           try {
-            const [endereco] = await Location.reverseGeocodeAsync({ latitude: lugar.latitude, longitude: lugar.longitude })
+            // Fila única, depois da tela Proteção, com cache: não disputa a cota do iPhone.
+            const { enderecos } = await buscarEnderecoReverso({ latitude: lugar.latitude, longitude: lugar.longitude, prioridade: 'relatorio', prazoMs: 20_000 })
+            const endereco = enderecos?.[0]
             nome = endereco?.street ? `Perto da ${endereco.street}` : endereco?.district ?? 'Lugar sem nome'
           } catch {
             nome = 'Lugar sem nome'
@@ -336,7 +338,8 @@ export default function Dashboard({ navigation }) {
     setDetalhe({ tipo: 'alerta', alerta })
     if (alerta.latitude == null || alerta.longitude == null) return
     try {
-      const [e] = await Location.reverseGeocodeAsync({ latitude: Number(alerta.latitude), longitude: Number(alerta.longitude) })
+      const { enderecos } = await buscarEnderecoReverso({ latitude: Number(alerta.latitude), longitude: Number(alerta.longitude), prioridade: 'relatorio', prazoMs: 10_000 })
+      const e = enderecos?.[0]
       const texto = [e?.street && `${e.street}${e.streetNumber ? `, ${e.streetNumber}` : ''}`, e?.district, e?.city].filter(Boolean).join(' · ')
       setEnderecoAlerta({ id: alerta.id, texto: texto || null })
     } catch {

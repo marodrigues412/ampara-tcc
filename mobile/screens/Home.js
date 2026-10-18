@@ -21,12 +21,11 @@ import {
 
 import { useFocusEffect } from '@react-navigation/native'
 import * as Location from 'expo-location'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRiskDetection } from '../hooks/useRiskDetection'
 import { useContextLayer } from '../hooks/useContextLayer'
-import { LOCAIS_DE_DEMONSTRACAO } from '../constants/demonstracao'
+import { buscarEnderecoReverso } from '../services/enderecoReverso'
 import { buscarResumoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
@@ -53,16 +52,11 @@ import AnelDaLia from '../components/AnelDaLia'
 import CamadasDoRisco from '../components/CamadasDoRisco'
 
 import { dispararAlerta } from '../services/alertService'
-import { enviarAlertaOuSimular, MENSAGEM_DO_ENVIO_SIMULADO } from '../services/envioDeAlerta'
 import { FRACAO_DO_ANO } from '../utils/mapaCalor'
 
 // Raio do entorno da usuária: a área cujos crimes entram no score. É o mesmo raio que a
 // aba Mapa usa para resumir uma região.
 const RAIO_INICIAL_KM = 1
-const SHOW_PRESENTATION_MODE = false
-// Modo demonstração (estande): simula só o bairro da Camada 1. Aparece no build de
-// desenvolvimento; para um build de release, troque por true.
-const MOSTRAR_DEMONSTRACAO = __DEV__
 // Monitoramento reforçado (nível moderado): grava a posição nesse intervalo, sem avisar.
 const INTERVALO_REFORCADO_MS = 60_000
 const VERSAO_DO_SCORE = 'contexto-ssp+corpo-3camadas-v2.0'
@@ -179,14 +173,7 @@ export default function Home({ navigation }) {
   const { data, location, riskStatus, phoneMotionWindow, gpsSpeedDeltaMps } = useRiskDetection()
   const smartwatch = useSmartwatch(userId)
   // Camada 1 do score de 3 camadas: faixa do mapa bairro × dia × período (SSP).
-  // Não são guardados entre aberturas do app: ninguém fica preso numa simulação sem saber.
-  const [localSimulado, setLocalSimulado] = useState(null)
-  const [modoApresentacao, setModoApresentacao] = useState(false)
-  const insets = useSafeAreaInsets()
-  const { contexto: contextoDaRegiao, simulado: contextoSimulado } = useContextLayer({ location, insideSafeZone, localSimulado })
-  // Estande: com apresentação ou simulação, o alerta (automático ou SOS) não sai do celular.
-  const envioSimulado = SHOW_PRESENTATION_MODE || modoApresentacao || contextoSimulado
-  const encerrarDemonstracao = () => { setLocalSimulado(null); setModoApresentacao(false) }
+  const { contexto: contextoDaRegiao } = useContextLayer({ location, insideSafeZone })
   const motionRisk = useMemo(() => calculateMotionRiskScore({
     phoneMagnitudeG: riskStatus.magnitude,
     watchMotion: smartwatch.watchMotion,
@@ -351,9 +338,6 @@ export default function Home({ navigation }) {
   const [sosFeedbackData, setSosFeedbackData] = useState({ status: 'enviando', mensagem: '', enviados: [], falhas: [], endereco: '', detalhe: '' });
   const [simpleCheckVisible, setSimpleCheckVisible] = useState(false);
   const [alertType, setAlertType] = useState('moderado');
-  const [demoScore, setDemoScore] = useState(null);
-  const [demoBonus, setDemoBonus] = useState(0);
-  const [demoEnvLabel, setDemoEnvLabel] = useState(null);
 
   // --- Modo Monitoramento (liga/desliga detecção automática de risco) ---
   const [monitoramentoAtivo, setMonitoramentoAtivo] = useState(true);
@@ -642,9 +626,6 @@ export default function Home({ navigation }) {
       setSimpleCheckVisible(false)
       setAlertaDisparado(false)
       setSustainedHighRisk(false)
-      setDemoScore(null)
-      setDemoBonus(0)
-      setDemoEnvLabel(null)
       cancelCooldownRef.current = Date.now() + 30 * 1000
     }
   }
@@ -702,8 +683,7 @@ export default function Home({ navigation }) {
   }, [totalCrimesEntorno, activityMode, location, safeLocations, motionRisk.total])
 
   // Uma avaliação a cada 30 s, nos três cenários. Com relógio, cada leitura de BPM
-  // também entra (é dela que sai a linha de base da última hora). Na simulação do
-  // estande não grava nada: o bairro não é o real.
+  // também entra (é dela que sai a linha de base da última hora).
   useEffect(() => {
     const measurement = watchMeasurement
     const comBpm = heartRateIsCurrent && measurement?.isDirect && smartwatch.heartRateHistoryReady
@@ -711,7 +691,6 @@ export default function Home({ navigation }) {
     if (
       !userId
       || !monitoramentoAtivo
-      || contextoSimulado
       || riskContextScore === null
       || (!comBpm && !corpo.disponivel)
       || !Number.isFinite(medidoEm)
@@ -761,7 +740,6 @@ export default function Home({ navigation }) {
   }, [
     userId,
     monitoramentoAtivo,
-    contextoSimulado,
     riskContextScore,
     insideSafeZone,
     activityMode,
@@ -799,7 +777,8 @@ export default function Home({ navigation }) {
     
     let enderecoFormatado = "Endereço não identificado (Apenas GPS)";
     try {
-      const addressArray = await Location.reverseGeocodeAsync({ latitude: userLat, longitude: userLon });
+      // Prazo curto: o SOS não pode esperar o geocodificador. Sem endereço, vai só o GPS.
+      const { enderecos: addressArray } = await buscarEnderecoReverso({ latitude: userLat, longitude: userLon, prioridade: 'protecao', prazoMs: 4_000 });
       if (addressArray && addressArray.length > 0) {
         const a = addressArray[0];
         enderecoFormatado = `${a.street || a.name || ''}${a.streetNumber ? ', ' + a.streetNumber : ''} - ${a.district || a.subregion || ''}, ${a.city || ''}`;
@@ -813,24 +792,20 @@ export default function Home({ navigation }) {
     setSosFeedbackData({ status: 'enviando', mensagem: textoMensagem, enviados: [], falhas: [], endereco: enderecoFormatado, detalhe: '' });
     setSosFeedbackVisible(true);
 
-    const resultado = await enviarAlertaOuSimular({
-      simular: envioSimulado,
-      enviar: dispararAlerta,
-      dados: {
-        userId,
-        nomeUsuario: userName,
-        endereco: enderecoFormatado,
-        latitude: userLat,
-        longitude: userLon,
-        nivelRisco: rotuloDoNivelNoAlerta,
-        mensagem: textoMensagem,
-      },
+    const resultado = await dispararAlerta({
+      userId,
+      nomeUsuario: userName,
+      endereco: enderecoFormatado,
+      latitude: userLat,
+      longitude: userLon,
+      nivelRisco: rotuloDoNivelNoAlerta,
+      mensagem: textoMensagem,
     });
 
-    if (!resultado.enviado && !resultado.simulado) console.error("❌ [Alerta] Envio não confirmado:", resultado.detalhe);
+    if (!resultado.enviado) console.error("❌ [Alerta] Envio não confirmado:", resultado.detalhe);
 
     setSosFeedbackData({
-      status: resultado.simulado ? 'simulado' : resultado.enviado ? 'enviado' : 'falhou',
+      status: resultado.enviado ? 'enviado' : 'falhou',
       mensagem: textoMensagem,
       enviados: resultado.enviados,
       falhas: resultado.falhas,
@@ -903,7 +878,7 @@ export default function Home({ navigation }) {
     let loc = await Location.getCurrentPositionAsync({})
     const { latitude, longitude } = loc.coords
     setOccCoords({ latitude, longitude })
-    const address = await Location.reverseGeocodeAsync({ latitude, longitude })
+    const { enderecos: address } = await buscarEnderecoReverso({ latitude, longitude, prioridade: 'protecao', prazoMs: 8_000 })
     if (address && address.length > 0) { const a = address[0]; setOccEndereco(`${a.street || ''}${a.streetNumber ? ', ' + a.streetNumber : ''}, ${a.district || ''}, ${a.city || ''}`); }
     setLoadingGPS(false)
   }
@@ -1056,43 +1031,9 @@ export default function Home({ navigation }) {
   const densidadeRegiao = ['roubo', 'furto', 'violencia'].reduce((soma, id) => soma + (resumoCrimes[id] ?? 0), 0) / Math.PI
   const posicaoNaRegiao = Math.round(Math.min(densidadeRegiao / (700 * FRACAO_DO_ANO * 1.5), 1) * 92)
 
-  const simularNivel = (score) => {
-    setDemoEnvLabel(null)
-    setDemoBonus(0)
-    setDemoScore(score)
-  }
-
-  const setDemoEnvironment = (bonus, label) => {
-    setDemoScore(null)
-    setDemoBonus(bonus)
-    setDemoEnvLabel(label)
-  }
-
-  const resetDemo = () => {
-    setDemoScore(null)
-    setDemoBonus(0)
-    setDemoEnvLabel(null)
-  }
 
   return (
     <View style={styles.container}>
-      {envioSimulado && (
-        <View
-          style={[styles.simulacaoFaixa, { top: insets.top + 4 }]}
-          accessibilityRole="alert"
-          accessibilityLabel={contextoSimulado
-            ? `Simulação ativa: ${localSimulado.rotulo}, ${localSimulado.cidade}. Nenhum alerta será enviado.`
-            : 'Modo apresentação ativo. Nenhum alerta será enviado.'}
-        >
-          <Ionicons name="flask" size={14} color="#FFFFFF" />
-          <Text style={styles.simulacaoFaixaTexto} numberOfLines={1}>
-            {contextoSimulado ? `SIMULAÇÃO · ${localSimulado.rotulo}` : 'MODO APRESENTAÇÃO'} · envio bloqueado
-          </Text>
-          <TouchableOpacity onPress={encerrarDemonstracao} accessibilityRole="button" accessibilityLabel="Encerrar simulação e modo apresentação" hitSlop={10}>
-            <Text style={styles.simulacaoFaixaSair}>Encerrar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
 
         {/* ── HEADER: a Lia no anel de risco ── */}
@@ -1156,7 +1097,6 @@ export default function Home({ navigation }) {
             rotuloDoNivel={calculandoScore ? 'calculando' : displayLevel.toLowerCase()}
             corDoNivel={riskAccent}
             corDaAba={TEMA.forte}
-            simulado={contextoSimulado}
             monitoramentoReforcado={monitoramentoReforcado}
           />
         )}
@@ -1355,132 +1295,6 @@ export default function Home({ navigation }) {
 
         </>
 
-        {MOSTRAR_DEMONSTRACAO && (
-        <View style={styles.demoPanel}>
-          <View style={styles.demoPanelHeader}>
-            <Ionicons name="flask-outline" size={16} color={Brand.blue} />
-            <Text style={styles.demoPanelTitle}>Modo demonstração · simular localização</Text>
-          </View>
-          <Text style={styles.demoSectionLabel}>Bairro usado no contexto da região</Text>
-          <View style={[styles.demoBtnRow, styles.demoGrade]}>
-            {LOCAIS_DE_DEMONSTRACAO.map((lugar) => {
-              const ativo = localSimulado?.id === lugar.id
-              return (
-                <TouchableOpacity
-                  key={lugar.id}
-                  style={[styles.demoBtn, styles.demoBtnDaGrade, { borderColor: Brand.blue, borderWidth: ativo ? 2.5 : 1.5 }, ativo && { backgroundColor: Brand.blueSoft }]}
-                  onPress={() => setLocalSimulado(ativo ? null : lugar)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: ativo }}
-                >
-                  <Text style={[styles.demoBtnText, { color: Brand.blue }]}>{lugar.rotulo}</Text>
-                  <Text style={styles.demoBtnSub}>{lugar.cidade}</Text>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-          <Text style={styles.demoNota}>
-            Só o bairro é simulado: a faixa vem do mapa da SSP para o período real. Com um bairro simulado, nenhum alerta sai do celular.
-          </Text>
-          <TouchableOpacity
-            style={[styles.demoApresentacao, modoApresentacao && styles.demoApresentacaoAtivo]}
-            onPress={() => setModoApresentacao((ativo) => !ativo)}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: modoApresentacao }}
-            accessibilityLabel="Modo apresentação: bloqueia o envio real de alertas"
-          >
-            <Ionicons name={modoApresentacao ? 'checkbox' : 'square-outline'} size={18} color={Brand.blue} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.demoApresentacaoTitulo}>Modo apresentação</Text>
-              <Text style={styles.demoApresentacaoTexto}>Alerta automático e SOS mostram o fluxo inteiro, mas nada é enviado.</Text>
-            </View>
-          </TouchableOpacity>
-          {(localSimulado || modoApresentacao) && (
-            <TouchableOpacity style={styles.demoResetBtn} onPress={encerrarDemonstracao}>
-              <Ionicons name="refresh-outline" size={14} color={Brand.blue} />
-              <Text style={styles.demoResetText}>Voltar ao uso real (localização real e envio real)</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        )}
-
-        {/* Mantido oculto para possível reutilização futura; não participa do score real. */}
-        {SHOW_PRESENTATION_MODE && (
-        <View style={styles.demoPanel}>
-          <View style={styles.demoPanelHeader}>
-            <Ionicons name="flask-outline" size={16} color={TEMA.forte} />
-            <Text style={styles.demoPanelTitle}>Modo Apresentação</Text>
-          </View>
-
-          {/* Seção 1: Ambiente + sacudir */}
-          <Text style={styles.demoSectionLabel}>① Simular ambiente · depois sacuda o celular</Text>
-          <View style={styles.demoBtnRow}>
-            <TouchableOpacity
-              style={[
-                styles.demoBtn,
-                { borderColor: '#E6A200', borderWidth: demoEnvLabel === 'risco-dia' ? 2.5 : 1.5 },
-                demoEnvLabel === 'risco-dia' && { backgroundColor: '#FFF8E6' }
-              ]}
-              onPress={() => setDemoEnvironment(1, 'risco-dia')}
-            >
-              {demoEnvLabel === 'risco-dia'
-                ? <Ionicons name="checkmark-circle" size={18} color="#E6A200" />
-                : <Ionicons name="sunny-outline" size={16} color="#E6A200" />
-              }
-              <Text style={[styles.demoBtnText, { color: '#E6A200' }]}>Risco (dia)</Text>
-              <Text style={styles.demoBtnSub}>Sacuda → Moderado</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.demoBtn,
-                { borderColor: Brand.danger, borderWidth: demoEnvLabel === 'risco-noite' ? 2.5 : 1.5 },
-                demoEnvLabel === 'risco-noite' && { backgroundColor: '#FDEAEA' }
-              ]}
-              onPress={() => setDemoEnvironment(3, 'risco-noite')}
-            >
-              {demoEnvLabel === 'risco-noite'
-                ? <Ionicons name="checkmark-circle" size={18} color={Brand.danger} />
-                : <Ionicons name="moon-outline" size={16} color={Brand.danger} />
-              }
-              <Text style={[styles.demoBtnText, { color: Brand.danger }]}>Risco noturno</Text>
-              <Text style={styles.demoBtnSub}>Sacuda → Crítico</Text>
-            </TouchableOpacity>
-          </View>
-
-          {demoEnvLabel && (
-            <View style={styles.demoEnvActive}>
-              <Ionicons name="radio-outline" size={13} color="#27AE60" />
-              <Text style={styles.demoEnvActiveText}>
-                {demoEnvLabel === 'risco-dia' ? 'Região de risco (dia) ativa' : 'Risco noturno ativo'} · Sacuda para acionar
-              </Text>
-            </View>
-          )}
-
-          {/* Seção 2: Acionamento direto */}
-          <Text style={[styles.demoSectionLabel, { marginTop: 14 }]}>② Ou acione diretamente</Text>
-          <View style={styles.demoBtnRow}>
-            <TouchableOpacity style={[styles.demoBtn, { borderColor: '#27AE60' }]} onPress={() => simularNivel(3)}>
-              <Text style={[styles.demoBtnText, { color: '#27AE60' }]}>Nível 1</Text>
-              <Text style={styles.demoBtnSub}>Tudo bem?</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.demoBtn, { borderColor: '#E6A200' }]} onPress={() => simularNivel(6)}>
-              <Text style={[styles.demoBtnText, { color: '#E6A200' }]}>Nível 2</Text>
-              <Text style={styles.demoBtnSub}>Confirmar (30s)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.demoBtn, { borderColor: Brand.danger }]} onPress={() => simularNivel(9)}>
-              <Text style={[styles.demoBtnText, { color: Brand.danger }]}>Nível 3</Text>
-              <Text style={styles.demoBtnSub}>Alerta (10s)</Text>
-            </TouchableOpacity>
-          </View>
-
-          {(demoScore !== null || demoEnvLabel !== null) && (
-            <TouchableOpacity style={styles.demoResetBtn} onPress={resetDemo}>
-              <Ionicons name="refresh-outline" size={14} color={TEMA.forte} />
-              <Text style={styles.demoResetText}>Resetar demo</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        )}
 
       </ScrollView>
 
@@ -1514,13 +1328,13 @@ export default function Home({ navigation }) {
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: sosFeedbackData.status === 'enviado' ? Brand.green : sosFeedbackData.status === 'falhou' ? Brand.danger : sosFeedbackData.status === 'simulado' ? Brand.blue : TEMA.forte }]} />
+            <View style={[styles.modalStrip, { backgroundColor: sosFeedbackData.status === 'enviado' ? Brand.green : sosFeedbackData.status === 'falhou' ? Brand.danger : TEMA.forte }]} />
             <View style={styles.modalInner}>
               {sosFeedbackData.status === 'enviando' && (
                 <>
                   <ActivityIndicator size="large" color={TEMA.forte} style={{ marginBottom: 12 }} />
-                  <Text style={styles.cardTitle}>{envioSimulado ? 'Simulando o envio...' : 'Enviando alerta...'}</Text>
-                  <Text style={styles.cardSubtitle}>{envioSimulado ? 'Modo apresentação: nenhuma mensagem sai do celular.' : 'Avisando sua rede de apoio com sua localização.'}</Text>
+                  <Text style={styles.cardTitle}>Enviando alerta...</Text>
+                  <Text style={styles.cardSubtitle}>Avisando sua rede de apoio com sua localização.</Text>
                 </>
               )}
               {sosFeedbackData.status === 'enviado' && (
@@ -1528,14 +1342,6 @@ export default function Home({ navigation }) {
                   <Text style={[styles.cardTitleCritical, { color: Brand.green }]}>Alerta Enviado</Text>
                   <Text style={styles.cardSubtitle}>
                     Mensagem de WhatsApp com sua localização enviada para {sosFeedbackData.enviados.length} {sosFeedbackData.enviados.length === 1 ? 'contato' : 'contatos'}.
-                  </Text>
-                </>
-              )}
-              {sosFeedbackData.status === 'simulado' && (
-                <>
-                  <Text style={[styles.cardTitleCritical, { color: Brand.blue }]}>{MENSAGEM_DO_ENVIO_SIMULADO}</Text>
-                  <Text style={styles.cardSubtitle}>
-                    Modo apresentação: o alerta seguiu o fluxo completo, mas nada saiu do celular e nada foi registrado no histórico de alertas.
                   </Text>
                 </>
               )}
@@ -1727,9 +1533,7 @@ export default function Home({ navigation }) {
               </Text>
               <Text style={styles.cardSubtitle}>
                 {alertType === 'critico'
-                  ? envioSimulado
-                    ? 'Risco alto detectado. Simulação: ao fim da contagem, nada será enviado.'
-                    : 'Risco alto detectado. Seus contatos serão acionados em:'
+                  ? 'Risco alto detectado. Seus contatos serão acionados em:'
                   : 'Movimento incomum detectado. Confirme que está segura.'}
               </Text>
 
@@ -1997,27 +1801,4 @@ const styles = StyleSheet.create({
   timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' },
   alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
 
-  demoPanel: { marginHorizontal: 20, marginTop: 16, marginBottom: 8, backgroundColor: '#EEF6FC', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#B8D6E8' },
-  demoPanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  demoPanelTitle: { fontSize: 13, fontWeight: '700', color: Brand.blue },
-  demoSectionLabel: { fontSize: 11, color: '#5A8FAF', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 },
-  demoBtnRow: { flexDirection: 'row', gap: 8 },
-  demoBtn: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 10, alignItems: 'center', backgroundColor: '#FFF', gap: 2 },
-  demoBtnActive: { backgroundColor: '#F0F8FF' },
-  demoBtnText: { fontSize: 12, fontWeight: '700' },
-  demoBtnSub: { fontSize: 10, color: '#888' },
-  demoEnvActive: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EAF5EC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
-  demoEnvActiveText: { fontSize: 11, color: '#27AE60', fontWeight: '600', flex: 1 },
-  demoGrade: { flexWrap: 'wrap' },
-  demoBtnDaGrade: { flexBasis: '45%', flexGrow: 1 },
-  demoApresentacao: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#B8D6E8', backgroundColor: '#FFFFFF' },
-  demoApresentacaoAtivo: { borderColor: Brand.blue, borderWidth: 2, backgroundColor: Brand.blueSoft },
-  demoApresentacaoTitulo: { fontSize: 13, fontWeight: '700', color: Brand.blue },
-  demoApresentacaoTexto: { fontSize: 11, color: Brand.muted, marginTop: 2 },
-  demoNota: { fontSize: 11, color: Brand.muted, marginTop: 10, lineHeight: 15 },
-  simulacaoFaixa: { position: 'absolute', left: 16, right: 16, zIndex: 20, elevation: 6, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Brand.blue, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14 },
-  simulacaoFaixaTexto: { flex: 1, color: '#FFFFFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
-  simulacaoFaixaSair: { color: '#FFFFFF', fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
-  demoResetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 12 },
-  demoResetText: { fontSize: 12, color: '#5A8FAF', fontWeight: '600' },
 })

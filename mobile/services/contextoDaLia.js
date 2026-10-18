@@ -1,5 +1,6 @@
 import * as Location from 'expo-location'
 import { supabase } from './supabase'
+import { buscarEnderecoReverso } from './enderecoReverso'
 import { getRecentLocationHistory, getLocationHistoryBetween } from './locationService'
 import { buscarResumoCrimes } from './crimesService'
 import { listarCompromissos, listarLocaisSeguros } from './routineService'
@@ -37,7 +38,8 @@ async function posicaoAtual() {
 
 async function bairroDe({ latitude, longitude }) {
   try {
-    const [endereco] = await Location.reverseGeocodeAsync({ latitude, longitude })
+    const { enderecos } = await buscarEnderecoReverso({ latitude, longitude, prioridade: 'relatorio', prazoMs: 5_000 })
+    const endereco = enderecos?.[0]
     const bairro = endereco?.district || endereco?.subregion
     const cidade = endereco?.city || endereco?.subregion
     return [bairro, cidade].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ') || null

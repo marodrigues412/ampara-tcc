@@ -39,7 +39,7 @@ function Linha({ icone, cor, fundo, nome, detalhe, faixa }) {
   )
 }
 
-export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNivel, corDoNivel, corDaAba, simulado, monitoramentoReforcado }) {
+export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNivel, corDoNivel, corDaAba, monitoramentoReforcado }) {
   const [aberta, setAberta] = useState(false)
   const textoContexto = !contexto
     ? 'calculando'
@@ -47,7 +47,7 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
       ? `${ROTULO_DA_FAIXA[contexto.faixa]}${contexto.origem === 'cidade' ? ' (estimativa da cidade)' : ''}`
       : 'sem dados'
   const textoCorpo = !corpo?.disponivel ? 'calculando' : ROTULO_DA_FAIXA[corpo.faixa]
-  const resumo = `Região ${textoContexto} · corpo ${textoCorpo}${simulado ? ' · simulação' : ''}`
+  const resumo = `Região ${textoContexto} · corpo ${textoCorpo}`
 
   const alternar = () => {
     LayoutAnimation.configureNext(LayoutAnimation.create(240, 'easeInEaseOut', 'opacity'))
@@ -59,7 +59,7 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
     ? 'Buscando o bairro…'
     : !contexto.disponivel
       ? MOTIVO_SEM_CONTEXTO[contexto.motivo]
-      : `${contexto.origem === 'cidade' ? `Estimativa da cidade (${MOTIVO_DA_ESTIMATIVA[contexto.motivo]})` : celula.bairro.toLowerCase()} · ${PERIODO[celula.periodo]}${contexto.localSeguroAplicado ? ' · local seguro baixou uma faixa' : ''}${simulado ? ' · SIMULAÇÃO' : ''}`
+      : `${contexto.origem === 'cidade' ? `Estimativa da cidade (${MOTIVO_DA_ESTIMATIVA[contexto.motivo]})` : celula.bairro.toLowerCase()} · ${PERIODO[celula.periodo]}${contexto.localSeguroAplicado ? ' · local seguro baixou uma faixa' : ''}`
 
   const s = corpo?.sinais ?? {}
   const sinais = [
