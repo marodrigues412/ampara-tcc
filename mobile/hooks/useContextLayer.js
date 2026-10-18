@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as Location from 'expo-location'
 import { buscarCelulaDeContexto } from '../services/contextRiskMapService'
-import { avaliarContexto, diaDaSemana, localDoEndereco, periodoDoHorario } from '../utils/contextLayer'
+import { avaliarContexto, localDoEndereco, periodoDoHorario } from '../utils/contextLayer'
 import { distanceKm } from '../utils/geo'
 
 // Só refaz o endereço reverso depois de andar isso: bairro não muda a cada passo, e o
@@ -11,7 +11,7 @@ const DISTANCIA_PARA_REGEOCODIFICAR_KM = 0.15
 const CHECAGEM_PERIODO_MS = 60_000
 
 function chaveDoMomento(data) {
-  return `${diaDaSemana(data)}|${periodoDoHorario(data)}`
+  return periodoDoHorario(data)
 }
 
 // Camada 1 (contexto) para a posição atual. Com `localSimulado` (modo demonstração),
@@ -63,13 +63,13 @@ export function useContextLayer({ location, insideSafeZone, localSimulado = null
     if (!temLocal) return
     let cancelado = false
     buscarCelulaDeContexto({ municipio, bairro })
-      .then(({ celula }) => { if (!cancelado) setResposta({ chave: chaveAtual, celula }) })
+      .then(({ celula, celulaDaCidade }) => { if (!cancelado) setResposta({ chave: chaveAtual, celula, celulaDaCidade }) })
     return () => { cancelado = true }
   }, [temLocal, municipio, bairro, chaveAtual])
 
   const atual = temLocal && resposta?.chave === chaveAtual
   const contexto = atual
-    ? avaliarContexto({ municipio, bairro, celula: resposta.celula, emLocalSeguro: insideSafeZone })
+    ? avaliarContexto({ municipio, bairro, celula: resposta.celula, celulaDaCidade: resposta.celulaDaCidade, emLocalSeguro: insideSafeZone })
     : null
 
   return { contexto, local, simulado: Boolean(localSimulado) }

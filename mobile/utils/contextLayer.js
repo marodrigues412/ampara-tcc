@@ -1,18 +1,17 @@
 // Camada 1 do score (contexto): onde e quando a usuária está, segundo o mapa
-// município × bairro × dia da semana × período (data/context_risk_map.sql).
+// município × bairro × período (data/context_risk_map.sql), com a reserva município ×
+// período (context_risk_map_cidade) para bairro sem célula.
 //
 // Tudo aqui é puro, para os testes rodarem sem Supabase nem GPS. A busca fica em
 // services/contextRiskMapService.js.
 //
 // Regras combinadas com as autoras:
-// - célula ausente = "indisponível", nunca "baixo";
+// - bairro sem célula usa a estimativa da cidade; sem ela também = "indisponível",
+//   nunca "baixo";
 // - o horário não soma de novo por fora: o mapa já separa por período;
 // - local seguro (80 m) baixa uma faixa — extensão nossa, não está na orientação.
 
 export const PERIODOS = ['madrugada', 'manha', 'tarde', 'noite']
-// Mesma ordem do Date.getDay(): domingo = 0. No Python é dayofweek (segunda = 0), mas
-// o que importa é o nome gravado na tabela.
-const DIAS = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
 const FAIXAS = ['baixo', 'medio', 'alto']
 
 // Nome do geocodificador → nome da SSP. A SSP abrevia "São"/"Santo" nos municípios.
@@ -67,10 +66,6 @@ export function periodoDoHorario(data) {
   return PERIODOS[Math.floor(hora / 6)]
 }
 
-export function diaDaSemana(data) {
-  return DIAS[data.getDay()]
-}
-
 // Mesma regra do finalize_context_map: < p33 baixo, ≤ p66 médio, senão alto.
 export function faixaPorPercentis(escore, p33, p66) {
   // Number(null) e Number('') dão 0, que viraria "baixo": vazio tem que ser vazio.
@@ -116,7 +111,7 @@ export function localDoEndereco(enderecos) {
   return { municipio, bairro }
 }
 
-// Acha o bairro entre as células de um município/dia/período. Tenta, em ordem:
+// Acha o bairro entre as células de um município/período. Tenta, em ordem:
 // nome exato; nome com abreviações expandidas; nome sem o complemento entre parênteses
 // que a SSP usa para homônimos, ex. "JARDIM BRASIL (ZONA NORTE)". Neste último, só
 // aceita se houver um candidato: com dois, não dá para saber qual é.
@@ -137,27 +132,33 @@ export function encontrarCelula(celulas, bairro) {
 }
 
 // Resultado da Camada 1. `faixa` é null sempre que `disponivel` é false: quem chama
-// mostra "sem dados da região" em vez de um nível.
-export function avaliarContexto({ municipio, bairro, celula, emLocalSeguro = false }) {
+// mostra "sem dados da região" em vez de um nível. `origem` diz de onde veio a faixa:
+// 'bairro' (célula do bairro) ou 'cidade' (estimativa da cidade, quando o bairro não
+// foi identificado ou não tem célula publicada nesse período).
+export function avaliarContexto({ municipio, bairro, celula, celulaDaCidade = null, emLocalSeguro = false }) {
   const indisponivel = (motivo) => ({
-    disponivel: false, motivo, faixa: null, faixaDoMapa: null, escore: null, celula: null,
-    localSeguroAplicado: false,
+    disponivel: false, motivo, origem: null, faixa: null, faixaDoMapa: null, escore: null,
+    celula: null, localSeguroAplicado: false,
   })
   if (!municipio) return indisponivel('fora_da_cobertura')
-  if (!bairro) return indisponivel('bairro_nao_identificado')
-  if (!celula) return indisponivel('sem_celula')
 
-  const faixaDoMapa = faixaPorPercentis(celula.escore_contexto, celula.percentil_33, celula.percentil_66)
-    ?? (FAIXAS.includes(celula.nivel_contexto) ? celula.nivel_contexto : null)
-  if (!faixaDoMapa) return indisponivel('sem_celula')
+  const motivoDoBairro = !bairro ? 'bairro_nao_identificado' : !celula ? 'sem_celula' : null
+  const escolhida = motivoDoBairro ? celulaDaCidade : celula
+  if (!escolhida) return indisponivel(motivoDoBairro)
+
+  const faixaDoMapa = faixaPorPercentis(escolhida.escore_contexto, escolhida.percentil_33, escolhida.percentil_66)
+    ?? (FAIXAS.includes(escolhida.nivel_contexto) ? escolhida.nivel_contexto : null)
+  if (!faixaDoMapa) return indisponivel(motivoDoBairro ?? 'sem_celula')
 
   return {
     disponivel: true,
-    motivo: null,
+    // Com a estimativa da cidade, guarda por que o bairro não serviu.
+    motivo: motivoDoBairro,
+    origem: motivoDoBairro ? 'cidade' : 'bairro',
     faixaDoMapa,
     faixa: emLocalSeguro ? baixarUmaFaixa(faixaDoMapa) : faixaDoMapa,
-    escore: Number(celula.escore_contexto),
-    celula,
+    escore: Number(escolhida.escore_contexto),
+    celula: escolhida,
     localSeguroAplicado: Boolean(emLocalSeguro) && faixaDoMapa !== 'baixo',
   }
 }
