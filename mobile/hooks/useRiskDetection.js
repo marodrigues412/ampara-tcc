@@ -2,11 +2,18 @@ import { useState, useEffect, useRef } from 'react';
 import { Accelerometer, Pedometer } from 'expo-sensors';
 import * as Location from 'expo-location';
 import { appendPhoneMotionSample, summarizePhoneMotionWindow } from '../utils/motionWindowFeatures';
+import { extractPhoneMotionFeatures, scoreIsolationForest } from '../services/isolationForestMotion';
+import { PICO_FORTE_DO_CELULAR_G, acompanharMovimento, movimentoAtipico } from '../services/threeLayerRisk';
+import isolationForestMotionModel from '../models/isolationForestMotionModel.json';
 
 export const useRiskDetection = () => {
   const [data, setData] = useState({ x: 0, y: 0, z: 0 });
   const [phoneMotionWindow, setPhoneMotionWindow] = useState(null)
   const phoneMotionSamplesRef = useRef([])
+  // Movimento atípico do celular mantido por 10 s (princípio de corroboração): só isso
+  // conta no corpo sem relógio. Um pico isolado não muda nada.
+  const [movimentoCelularSustentado, setMovimentoCelularSustentado] = useState(false)
+  const movimentoRef = useRef(null)
   const [stepCount, setStepCount] = useState(0);
   const [location, setLocation] = useState(null);
   const [gpsSpeedDeltaMps, setGpsSpeedDeltaMps] = useState(null)
@@ -42,7 +49,14 @@ export const useRiskDetection = () => {
       const mag = Math.sqrt(x**2 + y**2 + z**2);
       const sampleTime = Date.now()
       phoneMotionSamplesRef.current = appendPhoneMotionSample(phoneMotionSamplesRef.current, mag, sampleTime)
-      setPhoneMotionWindow(summarizePhoneMotionWindow(phoneMotionSamplesRef.current))
+      const resumo = summarizePhoneMotionWindow(phoneMotionSamplesRef.current)
+      setPhoneMotionWindow(resumo)
+      const features = extractPhoneMotionFeatures(resumo)
+      const anomalia = features ? scoreIsolationForest(features, isolationForestMotionModel)?.anomalyScore ?? null : null
+      const picoForte = Number(resumo?.peakMagnitudeG) >= PICO_FORTE_DO_CELULAR_G
+      const acompanhado = acompanharMovimento(movimentoRef.current, { t: sampleTime, atipico: movimentoAtipico({ anomalia, picoForte }) })
+      movimentoRef.current = acompanhado.estado
+      setMovimentoCelularSustentado((antes) => (antes === acompanhado.sustentado ? antes : acompanhado.sustentado))
 
       // O score de 3 camadas é calculado na Home (services/threeLayerRisk.js); aqui fica
       // só a janela de movimento e o gatilho de impacto forte.
@@ -93,6 +107,7 @@ export const useRiskDetection = () => {
   return {
     data,
     phoneMotionWindow,
+    movimentoCelularSustentado,
     gpsSpeedDeltaMps,
     location,
     riskStatus,

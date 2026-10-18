@@ -37,7 +37,7 @@ import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
 import { extractPhoneMotionFeatures, scoreIsolationForest } from '../services/isolationForestMotion'
-import { ALTO_SUSTENTADO_MS, PICO_FORTE_DO_CELULAR_G, acaoDoNivel, avaliarCorpo, fundirCamadas, movimentoDoRelogio } from '../services/threeLayerRisk'
+import { acaoDoNivel, avaliarCorpo, estabilizarNivel, fundirCamadas, movimentoDoRelogio } from '../services/threeLayerRisk'
 import { publicarEstadoDoRisco } from '../services/estadoDoRisco'
 import isolationForestMotionModel from '../models/isolationForestMotionModel.json'
 import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
@@ -62,27 +62,6 @@ const INTERVALO_REFORCADO_MS = 60_000
 const VERSAO_DO_SCORE = 'contexto-ssp+corpo-3camadas-v2.0'
 const LIVE_HEART_RATE_MS = 10_000
 const SOS_HOLD_MS = 3_000
-const HEART_RATE_STATUS_MAX_AGE_MS = 30_000
-
-const getHeartRateSignalMessage = (sensorStatus) => {
-  if (!sensorStatus || Date.now() - Date.parse(sensorStatus.time) > HEART_RATE_STATUS_MAX_AGE_MS) return null
-  switch (sensorStatus.status) {
-    case -10:
-      return 'Sinal fraco ou movimento excessivo. Ajuste o relógio no pulso e aguarde alguns segundos.'
-    case -8:
-      return 'O sinal do sensor oscilou. Confira o encaixe do relógio no pulso e aguarde uma nova leitura.'
-    case -3:
-      return 'O relógio detectou que está fora do pulso. Recoloque-o para retomar as leituras.'
-    case -2:
-      return 'O relógio detectou movimento durante a medição. As leituras voltam quando o sinal estabilizar.'
-    case -999:
-      return 'Outro sensor está medindo neste momento. O monitoramento contínuo será retomado em seguida.'
-    case 0:
-      return 'O sensor está iniciando uma nova medição.'
-    default:
-      return null
-  }
-}
 
 // De quanto em quanto tempo a Home confere se começou ou acabou um horário programado
 // de atividade. Meio minuto basta: ninguém percebe o modo ligar 30 s depois das 8h.
@@ -170,7 +149,8 @@ export default function Home({ navigation }) {
     [resumoCrimes],
   )
 
-  const { data, location, riskStatus, phoneMotionWindow, gpsSpeedDeltaMps } = useRiskDetection()
+  const { location, riskStatus, phoneMotionWindow, movimentoCelularSustentado, gpsSpeedDeltaMps } = useRiskDetection()
+  const { magnitude } = riskStatus
   const smartwatch = useSmartwatch(userId)
   // Camada 1 do score de 3 camadas: faixa do mapa bairro × dia × período (SSP).
   const { contexto: contextoDaRegiao } = useContextLayer({ location, insideSafeZone })
@@ -197,49 +177,19 @@ export default function Home({ navigation }) {
   // Camada 2 (corpo): só os sinais que existem agora. Sem relógio ou com BPM velho, o
   // modo cai sozinho para "só celular"; quando o relógio volta, volta para "completo".
   const watchMotionAnomaly = movimentoDoRelogio(smartwatch.watchMotion, { activityMode })
-  // Pico forte do celular entra aqui, como sinal do corpo, e não como alerta direto.
-  const picoForteCelular = Number(phoneMotionWindow?.peakMagnitudeG) >= PICO_FORTE_DO_CELULAR_G
+  // Princípio de corroboração (threeLayerRisk.avaliarCorpo): sem relógio, só movimento
+  // atípico mantido por 10 s conta, e o corpo não passa de médio.
   const corpo = avaliarCorpo({
     heartRateZScore: heartRateBaseline.available ? heartRateBaseline.zScore : null,
     movimentoCelular: experimentalMotionScore,
     movimentoRelogio: watchMotionAnomaly,
     activityMode,
-    picoForteCelular,
+    movimentoCelularSustentado,
   })
-  // Camada 3: matriz 3×3. É o resultado oficial: mostra na tela e abre os alertas.
+  // Camada 3: matriz 3×3. O nível bruto passa pelo estabilizador abaixo (nivelExibido),
+  // que é o resultado oficial: o mesmo na tela e no alerta.
   const resultadoDoRisco = fundirCamadas({ contexto: contextoDaRegiao, corpo })
   const nivelDoRisco = resultadoDoRisco.nivel
-  const watchMotionDetail = watchMotionAnomaly !== null
-    ? `RMS ${smartwatch.watchMotion.rms.toFixed(1)} m/s² · ${watchMotionAnomaly === 1 ? 'impacto forte' : watchMotionAnomaly === 0.5 ? 'agitação' : 'normal'}`
-    : smartwatchConnected ? 'Sem leitura recente' : 'Desconectado'
-  const smartwatchWarning = ['disconnected', 'error', 'development_build_required'].includes(smartwatch.directWatchStatus)
-    ? {
-        title: smartwatch.directWatchStatus === 'development_build_required'
-          ? 'Versão Android necessária'
-          : 'Smartwatch desconectado',
-        message: smartwatch.directWatchStatus === 'development_build_required'
-          ? 'Abra o Ampara instalado no celular para conectar o Galaxy Watch.'
-          : 'Conecte o Galaxy Watch para retomar o envio dos batimentos.',
-      }
-    : smartwatchConnected && smartwatch.monitoringStatus === 'inactive'
-      ? {
-          title: 'Monitoramento cardíaco desligado',
-          message: 'No relógio, toque em “Ativar monitoramento” para voltar a enviar os batimentos.',
-        }
-      : smartwatchConnected && smartwatch.monitoringStatus === 'active' && !heartRateIsCurrent
-        ? {
-            title: getHeartRateSignalMessage(smartwatch.heartRateSensorStatus)
-              ? 'Sinal do sensor oscilando'
-              : 'Sem batimentos recentes',
-            message: getHeartRateSignalMessage(smartwatch.heartRateSensorStatus)
-              || 'O relógio informa que o monitoramento está ativo, mas o celular ainda não recebeu uma leitura recente.',
-          }
-        : smartwatchConnected && smartwatch.monitoringStatus === 'unknown' && !heartRateIsCurrent
-          ? {
-              title: 'Sem confirmação do relógio',
-              message: 'O celular ainda não recebeu o status do monitoramento nem uma leitura recente do Ampara no relógio.',
-            }
-      : null
   const isReceivingHeartRate = smartwatch.measurement?.isDirect
     && smartwatch.measurement?.isRecent
     && !heartRateFreshnessExpired
@@ -247,12 +197,6 @@ export default function Home({ navigation }) {
     && watchMonitoringWanted
     && !isReceivingHeartRate
     && !watchAlertDismissed
-  const heartRateValue = heartRateIsCurrent ? Math.round(smartwatch.measurement.bpm) : '--'
-  const heartRateDetail = heartRateIsCurrent
-    ? `${smartwatch.measurement.source} · ${formatReadingAge(smartwatch.measurement.time)}`
-    : smartwatch.measurement
-      ? `Última leitura: ${Math.round(smartwatch.measurement.bpm)} bpm · ${formatReadingAge(smartwatch.measurement.time)}`
-      : 'Aguardando leitura automática'
   const smartwatchConnectionText = getSmartwatchConnectionText(
     smartwatch.status,
     smartwatch.directWatchStatus,
@@ -306,7 +250,6 @@ export default function Home({ navigation }) {
   const searchTimeout = useRef(null)
   const [userName, setUserName] = useState("Usuária");
 
-  const { magnitude } = riskStatus
 
   const tiposOcorrencia = [
     'Homicídio Doloso',
@@ -447,42 +390,52 @@ export default function Home({ navigation }) {
   // Último resultado para o contexto da Lia (só rótulos: nível, origem e sensores).
   const origemDoContexto = contextoDaRegiao?.origem ?? null
   // Republica a cada 30 s mesmo sem mudança: a Lia só usa leitura de até 2 min.
+  // Nível mostrado (estabilizarNivel): sobe depois de 5 s seguidos no nível novo, desce
+  // depois de 10 s estável. É o mesmo nível que abre o alerta: tela e alerta nunca
+  // discordam, e o topo não pisca. Avaliado a cada 0,5 s.
+  const [nivelExibido, setNivelExibido] = useState(null)
+  const nivelBrutoRef = useRef(null)
+  const estabilizadorRef = useRef(null)
+  useEffect(() => { nivelBrutoRef.current = monitoramentoAtivo ? nivelDoRisco : null }, [monitoramentoAtivo, nivelDoRisco])
+  useEffect(() => {
+    const avaliar = () => {
+      estabilizadorRef.current = estabilizarNivel(estabilizadorRef.current, { t: Date.now(), nivel: nivelBrutoRef.current })
+      setNivelExibido(estabilizadorRef.current.exibido)
+    }
+    const intervalo = setInterval(avaliar, 500)
+    return () => clearInterval(intervalo)
+  }, [])
+  // Estado do que a tela mostra: sem nível exibido ainda, é "calculando" (ou "sem dados").
+  const estadoExibido = !monitoramentoAtivo
+    ? 'pausado'
+    : nivelExibido ? 'pronto' : resultadoDoRisco.estado === 'sem_contexto' ? 'sem_contexto' : 'calculando'
+
   useEffect(() => {
     const publicar = () => publicarEstadoDoRisco({
       monitoramentoAtivo,
-      nivel: nivelDoRisco,
-      estado: resultadoDoRisco.estado,
+      nivel: nivelExibido,
+      estado: estadoExibido,
       origem: origemDoContexto,
       modo: corpo.modo,
     })
     publicar()
     const intervalo = setInterval(publicar, 30_000)
     return () => clearInterval(intervalo)
-  }, [monitoramentoAtivo, nivelDoRisco, resultadoDoRisco.estado, origemDoContexto, corpo.modo])
+  }, [monitoramentoAtivo, nivelExibido, estadoExibido, origemDoContexto, corpo.modo])
 
-  // Nível alto das 3 camadas só conta depois de ALTO_SUSTENTADO_MS seguidos. Os dois
-  // caminhos passam por timer (o falso também, com 0 ms) para não mudar estado direto
-  // no corpo do efeito.
-  const [altoSustentado, setAltoSustentado] = useState(false)
-  useEffect(() => {
-    const alto = monitoramentoAtivo && nivelDoRisco === 'alto'
-    const timer = setTimeout(() => setAltoSustentado(alto), alto ? ALTO_SUSTENTADO_MS : 0)
-    return () => clearTimeout(timer)
-  }, [monitoramentoAtivo, nivelDoRisco])
-
-  // Único gatilho automático: nível alto das 3 camadas por 5 s seguidos. Pico forte do
-  // celular só conta pela Camada 2; não há atalho por cima da matriz. SOS manual à parte.
+  // Único gatilho automático: o nível mostrado chegou a alto (5 s seguidos). Não há
+  // atalho por cima da matriz; só o SOS manual é imediato.
   useEffect(() => {
     if (!monitoramentoAtivo) {
       setSustainedHighRisk(false);
       return;
     }
-    setSustainedHighRisk(altoSustentado);
-  }, [monitoramentoAtivo, altoSustentado]);
+    setSustainedHighRisk(nivelExibido === 'alto');
+  }, [monitoramentoAtivo, nivelExibido]);
 
   // Nível moderado: monitoramento reforçado silencioso — a posição vai para o histórico
   // a cada minuto, mesmo parada, sem nenhum aviso na tela.
-  const monitoramentoReforcado = monitoramentoAtivo && acaoDoNivel(nivelDoRisco) === 'monitoramento_reforcado'
+  const monitoramentoReforcado = monitoramentoAtivo && acaoDoNivel(nivelExibido) === 'monitoramento_reforcado'
   const ultimaLocalizacaoRef = useRef(null)
   useEffect(() => { ultimaLocalizacaoRef.current = location }, [location])
   useEffect(() => {
@@ -507,10 +460,10 @@ export default function Home({ navigation }) {
     const emCooldownCancelamento = cancelCooldownRef.current && agora < cancelCooldownRef.current;
     if (emCooldownEnvio || emCooldownCancelamento) return;
 
-    if (nivelDoRisco !== 'alto') return;
+    if (nivelExibido !== 'alto') return;
     setCountdown(10);
     setModalVisible(true);
-  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, alertaDisparado, nivelDoRisco]);
+  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, alertaDisparado, nivelExibido]);
 
   // 2️⃣ O MOTOR SEGURO
   useEffect(() => {
@@ -692,7 +645,7 @@ export default function Home({ navigation }) {
       baselineStdDevBpm: heartRateBaseline.standardDeviationBpm,
       bpmZScore: heartRateBaseline.zScore,
       contextScore: riskContextScore,
-      experimentalRiskLevel: nivelDoRisco,
+      experimentalRiskLevel: nivelExibido,
       sensorMode: corpo.modo,
       bodyScore: corpo.escore,
       bodyBand: corpo.faixa,
@@ -736,7 +689,7 @@ export default function Home({ navigation }) {
     heartRateBaseline.meanBpm,
     heartRateBaseline.standardDeviationBpm,
     heartRateBaseline.zScore,
-    nivelDoRisco,
+    nivelExibido,
     corpo,
     contextoDaRegiao,
     experimentalMotionScore,
@@ -948,8 +901,8 @@ export default function Home({ navigation }) {
 
   // O que a tela mostra é o nível da matriz. Sem uma das camadas não há nível:
   // "calculando" (primeiros segundos) ou "sem dados da região" (bairro fora do mapa).
-  const nivelNaTela = monitoramentoAtivo ? nivelDoRisco : null
-  const calculandoScore = monitoramentoAtivo && resultadoDoRisco.estado === 'calculando'
+  const nivelNaTela = monitoramentoAtivo ? nivelExibido : null
+  const calculandoScore = monitoramentoAtivo && estadoExibido === 'calculando'
   const semDadosDaRegiao = monitoramentoAtivo && resultadoDoRisco.estado === 'sem_contexto'
   // O anel enche um terço por nível.
   const anelDoNivel = { baixo: 10 / 3, moderado: 20 / 3, alto: 10 }[nivelNaTela] ?? null
@@ -1178,39 +1131,10 @@ export default function Home({ navigation }) {
           )}
         </TouchableOpacity>
 
-        <>
-        <Text style={styles.mapSectionTitle}>Sensores do dispositivo</Text>
+        {/* Só a conexão do Galaxy Watch (Android), sem números técnicos: o corpo aparece
+            em palavras em "Por que seu risco está assim". */}
         {Platform.OS === 'android' && (
           <>
-            <View style={styles.heartRatePanel}>
-              <Ionicons
-                name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
-                size={23}
-                color={heartRateIsCurrent ? TEMA.forte : '#9A8C93'}
-              />
-              <Text style={styles.heartRateLabel}>FREQUÊNCIA CARDÍACA</Text>
-              <View style={styles.heartRateValueRow}>
-                <Text style={[styles.heartRateValue, !heartRateIsCurrent && styles.heartRateValueUnavailable]}>
-                  {heartRateValue}
-                </Text>
-                <Text style={styles.heartRateUnit}>bpm</Text>
-              </View>
-              <Text style={[styles.heartRateDetail, !heartRateIsCurrent && styles.heartRateDetailStale]}>
-                {heartRateDetail}
-              </Text>
-              <Text style={styles.heartRateBaselineDetail}>
-                {!heartRateIsCurrent
-                  ? 'Aguardando BPM atual para comparar com sua média'
-                  : heartRateBaseline.available
-                  ? `${heartRateBaseline.zScore >= 0 ? '+' : ''}${heartRateBaseline.zScore.toFixed(1)} desvios da sua média da última hora`
-                  : heartRateBaseline.sampleCount < 20
-                    ? `Formando sua média pessoal · ${heartRateBaseline.sampleCount}/20 leituras`
-                    : heartRateBaseline.baselineReady
-                      ? 'Sua média estável não permite calcular o desvio agora'
-                      : `Histórico pessoal: ${heartRateBaseline.coverageMinutes} min · precisa cobrir quase 1 hora`}
-              </Text>
-            </View>
-
             <TouchableOpacity
               style={[
                 styles.smartwatchConnectionButton,
@@ -1240,46 +1164,8 @@ export default function Home({ navigation }) {
                 />
               )}
             </TouchableOpacity>
-
-            {smartwatchWarning && (
-              <View
-                accessibilityRole="alert"
-                accessibilityLiveRegion="polite"
-                style={styles.smartwatchWarning}
-              >
-                <Ionicons name="warning" size={20} color="#A65D00" />
-                <View style={styles.smartwatchWarningTexts}>
-                  <Text style={styles.smartwatchWarningTitle}>{smartwatchWarning.title}</Text>
-                  <Text style={styles.smartwatchWarningMessage}>{smartwatchWarning.message}</Text>
-                </View>
-              </View>
-            )}
-
-            {Platform.OS === 'android' && (
-              <View style={styles.watchMotionRow}>
-                <Ionicons name="watch-outline" size={18} color={motionRisk.watchIsRecent ? Brand.green : Brand.muted} />
-                <Text style={styles.watchMotionValue}>
-                  {motionRisk.watchIsRecent ? `${smartwatch.watchMotion.peak.toFixed(1)} m/s²` : '—'}
-                </Text>
-                <View style={styles.watchMotionTexts}>
-                  <Text style={styles.watchMotionTitle}>Acelerômetro do relógio</Text>
-                  <Text style={styles.watchMotionDetail}>{watchMotionDetail}</Text>
-                </View>
-              </View>
-            )}
           </>
         )}
-        <View style={styles.forceRow}>
-          <Ionicons name="phone-portrait-outline" size={18} color={picoForteCelular ? TEMA.forte : Brand.muted} />
-          <Text style={[styles.forceValue, { color: picoForteCelular ? TEMA.forte : Brand.ink }]}>{magnitude}G</Text>
-          <Text style={styles.forceLabel}>Acelerômetro do celular · {experimentalMotionScore == null ? 'aguardando' : `${Math.round(experimentalMotionScore * 100)}% atípico`}</Text>
-          {picoForteCelular && <View style={styles.forcePill}><Text style={styles.forcePillText}>Pico forte</Text></View>}
-        </View>
-        {Platform.OS === 'ios' && (
-          <Text style={styles.sensorAvailabilityNote}>A leitura cardíaca e o acelerômetro do relógio ficam disponíveis no Android.</Text>
-        )}
-
-        </>
 
 
       </ScrollView>

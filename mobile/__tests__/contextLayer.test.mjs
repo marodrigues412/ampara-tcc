@@ -193,14 +193,12 @@ test('célula presente devolve a faixa do mapa', () => {
   assert.equal(alto.localSeguroAplicado, false)
 })
 
-test('local seguro baixa uma faixa, e baixo continua baixo', () => {
+test('dentro de um local seguro o contexto é baixo, qualquer que seja a faixa do mapa', () => {
   assert.equal(baixarUmaFaixa('alto'), 'medio')
-  assert.equal(baixarUmaFaixa('medio'), 'baixo')
-  assert.equal(baixarUmaFaixa('baixo'), 'baixo')
   const seguro = (escore) => avaliarContexto({
     municipio: 'S.PAULO', bairro: 'SE', celula: celula('SE', escore), emLocalSeguro: true,
   })
-  assert.equal(seguro(0.5).faixa, 'medio')
+  assert.equal(seguro(0.5).faixa, 'baixo')
   assert.equal(seguro(0.5).faixaDoMapa, 'alto')
   assert.equal(seguro(0.5).localSeguroAplicado, true)
   assert.equal(seguro(0.06).faixa, 'baixo')

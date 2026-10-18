@@ -21,11 +21,22 @@ export const FATOR_DO_MOVIMENTO_EM_ATIVIDADE = 0.5
 // Só o SOS manual não espera (docs/score_bpm_ml.md).
 export const ALTO_SUSTENTADO_MS = 5_000
 
-// Pico forte do celular (magnitude >= 2,8 g na janela de 2,56 s). Não abre alerta
-// sozinho: entra na Camada 2 como movimento do celular = 1 e passa pela matriz como
-// qualquer outro sinal (contexto baixo + corpo alto = moderado, sem alerta). Antes, um
-// gatilho de impacto abria o alerta direto, por cima da matriz.
+// Pico forte do celular (magnitude >= 2,8 g na janela de 2,56 s). Sozinho não muda
+// nada: conta como movimento atípico, e só movimento atípico mantido por
+// MOVIMENTO_SUSTENTADO_MS entra no corpo (princípio de corroboração, abaixo).
 export const PICO_FORTE_DO_CELULAR_G = 2.8
+// Movimento do celular é "atípico" com o Isolation Forest acima da faixa baixa (> 0,33)
+// ou com pico forte na janela.
+export const LIMIAR_DE_MOVIMENTO_ATIPICO = 0.33
+// Quanto o movimento atípico tem que durar, sem interrupção, para contar no corpo.
+export const MOVIMENTO_SUSTENTADO_MS = 10_000
+// Buracos menores que isso entre leituras atípicas não interrompem a sequência (o
+// chacoalhão alterna amostras altas e baixas).
+export const TOLERANCIA_DE_INTERRUPCAO_MS = 1_000
+// O nível da tela (e o alerta) sobe depois de SUBIDA_DO_NIVEL_MS no nível novo e desce
+// depois de DESCIDA_DO_NIVEL_MS estável, para não piscar.
+export const SUBIDA_DO_NIVEL_MS = ALTO_SUSTENTADO_MS
+export const DESCIDA_DO_NIVEL_MS = 10_000
 
 const RELOGIO_RECENTE_MS = 5_000
 const RELOGIO_MIN_AMOSTRAS = 10
@@ -70,23 +81,60 @@ export const ROTULOS_DO_MODO = {
   so_relogio: 'só relógio',
 }
 
+// Sequência de movimento atípico do celular. estado = { inicio, ultimo } (ou null);
+// devolve o novo estado e se ela já dura MOVIMENTO_SUSTENTADO_MS.
+export function acompanharMovimento(estado, { t, atipico }) {
+  let { inicio = null, ultimo = null } = estado ?? {}
+  if (atipico) {
+    if (inicio === null || t - ultimo > TOLERANCIA_DE_INTERRUPCAO_MS) inicio = t
+    ultimo = t
+  } else if (ultimo !== null && t - ultimo > TOLERANCIA_DE_INTERRUPCAO_MS) {
+    inicio = null
+    ultimo = null
+  }
+  const sustentado = inicio !== null && t - inicio >= MOVIMENTO_SUSTENTADO_MS
+  return { estado: { inicio, ultimo }, sustentado }
+}
+
+export const movimentoAtipico = ({ anomalia, picoForte }) =>
+  Boolean(picoForte) || (Number.isFinite(Number(anomalia)) && anomalia !== null && Number(anomalia) > LIMIAR_DE_MOVIMENTO_ATIPICO)
+
 // Camada 2. Entradas já normalizadas ou nulas:
 // - heartRateZScore: z do BPM atual contra a última hora (null sem relógio/BPM velho);
 // - movimentoCelular: anomalyScore do Isolation Forest, [0, 1];
-// - movimentoRelogio: saída de movimentoDoRelogio, [0, 1].
+// - movimentoRelogio: saída de movimentoDoRelogio, [0, 1];
+// - movimentoCelularSustentado: movimento atípico do celular há >= 10 s seguidos
+//   (acompanharMovimento).
 // O modo sai das leituras disponíveis agora, não do tipo de aparelho: o relógio
 // desconectou, cai para só celular; voltou, volta para completo.
-// picoForteCelular: a janela do celular teve pico >= PICO_FORTE_DO_CELULAR_G; o
-// movimento do celular passa a valer 1 (mesmo sem o Isolation Forest pronto).
-export function avaliarCorpo({ heartRateZScore = null, movimentoCelular = null, movimentoRelogio = null, activityMode = false, picoForteCelular = false }) {
+//
+// Princípio de corroboração (decisão de projeto, docs/score_bpm_ml.md): o acelerômetro
+// do celular sozinho não tem a confiança de batimento + movimento.
+// - Só celular: o corpo nunca passa de médio, e só chega a médio com movimento atípico
+//   mantido por 10 s (fora do modo atividade). Um pico isolado não muda nada.
+// - Com relógio: "alto" exige o batimento (>= faixa média) ou o movimento do relógio
+//   (>= 0,5) confirmando; sem confirmação, fica em médio.
+export function avaliarCorpo({ heartRateZScore = null, movimentoCelular = null, movimentoRelogio = null, activityMode = false, movimentoCelularSustentado = false }) {
   const movimentoDoModelo = valorFinito(movimentoCelular) === null ? null : limitar(Number(movimentoCelular))
   const sinais = {
     bpm: normalizeHeartRateAnomaly(valorFinito(heartRateZScore)),
-    movimentoCelular: picoForteCelular ? 1 : movimentoDoModelo,
+    // Movimento atípico mantido conta inteiro; fora isso, vale a nota do modelo.
+    movimentoCelular: movimentoDoModelo === null && !movimentoCelularSustentado ? null : movimentoCelularSustentado ? 1 : movimentoDoModelo,
     movimentoRelogio: valorFinito(movimentoRelogio) === null ? null : limitar(Number(movimentoRelogio)),
   }
   const modo = modoDosSensores(sinais)
-  if (!modo) return { disponivel: false, escore: null, faixa: null, modo: null, sinais, pesos: {} }
+  if (!modo) return { disponivel: false, escore: null, faixa: null, modo: null, sinais, pesos: {}, limitado: false }
+
+  if (modo === 'so_celular') {
+    const agitado = movimentoCelularSustentado && !activityMode
+    const escore = agitado ? 0.5 : Math.round(Math.min(sinais.movimentoCelular, 0.33) * 1000) / 1000
+    return {
+      disponivel: true, escore, faixa: agitado ? 'medio' : 'baixo', modo, sinais,
+      pesos: { movimentoCelular: 1 }, movimentoSustentado: Boolean(movimentoCelularSustentado),
+      // Sem relógio, um movimento forte não confirmado pelo corpo não passa de médio.
+      limitado: sinais.movimentoCelular > 0.66 || (movimentoCelularSustentado && activityMode),
+    }
+  }
 
   const disponiveis = Object.keys(sinais).filter((nome) => sinais[nome] !== null)
   const somaNominal = disponiveis.reduce((soma, nome) => soma + PESOS_DO_CORPO[nome], 0)
@@ -99,7 +147,55 @@ export function avaliarCorpo({ heartRateZScore = null, movimentoCelular = null, 
   }
   escore = Math.round(limitar(escore) * 1000) / 1000
 
-  return { disponivel: true, escore, faixa: classifyScoreBand(escore), modo, sinais, pesos }
+  let faixa = classifyScoreBand(escore)
+  const confirmado = (sinais.bpm !== null && sinais.bpm > 0.33) || (sinais.movimentoRelogio !== null && sinais.movimentoRelogio >= 0.5)
+  const limitado = faixa === 'alto' && !confirmado
+  if (limitado) {
+    faixa = 'medio'
+    escore = 0.66
+  }
+  return { disponivel: true, escore, faixa, modo, sinais, pesos, movimentoSustentado: Boolean(movimentoCelularSustentado), limitado }
+}
+
+const ORDEM_DO_NIVEL = { baixo: 0, moderado: 1, alto: 2 }
+
+// Nível mostrado na tela (e que abre o alerta), a partir do nível bruto da matriz.
+// estado = { exibido, direcao, desde, extremo } (ou null). A cada leitura { t, nivel }:
+// - igual ao exibido: nada muda;
+// - acima: só sobe depois de SUBIDA_DO_NIVEL_MS acima sem interrupção, para o menor
+//   nível visto nesse tempo (alto por 5 s → alto; moderado e alto → moderado);
+// - abaixo: só desce depois de DESCIDA_DO_NIVEL_MS abaixo, para o maior nível visto;
+// - sem nível (calculando / sem dados da região): vale na hora. Saindo de "sem nível",
+//   baixo aparece na hora e os outros esperam a subida.
+export function estabilizarNivel(estado, { t, nivel }) {
+  const atual = estado ?? { exibido: null, direcao: null, desde: null, extremo: null }
+  if (nivel === null || nivel === undefined) return { exibido: null, direcao: null, desde: null, extremo: null }
+  if (atual.exibido === null && nivel === 'baixo') return { exibido: 'baixo', direcao: null, desde: null, extremo: null }
+  if (nivel === atual.exibido) return { ...atual, direcao: null, desde: null, extremo: null }
+
+  const ordemExibida = atual.exibido === null ? -1 : ORDEM_DO_NIVEL[atual.exibido]
+  const direcao = ORDEM_DO_NIVEL[nivel] > ordemExibida ? 'subida' : 'descida'
+  if (atual.direcao !== direcao) return { ...atual, direcao, desde: t, extremo: nivel }
+
+  const extremo = direcao === 'subida'
+    ? (ORDEM_DO_NIVEL[nivel] < ORDEM_DO_NIVEL[atual.extremo] ? nivel : atual.extremo)
+    : (ORDEM_DO_NIVEL[nivel] > ORDEM_DO_NIVEL[atual.extremo] ? nivel : atual.extremo)
+  const espera = direcao === 'subida' ? SUBIDA_DO_NIVEL_MS : DESCIDA_DO_NIVEL_MS
+  if (t - atual.desde >= espera) return { exibido: extremo, direcao: null, desde: null, extremo: null }
+  return { ...atual, extremo }
+}
+
+// Instantes em que o alerta abriria para uma sequência de leituras [{ t, nivel }]: quando
+// o nível mostrado (estabilizarNivel) vira "alto". É a mesma regra da Home.
+export function alertasPeloNivelExibido(leituras) {
+  const alertas = []
+  let estado = null
+  for (const leitura of leituras) {
+    const antes = estado?.exibido ?? null
+    estado = estabilizarNivel(estado, leitura)
+    if (estado.exibido === 'alto' && antes !== 'alto') alertas.push(leitura.t)
+  }
+  return alertas
 }
 
 // Camada 3: matriz 3×3 do orientador. Com uma camada indisponível não há nível — a

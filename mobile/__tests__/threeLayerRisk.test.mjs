@@ -55,12 +55,35 @@ test('cenário 3 (Galaxy Watch): 60/20/20', () => {
   assert.equal(r.faixa, 'alto')
 })
 
-test('cenários 1 e 2 (iPhone / Android sem relógio): movimento do celular vale 100%', () => {
+test('cenários 1 e 2 (iPhone / Android sem relógio): corroboração — no máximo médio, e só com movimento mantido', () => {
   const r = avaliarCorpo({ movimentoCelular: 0.5 })
   assert.equal(r.modo, 'so_celular')
   assert.deepEqual(r.pesos, { movimentoCelular: 1 })
-  assert.equal(r.escore, 0.5)
-  assert.equal(r.faixa, 'medio')
+  assert.equal(r.faixa, 'baixo') // movimento atípico ainda não mantido por 10 s
+  assert.equal(avaliarCorpo({ movimentoCelular: 1 }).faixa, 'baixo') // nem o máximo do modelo, sozinho
+  assert.equal(avaliarCorpo({ movimentoCelular: 1 }).limitado, true)
+  const mantido = avaliarCorpo({ movimentoCelular: 1, movimentoCelularSustentado: true })
+  assert.equal(mantido.faixa, 'medio') // nunca alto sem relógio
+  assert.equal(mantido.escore, 0.5)
+})
+
+test('com relógio, alto exige batimento ou movimento do relógio confirmando', () => {
+  // Celular mantido (1) + relógio parado e BPM normal: 0,2 → baixo.
+  assert.equal(avaliarCorpo({ heartRateZScore: 0.5, movimentoCelular: 1, movimentoRelogio: 0, movimentoCelularSustentado: true }).faixa, 'baixo')
+  // Só BPM + celular, sem confirmação do BPM: o que seria alto fica em médio.
+  const semConfirmacao = avaliarCorpo({ heartRateZScore: 0.5, movimentoCelular: 1, movimentoCelularSustentado: true })
+  assert.equal(semConfirmacao.modo, 'parcial')
+  assert.equal(semConfirmacao.faixa, 'baixo') // 0,25
+  const relogioForte = avaliarCorpo({ movimentoCelular: 1, movimentoRelogio: 1, movimentoCelularSustentado: true })
+  assert.equal(relogioForte.faixa, 'alto') // relógio confirmou
+  const bpmAlto = avaliarCorpo({ heartRateZScore: 2.5, movimentoCelular: 1, movimentoRelogio: 0, movimentoCelularSustentado: true })
+  assert.equal(bpmAlto.faixa, 'alto') // 0,8 com BPM confirmando
+  // BPM pouco acima (0,35) + celular mantido + relógio 0,5: 0,51 → médio.
+  assert.equal(avaliarCorpo({ heartRateZScore: 1.2, movimentoCelular: 1, movimentoRelogio: 0.5, movimentoCelularSustentado: true }).faixa, 'medio')
+  // Pico isolado (sem movimento mantido) não força o celular a 1: vale a nota do modelo.
+  assert.equal(avaliarCorpo({ heartRateZScore: 0.5, movimentoCelular: 0.1, movimentoRelogio: 0 }).sinais.movimentoCelular, 0.1)
+  // Com os pesos de hoje, alto com relógio sempre vem com BPM ou relógio confirmando; a
+  // trava (limitado) protege se os pesos mudarem.
 })
 
 test('relógio parcial: redistribui entre o que houver', () => {
@@ -95,11 +118,9 @@ test('sem nenhum sinal o corpo fica indisponível', () => {
 })
 
 test('modo atividade reduz o peso do movimento em todos os cenários', () => {
-  const normal = avaliarCorpo({ movimentoCelular: 0.9 })
-  const atividade = avaliarCorpo({ movimentoCelular: 0.9, activityMode: true })
-  assert.equal(normal.faixa, 'alto')
-  assert.equal(atividade.escore, 0.45)
-  assert.equal(atividade.faixa, 'medio')
+  // Só celular: exercício é agitação esperada, então nem o movimento mantido sobe o corpo.
+  assert.equal(avaliarCorpo({ movimentoCelular: 1, movimentoCelularSustentado: true }).faixa, 'medio')
+  assert.equal(avaliarCorpo({ movimentoCelular: 1, movimentoCelularSustentado: true, activityMode: true }).faixa, 'baixo')
 
   const completo = avaliarCorpo({ heartRateZScore: 0.5, movimentoCelular: 1, movimentoRelogio: 1, activityMode: true })
   perto(completo.pesos.bpm, 0.6)
@@ -138,9 +159,10 @@ test('local seguro entra pela Camada 1 e muda o resultado da matriz', () => {
   const celula = { escore_contexto: 0.5, percentil_33: 0.048, percentil_66: 0.092 }
   const fora = avaliarContexto({ municipio: 'S.PAULO', bairro: 'SE', celula })
   const dentro = avaliarContexto({ municipio: 'S.PAULO', bairro: 'SE', celula, emLocalSeguro: true })
-  const c = avaliarCorpo({ movimentoCelular: 0.5 })
-  assert.equal(fundirCamadas({ contexto: fora, corpo: c }).nivel, 'alto')
-  assert.equal(fundirCamadas({ contexto: dentro, corpo: c }).nivel, 'moderado')
+  assert.equal(dentro.faixa, 'baixo')
+  const medio = avaliarCorpo({ movimentoCelular: 0.2, movimentoCelularSustentado: true })
+  assert.equal(fundirCamadas({ contexto: fora, corpo: medio }).nivel, 'alto')
+  assert.equal(fundirCamadas({ contexto: dentro, corpo: medio }).nivel, 'baixo')
 })
 
 test('ações por nível', () => {
@@ -153,12 +175,10 @@ test('ações por nível', () => {
 test('persistência: alto por 5 s contínuos; só o SOS manual não espera', () => {
   assert.equal(ALTO_SUSTENTADO_MS, 5_000)
   const home = readFileSync(new URL('../screens/Home.js', import.meta.url), 'utf8')
-  // O timer recomeça quando o nível muda (dependência nivelDoRisco): mede tempo contínuo.
-  assert.match(home, /setTimeout\(\(\) => setAltoSustentado\(alto\), alto \? ALTO_SUSTENTADO_MS : 0\)/)
-  assert.match(home, /\}, \[monitoramentoAtivo, nivelDoRisco\]\)/)
-  // Sem atalho: o pico forte do celular só entra pela Camada 2 (alertaSoPelaMatriz.test.mjs).
-  assert.match(home, /setSustainedHighRisk\(altoSustentado\)/)
-  assert.ok(!/isHighRisk/.test(home))
+  // Tela e alerta passam pelo mesmo estabilizador (sobe com 5 s, desce com 10 s).
+  assert.match(home, /estabilizarNivel\(estabilizadorRef\.current, \{ t: Date\.now\(\), nivel: nivelBrutoRef\.current \}\)/)
+  assert.match(home, /setSustainedHighRisk\(nivelExibido === 'alto'\)/)
+  assert.ok(!/isHighRisk|setAltoSustentado/.test(home))
   assert.ok(!/const ALTO_SUSTENTADO_MS/.test(home), 'a regra fica num lugar só (threeLayerRisk.js)')
   // SOS manual: segurar 3 s chama o envio direto, sem depender do nível.
   assert.match(home, /sosHoldTimerRef\.current = setTimeout\(\(\) => \{[\s\S]*?void executarEnvioDeSocorro\(\)[\s\S]*?\}, SOS_HOLD_MS\)/)
