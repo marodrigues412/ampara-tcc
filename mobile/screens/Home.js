@@ -53,6 +53,7 @@ import AnelDaLia from '../components/AnelDaLia'
 import CamadasDoRisco from '../components/CamadasDoRisco'
 
 import { dispararAlerta } from '../services/alertService'
+import { enviarAlertaOuSimular, MENSAGEM_DO_ENVIO_SIMULADO } from '../services/envioDeAlerta'
 import { FRACAO_DO_ANO } from '../utils/mapaCalor'
 
 // Raio do entorno da usuária: a área cujos crimes entram no score. É o mesmo raio que a
@@ -181,10 +182,14 @@ export default function Home({ navigation }) {
   const { data, location, riskStatus, phoneMotionWindow, gpsSpeedDeltaMps } = useRiskDetection()
   const smartwatch = useSmartwatch(userId)
   // Camada 1 do score de 3 camadas: faixa do mapa bairro × dia × período (SSP).
-  // Não é guardado entre aberturas do app: ninguém fica preso numa simulação sem saber.
+  // Não são guardados entre aberturas do app: ninguém fica preso numa simulação sem saber.
   const [localSimulado, setLocalSimulado] = useState(null)
+  const [modoApresentacao, setModoApresentacao] = useState(false)
   const insets = useSafeAreaInsets()
   const { contexto: contextoDaRegiao, simulado: contextoSimulado } = useContextLayer({ location, insideSafeZone, localSimulado })
+  // Estande: com apresentação ou simulação, o alerta (automático ou SOS) não sai do celular.
+  const envioSimulado = SHOW_PRESENTATION_MODE || modoApresentacao || contextoSimulado
+  const encerrarDemonstracao = () => { setLocalSimulado(null); setModoApresentacao(false) }
   const motionRisk = useMemo(() => calculateMotionRiskScore({
     phoneMagnitudeG: riskStatus.magnitude,
     watchMotion: smartwatch.watchMotion,
@@ -811,20 +816,24 @@ export default function Home({ navigation }) {
     setSosFeedbackData({ status: 'enviando', mensagem: textoMensagem, enviados: [], falhas: [], endereco: enderecoFormatado, detalhe: '' });
     setSosFeedbackVisible(true);
 
-    const resultado = await dispararAlerta({
-      userId,
-      nomeUsuario: userName,
-      endereco: enderecoFormatado,
-      latitude: userLat,
-      longitude: userLon,
-      nivelRisco: rotuloDoNivelNoAlerta,
-      mensagem: textoMensagem,
+    const resultado = await enviarAlertaOuSimular({
+      simular: envioSimulado,
+      enviar: dispararAlerta,
+      dados: {
+        userId,
+        nomeUsuario: userName,
+        endereco: enderecoFormatado,
+        latitude: userLat,
+        longitude: userLon,
+        nivelRisco: rotuloDoNivelNoAlerta,
+        mensagem: textoMensagem,
+      },
     });
 
-    if (!resultado.enviado) console.error("❌ [Alerta] Envio não confirmado:", resultado.detalhe);
+    if (!resultado.enviado && !resultado.simulado) console.error("❌ [Alerta] Envio não confirmado:", resultado.detalhe);
 
     setSosFeedbackData({
-      status: resultado.enviado ? 'enviado' : 'falhou',
+      status: resultado.simulado ? 'simulado' : resultado.enviado ? 'enviado' : 'falhou',
       mensagem: textoMensagem,
       enviados: resultado.enviados,
       falhas: resultado.falhas,
@@ -1070,17 +1079,19 @@ export default function Home({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {contextoSimulado && (
+      {envioSimulado && (
         <View
           style={[styles.simulacaoFaixa, { top: insets.top + 4 }]}
           accessibilityRole="alert"
-          accessibilityLabel={`Simulação de localização ativa: ${localSimulado.rotulo}, ${localSimulado.cidade}`}
+          accessibilityLabel={contextoSimulado
+            ? `Simulação ativa: ${localSimulado.rotulo}, ${localSimulado.cidade}. Nenhum alerta será enviado.`
+            : 'Modo apresentação ativo. Nenhum alerta será enviado.'}
         >
           <Ionicons name="flask" size={14} color="#FFFFFF" />
           <Text style={styles.simulacaoFaixaTexto} numberOfLines={1}>
-            SIMULAÇÃO · {localSimulado.rotulo}, {localSimulado.cidade}
+            {contextoSimulado ? `SIMULAÇÃO · ${localSimulado.rotulo}` : 'MODO APRESENTAÇÃO'} · envio bloqueado
           </Text>
-          <TouchableOpacity onPress={() => setLocalSimulado(null)} accessibilityRole="button" accessibilityLabel="Encerrar simulação" hitSlop={10}>
+          <TouchableOpacity onPress={encerrarDemonstracao} accessibilityRole="button" accessibilityLabel="Encerrar simulação e modo apresentação" hitSlop={10}>
             <Text style={styles.simulacaoFaixaSair}>Encerrar</Text>
           </TouchableOpacity>
         </View>
@@ -1354,13 +1365,13 @@ export default function Home({ navigation }) {
             <Text style={styles.demoPanelTitle}>Modo demonstração · simular localização</Text>
           </View>
           <Text style={styles.demoSectionLabel}>Bairro usado no contexto da região</Text>
-          <View style={styles.demoBtnRow}>
+          <View style={[styles.demoBtnRow, styles.demoGrade]}>
             {LOCAIS_DE_DEMONSTRACAO.map((lugar) => {
               const ativo = localSimulado?.id === lugar.id
               return (
                 <TouchableOpacity
                   key={lugar.id}
-                  style={[styles.demoBtn, { borderColor: Brand.blue, borderWidth: ativo ? 2.5 : 1.5 }, ativo && { backgroundColor: Brand.blueSoft }]}
+                  style={[styles.demoBtn, styles.demoBtnDaGrade, { borderColor: Brand.blue, borderWidth: ativo ? 2.5 : 1.5 }, ativo && { backgroundColor: Brand.blueSoft }]}
                   onPress={() => setLocalSimulado(ativo ? null : lugar)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: ativo }}
@@ -1372,12 +1383,25 @@ export default function Home({ navigation }) {
             })}
           </View>
           <Text style={styles.demoNota}>
-            Só o bairro é simulado: a faixa vem do mapa da SSP para o dia e o horário reais. O SOS continua enviando o GPS verdadeiro.
+            Só o bairro é simulado: a faixa vem do mapa da SSP para o período real. Com um bairro simulado, nenhum alerta sai do celular.
           </Text>
-          {localSimulado && (
-            <TouchableOpacity style={styles.demoResetBtn} onPress={() => setLocalSimulado(null)}>
+          <TouchableOpacity
+            style={[styles.demoApresentacao, modoApresentacao && styles.demoApresentacaoAtivo]}
+            onPress={() => setModoApresentacao((ativo) => !ativo)}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: modoApresentacao }}
+            accessibilityLabel="Modo apresentação: bloqueia o envio real de alertas"
+          >
+            <Ionicons name={modoApresentacao ? 'checkbox' : 'square-outline'} size={18} color={Brand.blue} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.demoApresentacaoTitulo}>Modo apresentação</Text>
+              <Text style={styles.demoApresentacaoTexto}>Alerta automático e SOS mostram o fluxo inteiro, mas nada é enviado.</Text>
+            </View>
+          </TouchableOpacity>
+          {(localSimulado || modoApresentacao) && (
+            <TouchableOpacity style={styles.demoResetBtn} onPress={encerrarDemonstracao}>
               <Ionicons name="refresh-outline" size={14} color={Brand.blue} />
-              <Text style={styles.demoResetText}>Usar minha localização real</Text>
+              <Text style={styles.demoResetText}>Voltar ao uso real (localização real e envio real)</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1493,13 +1517,13 @@ export default function Home({ navigation }) {
       <Modal transparent visible={sosFeedbackVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: sosFeedbackData.status === 'enviado' ? Brand.green : sosFeedbackData.status === 'falhou' ? Brand.danger : TEMA.forte }]} />
+            <View style={[styles.modalStrip, { backgroundColor: sosFeedbackData.status === 'enviado' ? Brand.green : sosFeedbackData.status === 'falhou' ? Brand.danger : sosFeedbackData.status === 'simulado' ? Brand.blue : TEMA.forte }]} />
             <View style={styles.modalInner}>
               {sosFeedbackData.status === 'enviando' && (
                 <>
                   <ActivityIndicator size="large" color={TEMA.forte} style={{ marginBottom: 12 }} />
-                  <Text style={styles.cardTitle}>Enviando alerta...</Text>
-                  <Text style={styles.cardSubtitle}>Avisando sua rede de apoio com sua localização.</Text>
+                  <Text style={styles.cardTitle}>{envioSimulado ? 'Simulando o envio...' : 'Enviando alerta...'}</Text>
+                  <Text style={styles.cardSubtitle}>{envioSimulado ? 'Modo apresentação: nenhuma mensagem sai do celular.' : 'Avisando sua rede de apoio com sua localização.'}</Text>
                 </>
               )}
               {sosFeedbackData.status === 'enviado' && (
@@ -1507,6 +1531,14 @@ export default function Home({ navigation }) {
                   <Text style={[styles.cardTitleCritical, { color: Brand.green }]}>Alerta Enviado</Text>
                   <Text style={styles.cardSubtitle}>
                     Mensagem de WhatsApp com sua localização enviada para {sosFeedbackData.enviados.length} {sosFeedbackData.enviados.length === 1 ? 'contato' : 'contatos'}.
+                  </Text>
+                </>
+              )}
+              {sosFeedbackData.status === 'simulado' && (
+                <>
+                  <Text style={[styles.cardTitleCritical, { color: Brand.blue }]}>{MENSAGEM_DO_ENVIO_SIMULADO}</Text>
+                  <Text style={styles.cardSubtitle}>
+                    Modo apresentação: o alerta seguiu o fluxo completo, mas nada saiu do celular e nada foi registrado no histórico de alertas.
                   </Text>
                 </>
               )}
@@ -1698,7 +1730,9 @@ export default function Home({ navigation }) {
               </Text>
               <Text style={styles.cardSubtitle}>
                 {alertType === 'critico'
-                  ? 'Risco alto detectado. Seus contatos serão acionados em:'
+                  ? envioSimulado
+                    ? 'Risco alto detectado. Simulação: ao fim da contagem, nada será enviado.'
+                    : 'Risco alto detectado. Seus contatos serão acionados em:'
                   : 'Movimento incomum detectado. Confirme que está segura.'}
               </Text>
 
@@ -1977,6 +2011,12 @@ const styles = StyleSheet.create({
   demoBtnSub: { fontSize: 10, color: '#888' },
   demoEnvActive: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EAF5EC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
   demoEnvActiveText: { fontSize: 11, color: '#27AE60', fontWeight: '600', flex: 1 },
+  demoGrade: { flexWrap: 'wrap' },
+  demoBtnDaGrade: { flexBasis: '45%', flexGrow: 1 },
+  demoApresentacao: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#B8D6E8', backgroundColor: '#FFFFFF' },
+  demoApresentacaoAtivo: { borderColor: Brand.blue, borderWidth: 2, backgroundColor: Brand.blueSoft },
+  demoApresentacaoTitulo: { fontSize: 13, fontWeight: '700', color: Brand.blue },
+  demoApresentacaoTexto: { fontSize: 11, color: Brand.muted, marginTop: 2 },
   demoNota: { fontSize: 11, color: Brand.muted, marginTop: 10, lineHeight: 15 },
   simulacaoFaixa: { position: 'absolute', left: 16, right: 16, zIndex: 20, elevation: 6, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Brand.blue, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14 },
   simulacaoFaixaTexto: { flex: 1, color: '#FFFFFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
