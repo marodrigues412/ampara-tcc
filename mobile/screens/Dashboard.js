@@ -46,6 +46,12 @@ const ALTURA_BARRAS = 92
 // Um local seguro ou compromisso a menos disso dá nome ao lugar frequente.
 const RAIO_NOME_KM = 0.15
 
+// O relatório ainda é montado sobre o score de pontos 0–10 (coluna risco do
+// histórico), que deixou de ser o resultado oficial: a tela Proteção mostra o nível
+// das 3 camadas. Para não haver dois scores no app, tudo o que mostra o 0–10 fica
+// escondido até o relatório passar para os níveis (docs/PENDENCIAS_POS_EUREKA.md).
+const MOSTRAR_SCORE_DE_PONTOS = false
+
 const formatarRisco = (risco) => (risco == null ? '—' : risco.toFixed(1).replace('.', ','))
 const transporteDe = (id) => TRANSPORTES.find((t) => t.id === id) ?? TRANSPORTES[2]
 const formatarDataHora = (iso) => new Date(iso).toLocaleString('pt-BR', {
@@ -221,7 +227,7 @@ export default function Dashboard({ navigation }) {
   }, [chaveLugares, locais, compromissos])
 
   // --- Resumo da Lia: só números e rótulos vão para a IA ---
-  const chaveResumo = semHistorico || !userId ? null : `${userId}|${dias}|${formatarRisco(media)}`
+  const chaveResumo = !MOSTRAR_SCORE_DE_PONTOS || semHistorico || !userId ? null : `${userId}|${dias}|${formatarRisco(media)}`
   useEffect(() => {
     if (!chaveResumo) return undefined
     let ativo = true
@@ -359,7 +365,7 @@ export default function Dashboard({ navigation }) {
           ))}
         >
           <Text style={styles.titulo}>Relatório</Text>
-          {semHistorico ? (
+          {!MOSTRAR_SCORE_DE_PONTOS || semHistorico ? (
             <Text style={styles.subtitulo}>Últimos {dias} dias</Text>
           ) : (
             <View style={styles.destaque}>
@@ -396,7 +402,14 @@ export default function Dashboard({ navigation }) {
 
         {secao === 'resumo' && (
           <>
-            {semHistorico ? (
+            {!MOSTRAR_SCORE_DE_PONTOS ? (
+              <View style={styles.aviso}>
+                <Ionicons name="construct-outline" size={20} color={TEMA.forte} />
+                <Text style={styles.avisoTexto}>
+                  O risco da tela Proteção agora é um nível (baixo, moderado ou alto). O histórico por nível chega numa próxima versão do relatório.
+                </Text>
+              </View>
+            ) : semHistorico ? (
               <View style={styles.aviso}>
                 <Ionicons name="time-outline" size={20} color={TEMA.forte} />
                 <Text style={styles.avisoTexto}>
@@ -422,6 +435,7 @@ export default function Dashboard({ navigation }) {
               </>
             )}
 
+            {MOSTRAR_SCORE_DE_PONTOS && (
             <View style={styles.secao}>
               <Titulo
                 titulo="Risco por dia"
@@ -457,6 +471,7 @@ export default function Dashboard({ navigation }) {
                   ))}
               </View>
             </View>
+            )}
 
             <View style={styles.secao}>
               <Titulo
@@ -501,9 +516,11 @@ export default function Dashboard({ navigation }) {
                   <>
                     <View style={styles.numeros}>
                       <Numero valor={`${bpmMedio} bpm`} rotulo="média no período" />
-                      <Numero valor={scoreExperimental == null ? '—' : `${formatarRisco(scoreExperimental)}/10`} rotulo="score experimental" />
+                      {MOSTRAR_SCORE_DE_PONTOS && (
+                        <Numero valor={scoreExperimental == null ? '—' : `${formatarRisco(scoreExperimental)}/10`} rotulo="score experimental" />
+                      )}
                     </View>
-                    <Text style={styles.nota}>{leiturasBpm} leituras. Score em teste, não validado e não usado para acionar alertas.</Text>
+                    <Text style={styles.nota}>{leiturasBpm} leituras de batimento no período.</Text>
                   </>
                 )}
               </View>
@@ -513,6 +530,8 @@ export default function Dashboard({ navigation }) {
 
         {secao === 'deslocamentos' && (
           <>
+            {MOSTRAR_SCORE_DE_PONTOS && (
+            <>
             <View style={styles.secao}>
               <Titulo
                 titulo="Seus horários mais expostos"
@@ -587,6 +606,8 @@ export default function Dashboard({ navigation }) {
                 })
               )}
             </View>
+            </>
+            )}
 
             <View style={styles.secao}>
               <Titulo
