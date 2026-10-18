@@ -20,6 +20,11 @@ let guardado = null
 
 const DIAS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
 const formatarRisco = (risco) => risco.toFixed(1).replace('.', ',')
+// O risco atual e o histórico saem do score de pontos 0–10, que não é mais o que a tela
+// Proteção mostra (lá é o nível das 3 camadas). Até o relatório passar para os níveis,
+// a Lia não recebe esse número, para não falar de um segundo score. A função
+// ampara-chat ignora campos vazios.
+const ENVIAR_SCORE_DE_PONTOS = false
 
 async function posicaoAtual() {
   const { status } = await Location.getForegroundPermissionsAsync()
@@ -110,9 +115,9 @@ export async function montarContextoDaLia() {
     longitude: posicao?.longitude ?? null,
     bairro,
     regiao: nivelDaRegiao(resumoDaRegiao)?.rotulo.toLowerCase() ?? null,
-    riscoAtual: descreverRiscoAtual(doDia),
+    riscoAtual: ENVIAR_SCORE_DE_PONTOS ? descreverRiscoAtual(doDia) : null,
     proximoCompromisso: descreverProximoCompromisso(compromissos, casa, agora),
-    historico: descreverHistorico(semana, semanaAnterior),
+    historico: ENVIAR_SCORE_DE_PONTOS ? descreverHistorico(semana, semanaAnterior) : null,
     dataHora: `${DIAS[agora.getDay()]}, ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
   }
   guardado = { em: Date.now(), contexto }
