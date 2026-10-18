@@ -132,6 +132,20 @@ async function buscarLugares(tipo: BuscaDeLugar, latitude: number, longitude: nu
 const texto = (valor: unknown) =>
   typeof valor === 'string' && valor.trim() ? valor.trim().replace(/\s+/g, ' ').slice(0, MAX_CONTEXT_FIELD) : null
 
+// Nível da matriz, origem do contexto e sensores: só os rótulos que o app produz
+// (mobile/services/estadoDoRisco.js). Qualquer outro texto é descartado, para não
+// entrar nota de célula, bairro ou instrução no prompt por esses campos.
+const NIVEIS_ACEITOS = new Set([
+  'baixo', 'moderado', 'alto', 'calculando (ainda sem leitura suficiente)',
+  'sem dados da região (o app não estima o nível agora)', 'monitoramento pausado',
+])
+const ORIGENS_ACEITAS = new Set(['bairro', 'estimativa da cidade'])
+const MODOS_ACEITOS = new Set(['completo (relógio e celular)', 'só celular', 'relógio parcial e celular', 'só relógio'])
+const daLista = (lista: Set<string>, valor: unknown) => {
+  const t = texto(valor)
+  return t && lista.has(t) ? t : null
+}
+
 function lerContexto(bruto: any) {
   if (!bruto || typeof bruto !== 'object') return null
   const latitude = Number(bruto.latitude)
@@ -142,6 +156,9 @@ function lerContexto(bruto: any) {
     bairro: texto(bruto.bairro),
     regiao: texto(bruto.regiao),
     riscoAtual: texto(bruto.riscoAtual),
+    nivelAtual: daLista(NIVEIS_ACEITOS, bruto.nivelAtual),
+    origemDoContexto: daLista(ORIGENS_ACEITAS, bruto.origemDoContexto),
+    modoDosSensores: daLista(MODOS_ACEITOS, bruto.modoDosSensores),
     proximoCompromisso: texto(bruto.proximoCompromisso),
     historico: texto(bruto.historico),
     dataHora: texto(bruto.dataHora),
@@ -155,6 +172,9 @@ function blocoDeContexto(contexto: ReturnType<typeof lerContexto>) {
     contexto.bairro && `- Onde ela está: ${contexto.bairro}`,
     contexto.regiao && `- Ocorrências registradas na região (raio de 1 km, últimos 6 meses): ${contexto.regiao}`,
     contexto.riscoAtual && `- Risco atual no app (0 a 10, maior = mais risco): ${contexto.riscoAtual}`,
+    contexto.nivelAtual && `- Nível de risco atual no app (cruza a região e o horário com os sensores do corpo; baixo, moderado ou alto): ${contexto.nivelAtual}`,
+    contexto.origemDoContexto && `- Base da parte da região: ${contexto.origemDoContexto === 'bairro' ? 'dados do bairro' : 'estimativa da cidade (o bairro não tem registros suficientes)'}`,
+    contexto.modoDosSensores && `- Sensores usados agora: ${contexto.modoDosSensores}`,
     contexto.proximoCompromisso && `- Próximo compromisso da rotina: ${contexto.proximoCompromisso}`,
     contexto.historico && `- Histórico recente: ${contexto.historico}`,
   ].filter(Boolean)
