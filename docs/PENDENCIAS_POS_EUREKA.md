@@ -28,3 +28,13 @@ Lista completa (688 pares candidatos, mesmo município) em `docs/grafias_duplica
 - **São Caetano do Sul (5 pares):** BARCELONA (90) × VILA BARCELONA (240); NOVA GERTI (47) × NOVA GERTY (209); OSVALDO CRUZ (142) × OSWALDO CRUZ (18); PROSPERIDADE (17) × VILA PROPERIDADE (105, erro de digitação da fonte); SANTA PAULA (101) × VILA SANTA PAULA (266).
 
 Caminho sugerido: um dicionário de grafias revisado à mão, aplicado no `build_context_risk_map.py` antes de agrupar (com teste), começando pelas abreviações e por São Caetano.
+
+## Bairros homônimos em São Paulo (Camada 1)
+
+Teste `mobile/__tests__/casamentoDeBairros.test.mjs`: com o nome como o GPS devolveria, 2.239 dos 2.336 bairros do mapa casam com a própria célula. Os outros:
+
+- 14 abreviações duplicadas (JD/JARDIM, PQ/PARQUE) — mesma pendência das grafias acima.
+- 63 homônimos que caem na célula do nome sem complemento: quem está em "JARDIM ANGELA (ZONA LESTE)" recebe a faixa do Jardim Ângela da zona sul, porque o GPS não diz a zona.
+- 20 homônimos sem célula em parte ou em todo o dia (17 sempre, 3 em parte): o app usa a estimativa da cidade.
+
+Proposta: guardar no mapa o centro (mediana de latitude/longitude das ocorrências da SSP) de cada bairro e, quando houver homônimos, escolher o mais perto da usuária. Exige regerar o mapa e subir de novo.
