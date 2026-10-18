@@ -12,7 +12,9 @@
 
 ## Dashboard
 
-- **Converter o relatório para os níveis do score de 3 camadas** (tempo em baixo / moderado / alto e modo de sensores). Estimativa: 3–4 h, porque `location_history` só guarda o score de pontos 0–10, os níveis estão em `risk_assessments` e a grade de horários, os trajetos e o resumo da Lia precisam ser refeitos. Até lá, os elementos de 0–10 ficam escondidos para não haver dois scores no app.
+- ~~Converter o relatório para os níveis do score de 3 camadas~~ — feito em 18/10/2026 (`risk_level_report`, risco por dia, contexto dos lugares, horários, destaque e resumo da Lia, modo de sensores, trajetos).
+- Falta: apagar o código antigo de 0–10 que ficou escondido atrás de `MOSTRAR_SCORE_DE_PONTOS` (Dashboard) e `ENVIAR_SCORE_DE_PONTOS` (contexto da Lia), e decidir se o cálculo de pontos 0–10 da Home (coluna `risco` de `location_history`) continua sendo gravado.
+- Tempo por nível = avaliações × 30 s (uma a cada 30 s com o monitoramento ativo); é aproximado.
 
 ## Grafias duplicadas de bairro na SSP (Camada 1)
 

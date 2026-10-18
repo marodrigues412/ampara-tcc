@@ -17,10 +17,12 @@ import { distanceKm } from '../utils/geo'
 import { supabase } from '../services/supabase'
 import { getRecentLocationHistory, getLocationHistoryBetween } from '../services/locationService'
 import { getRecentAlerts } from '../services/alertService'
-import { getDailyRiskAssessmentReport } from '../services/riskAssessmentService'
+import { getDailyRiskAssessmentReport, getRiskLevelReport } from '../services/riskAssessmentService'
+import { gradePorNivel, nivelNaJanela, nivelPorDia, normalizarLinhas, minutosDe, porModoDeSensores, resumoPorNivel, tendenciaDoAlto } from '../utils/relatorioPorNivel'
 import { listarCompromissos, listarLocaisSeguros } from '../services/routineService'
 import { buscarResumoCrimes } from '../services/crimesService'
 import { resumoDaLia } from '../services/resumoDaLia'
+import { contextoDosLugares } from '../services/contextoDosLugaresService'
 import { Brand, TemaDaAba } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 import PopupAmpara, { LinhaDoPopup } from '../components/PopupAmpara'
@@ -46,11 +48,36 @@ const ALTURA_BARRAS = 92
 // Um local seguro ou compromisso a menos disso dá nome ao lugar frequente.
 const RAIO_NOME_KM = 0.15
 
-// O relatório ainda é montado sobre o score de pontos 0–10 (coluna risco do
-// histórico), que deixou de ser o resultado oficial: a tela Proteção mostra o nível
-// das 3 camadas. Para não haver dois scores no app, tudo o que mostra o 0–10 fica
-// escondido até o relatório passar para os níveis (docs/PENDENCIAS_POS_EUREKA.md).
+// O relatório usa o nível das 3 camadas (risk_level_report), o mesmo da tela Proteção.
+// O código antigo, montado sobre o score de pontos 0–10 (coluna risco do histórico),
+// fica escondido para não haver dois scores no app; apagar depois da Eureka
+// (docs/PENDENCIAS_POS_EUREKA.md).
 const MOSTRAR_SCORE_DE_PONTOS = false
+
+// Cores e rótulos dos níveis do score de 3 camadas (os mesmos da tela Proteção).
+const NIVEL_VISUAL = {
+  alto: { rotulo: 'Alto', cor: Brand.danger, fundo: '#FBE3E7' },
+  moderado: { rotulo: 'Moderado', cor: Brand.amber, fundo: Brand.amberSoft },
+  baixo: { rotulo: 'Baixo', cor: Brand.green, fundo: Brand.mint },
+  sem_nivel: { rotulo: 'Sem nível', cor: '#CFC6CB', fundo: '#F3EFF1' },
+}
+// De cima para baixo na barra empilhada.
+const ORDEM_NA_BARRA = ['sem_nivel', 'alto', 'moderado', 'baixo']
+const formatarPct = (pct) => `${Math.round(pct)}%`
+const ROTULO_DO_MODO = {
+  completo: 'completo (relógio e celular)',
+  so_celular: 'só celular',
+  parcial: 'relógio parcial',
+  so_relogio: 'só relógio',
+  desconhecido: 'não registrado',
+}
+// Faixas do mapa da região (Camada 1), para "contexto dos lugares".
+const FAIXA_VISUAL = {
+  alto: { rotulo: 'Alto', cor: Brand.danger },
+  medio: { rotulo: 'Médio', cor: Brand.amber },
+  baixo: { rotulo: 'Baixo', cor: Brand.green },
+  sem_dados: { rotulo: 'Sem dados', cor: '#CFC6CB' },
+}
 
 const formatarRisco = (risco) => (risco == null ? '—' : risco.toFixed(1).replace('.', ','))
 const transporteDe = (id) => TRANSPORTES.find((t) => t.id === id) ?? TRANSPORTES[2]
@@ -104,6 +131,11 @@ export default function Dashboard({ navigation }) {
   const [contatos, setContatos] = useState([])
   const [compromissos, setCompromissos] = useState([])
   const [avaliacoesBpm, setAvaliacoesBpm] = useState([])
+  // Score de 3 camadas (risk_level_report), já normalizado. null = não carregou.
+  const [niveis, setNiveis] = useState(null)
+  const [niveisAnteriores, setNiveisAnteriores] = useState(null)
+  // Faixa do mapa dos lugares do histórico: { chave, resumo }. Calculada no aparelho.
+  const [contextoLugares, setContextoLugares] = useState(null)
   // Nome e faixa da região de cada lugar frequente, preenchidos depois (consultas extras).
   const [detalhesLugares, setDetalhesLugares] = useState({})
   // { chave, texto } — chave identifica a que período/dados o texto se refere.
@@ -120,6 +152,18 @@ export default function Dashboard({ navigation }) {
     inicioAnterior.setDate(inicioAnterior.getDate() - periodo * 2)
     const fimAnterior = new Date()
     fimAnterior.setDate(fimAnterior.getDate() - periodo)
+
+    // Dias inteiros, como nas barras: de meia-noite de N-1 dias atrás até agora; o
+    // período anterior é o bloco de N dias logo antes.
+    const hoje = new Date()
+    const inicioDoPeriodo = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - (periodo - 1))
+    const inicioDoAnterior = new Date(inicioDoPeriodo.getFullYear(), inicioDoPeriodo.getMonth(), inicioDoPeriodo.getDate() - periodo)
+    const [linhasDeNivel, linhasDeNivelAnteriores] = await Promise.all([
+      getRiskLevelReport(inicioDoPeriodo).catch((erro) => { console.warn('risk_level_report:', erro.message); return null }),
+      getRiskLevelReport(inicioDoAnterior, inicioDoPeriodo).catch(() => null),
+    ])
+    setNiveis(linhasDeNivel ? normalizarLinhas(linhasDeNivel) : null)
+    setNiveisAnteriores(linhasDeNivelAnteriores ? normalizarLinhas(linhasDeNivelAnteriores) : null)
 
     const [atual, anterior, listaAlertas, resultadoContatos, rotina, seguros, bpm] = await Promise.all([
       getRecentLocationHistory(user.id, periodo),
@@ -158,6 +202,19 @@ export default function Dashboard({ navigation }) {
   const rankingContatos = tallyContactAlerts(alertas, contatos)
   const nomePorTelefone = useMemo(() => Object.fromEntries(contatos.map((c) => [c.telefone, c.nome])), [contatos])
   const semHistorico = media == null
+  const diasPorNivel = useMemo(() => nivelPorDia(niveis ?? [], dias), [niveis, dias])
+  const semNiveis = !diasPorNivel.some((d) => d.total > 0)
+  const gradeNiveis = useMemo(() => gradePorNivel(niveis ?? []), [niveis])
+  const resumoNivel = useMemo(() => resumoPorNivel(niveis ?? []), [niveis])
+  const modosDeSensores = useMemo(() => porModoDeSensores(niveis ?? []), [niveis])
+  const trajetosPorNivel = useMemo(
+    () => trajetos.map((t) => ({ ...t, nivel: nivelNaJanela(niveis ?? [], t.diasDaSemana, t.saida, t.chegada) })),
+    [trajetos, niveis],
+  )
+  const variacaoDoAlto = useMemo(
+    () => tendenciaDoAlto(resumoNivel, resumoPorNivel(niveisAnteriores ?? [])),
+    [resumoNivel, niveisAnteriores],
+  )
 
   // Score experimental do relógio (parte em teste do grupo): só na seção técnica.
   const leiturasBpm = avaliacoesBpm.reduce((soma, d) => soma + Number(d.sample_count || 0), 0)
@@ -226,19 +283,41 @@ export default function Dashboard({ navigation }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveLugares, locais, compromissos])
 
+  // --- Contexto dos lugares por onde ela passou (Camada 1 dos pontos do histórico) ---
+  const chaveContextoLugares = `${dias}|${historico.length}|${historico.at(-1)?.created_at ?? ''}`
+  useEffect(() => {
+    if (!historico.length) return undefined
+    let ativo = true
+    contextoDosLugares(historico)
+      .then((resumo) => { if (ativo) setContextoLugares({ chave: chaveContextoLugares, resumo }) })
+      .catch((erro) => { if (ativo) setContextoLugares({ chave: chaveContextoLugares, resumo: null, erro: erro.message }) })
+    return () => { ativo = false }
+    // chaveContextoLugares resume o histórico do período.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveContextoLugares])
+  const lugaresAtual = contextoLugares?.chave === chaveContextoLugares ? contextoLugares : undefined
+
   // --- Resumo da Lia: só números e rótulos vão para a IA ---
-  const chaveResumo = !MOSTRAR_SCORE_DE_PONTOS || semHistorico || !userId ? null : `${userId}|${dias}|${formatarRisco(media)}`
+  // Só rótulos e tempos vão para a IA (sem número de 0 a 10, lugar ou contato).
+  const chaveResumo = semNiveis || !userId ? null : `${userId}|${dias}|${resumoNivel.total}|${Math.round(resumoNivel.pct?.alto ?? 0)}`
   useEffect(() => {
     if (!chaveResumo) return undefined
     let ativo = true
     const pendentes = preparo.filter((p) => !p.feito).map((p) => p.texto.toLowerCase())
+    const pior = gradeNiveis.pior
     resumoDaLia(userId, {
       dias,
-      riscoMedio: formatarRisco(media),
-      faixa: nivelMedio.rotulo.toLowerCase(),
-      variacao: variacao && !variacao.igual ? `${Math.abs(variacao.variacao)}% ${variacao.melhorou ? 'menor' : 'maior'}` : null,
-      horarioMaisExposto: expostos.pior ? `${descreverHorario(expostos.pior).toLowerCase()} (risco ${formatarRisco(expostos.pior.risco)})` : null,
-      diasMonitorados: monitorados,
+      tempoMonitorado: descreverTempo(resumoNivel.minutosMonitorados),
+      porNivel: ['baixo', 'moderado', 'alto'].map((n) => `${n} ${formatarPct(resumoNivel.pct[n])}`).join(', ')
+        + (resumoNivel.contagens.sem_nivel ? `, sem nível ${formatarPct(resumoNivel.pct.sem_nivel)}` : ''),
+      tempoEmAlto: descreverTempo(resumoNivel.minutos.alto),
+      variacaoDoAlto: variacaoDoAlto && !variacaoDoAlto.igual
+        ? `tempo em alto ${Math.abs(variacaoDoAlto.pontos)} pontos percentuais ${variacaoDoAlto.melhorou ? 'menor' : 'maior'}`
+        : null,
+      horarioMaisExposto: pior
+        ? `${descreverHorario(pior).toLowerCase()} (mais tempo em risco ${NIVEL_VISUAL[pior.celula.predominante].rotulo.toLowerCase()})`
+        : null,
+      diasComRegistro: resumoNivel.diasComRegistro,
       alertas: alertas.length,
       preparo: pendentes.length ? pendentes.join(', ') : null,
     }).then((texto) => { if (ativo) setResumoLia({ chave: chaveResumo, texto }) })
@@ -267,7 +346,53 @@ export default function Dashboard({ navigation }) {
 
   // Conteúdo do popup de acordo com o que foi tocado.
   let popup = null
-  if (detalhe?.tipo === 'dia') {
+  if (detalhe?.tipo === 'diaNivel') {
+    const { d } = detalhe
+    popup = {
+      icone: 'calendar-outline',
+      titulo: `${DIAS_SEMANA[d.data.getDay()].nome}, ${d.data.getDate()}/${d.data.getMonth() + 1}`,
+      subtitulo: d.total ? `${descreverTempo(minutosDe(d.total))} monitorados` : 'Sem avaliações neste dia',
+      conteudo: d.total ? (
+        <>
+          {['alto', 'moderado', 'baixo', 'sem_nivel'].filter((n) => d.contagens[n] > 0).map((n) => (
+            <LinhaDoPopup
+              key={n}
+              icone={n === 'sem_nivel' ? 'help-circle-outline' : 'ellipse'}
+              rotulo={n === 'sem_nivel' ? 'Sem nível (calculando ou sem dados da região)' : `Risco ${NIVEL_VISUAL[n].rotulo.toLowerCase()}`}
+              valor={`${formatarPct(d.pct[n])} · ${descreverTempo(minutosDe(d.contagens[n]))}`}
+              cor={NIVEL_VISUAL[n].cor}
+            />
+          ))}
+        </>
+      ) : (
+        <Text style={styles.popupTexto}>Não há avaliação neste dia. Elas são gravadas a cada 30 s enquanto o monitoramento está ativo.</Text>
+      ),
+      acoes: [{ texto: 'Fechar', principal: true, onPress: () => setDetalhe(null) }],
+    }
+  } else if (detalhe?.tipo === 'horarioNivel') {
+    const { dia, periodo, celula } = detalhe
+    popup = {
+      icone: 'time-outline',
+      titulo: `${DIAS_SEMANA[dia].nome} · ${periodo.rotulo.toLowerCase()}`,
+      subtitulo: `Das ${String(periodo.de).padStart(2, '0')}h às ${String(periodo.ate % 24).padStart(2, '0')}h${celula.total ? ` · ${descreverTempo(minutosDe(celula.total))} monitorados` : ''}`,
+      conteudo: celula.total ? (
+        <>
+          {['alto', 'moderado', 'baixo', 'sem_nivel'].filter((n) => celula.contagens[n] > 0).map((n) => (
+            <LinhaDoPopup
+              key={n}
+              icone={n === 'sem_nivel' ? 'help-circle-outline' : 'ellipse'}
+              rotulo={n === 'sem_nivel' ? 'Sem nível' : `Risco ${NIVEL_VISUAL[n].rotulo.toLowerCase()}`}
+              valor={`${formatarPct(celula.pct[n])} · ${descreverTempo(minutosDe(celula.contagens[n]))}`}
+              cor={NIVEL_VISUAL[n].cor}
+            />
+          ))}
+          <Text style={styles.popupTexto}>Soma de todas as vezes em que você esteve monitorada nesse dia da semana e parte do dia, no período escolhido.</Text>
+        </>
+      ) : (
+        <Text style={styles.popupTexto}>Você não teve avaliações nesse horário no período.</Text>
+      ),
+    }
+  } else if (detalhe?.tipo === 'dia') {
     const { d } = detalhe
     const doDia = pontosComRisco.filter((p) => new Date(p.created_at).toDateString() === d.data.toDateString())
     const pico = doDia.reduce((maior, p) => (!maior || p.risco > maior.risco ? p : maior), null)
@@ -365,7 +490,27 @@ export default function Dashboard({ navigation }) {
           ))}
         >
           <Text style={styles.titulo}>Relatório</Text>
-          {!MOSTRAR_SCORE_DE_PONTOS || semHistorico ? (
+          {!MOSTRAR_SCORE_DE_PONTOS ? (
+            semNiveis ? (
+              <Text style={styles.subtitulo}>Últimos {dias} dias</Text>
+            ) : (
+              <View style={styles.destaque}>
+                <Text style={[styles.destaqueValor, { color: resumoNivel.contagens.alto ? Brand.danger : Brand.green }]}>
+                  {descreverTempo(resumoNivel.minutos.alto)}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.destaqueNivel}>em risco alto · {formatarPct(resumoNivel.pct.alto)} do tempo monitorado</Text>
+                  {variacaoDoAlto && !variacaoDoAlto.igual ? (
+                    <Text style={[styles.tendenciaTexto, { color: variacaoDoAlto.melhorou ? Brand.green : Brand.amber }]}>
+                      <Ionicons name={variacaoDoAlto.melhorou ? 'trending-down' : 'trending-up'} size={13} /> {Math.abs(variacaoDoAlto.pontos)} {Math.abs(variacaoDoAlto.pontos) === 1 ? 'ponto percentual' : 'pontos percentuais'} {variacaoDoAlto.melhorou ? 'a menos' : 'a mais'} que no período anterior
+                    </Text>
+                  ) : (
+                    <Text style={styles.subtitulo}>Últimos {dias} dias · {descreverTempo(resumoNivel.minutosMonitorados)} monitorados</Text>
+                  )}
+                </View>
+              </View>
+            )
+          ) : semHistorico ? (
             <Text style={styles.subtitulo}>Últimos {dias} dias</Text>
           ) : (
             <View style={styles.destaque}>
@@ -403,12 +548,19 @@ export default function Dashboard({ navigation }) {
         {secao === 'resumo' && (
           <>
             {!MOSTRAR_SCORE_DE_PONTOS ? (
-              <View style={styles.aviso}>
-                <Ionicons name="construct-outline" size={20} color={TEMA.forte} />
-                <Text style={styles.avisoTexto}>
-                  O risco da tela Proteção agora é um nível (baixo, moderado ou alto). O histórico por nível chega numa próxima versão do relatório.
-                </Text>
-              </View>
+              !semNiveis && textoLia !== null && (
+                <View style={styles.lia}>
+                  <LiaAvatar size={36} reaction="oi" showRing={false} showBadge={false} />
+                  <View style={styles.liaBalao}>
+                    <Text style={styles.liaRotulo}>Lia resume</Text>
+                    {textoLia === undefined ? (
+                      <Text style={styles.liaCarregando}>Lia está escrevendo…</Text>
+                    ) : (
+                      <Text style={styles.liaTexto}>{textoLia}</Text>
+                    )}
+                  </View>
+                </View>
+              )
             ) : semHistorico ? (
               <View style={styles.aviso}>
                 <Ionicons name="time-outline" size={20} color={TEMA.forte} />
@@ -433,6 +585,104 @@ export default function Dashboard({ navigation }) {
                   </View>
                 )}
               </>
+            )}
+
+            {!MOSTRAR_SCORE_DE_PONTOS && (
+            <View style={styles.secao}>
+              <Titulo
+                titulo="Risco por dia"
+                explicacao="Quanto do tempo monitorado de cada dia ficou em risco baixo, moderado ou alto — o mesmo nível da tela Proteção, que cruza a região e o horário com os sensores. Cinza é tempo sem nível (calculando ou sem dados da região). Toque numa barra para ver o dia. É um resumo do seu histórico no app, não uma previsão."
+                onExplicar={explicar}
+              />
+              {niveis === null ? (
+                <Vazio texto="Não foi possível carregar o risco por dia agora." />
+              ) : semNiveis ? (
+                <Vazio texto="Ainda não há avaliações no período. Elas são gravadas a cada 30 s enquanto o monitoramento está ativo." />
+              ) : (
+                <>
+                  <View style={styles.barras} accessibilityLabel="Gráfico do risco por dia, em porcentagem do tempo">
+                    {diasPorNivel.map((d) => (
+                      <Pressable
+                        key={d.data.toISOString()}
+                        style={styles.barraDia}
+                        onPress={() => setDetalhe({ tipo: 'diaNivel', d })}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${DIAS_SEMANA[d.data.getDay()].nome}, ${d.data.getDate()}/${d.data.getMonth() + 1}: ${d.total ? ['alto', 'moderado', 'baixo'].map((n) => `${formatarPct(d.pct[n])} ${NIVEL_VISUAL[n].rotulo.toLowerCase()}`).join(', ') : 'sem avaliações'}. Ver detalhes`}
+                      >
+                        {d.total ? (
+                          <View style={styles.barraEmpilhada}>
+                            {ORDEM_NA_BARRA.filter((n) => d.contagens[n] > 0).map((n) => (
+                              <View key={n} style={{ flex: d.contagens[n], backgroundColor: NIVEL_VISUAL[n].cor }} />
+                            ))}
+                          </View>
+                        ) : (
+                          <View style={styles.barraDiaVazia} />
+                        )}
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.barrasRotulos}>
+                    {dias === 7
+                      ? diasPorNivel.map((d) => <Text key={d.data.toISOString()} style={styles.barraDiaRotulo}>{DIAS_SEMANA[d.data.getDay()].curto}</Text>)
+                      : [diasPorNivel[0], diasPorNivel[Math.floor(diasPorNivel.length / 2)], diasPorNivel[diasPorNivel.length - 1]].map((d) => (
+                        <Text key={d.data.toISOString()} style={styles.barraDiaRotulo}>{d.data.getDate()}/{d.data.getMonth() + 1}</Text>
+                      ))}
+                  </View>
+                  <View style={styles.legenda}>
+                    {['baixo', 'moderado', 'alto', 'sem_nivel'].map((n) => (
+                      <View key={n} style={styles.legendaItem}>
+                        <View style={[styles.legendaCor, { backgroundColor: NIVEL_VISUAL[n].cor }]} />
+                        <Text style={styles.legendaTexto}>{NIVEL_VISUAL[n].rotulo}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {modosDeSensores.length > 0 && (
+                    <Text style={styles.nota} accessibilityLabel={`Sensores usados: ${modosDeSensores.map((m) => `${formatarPct(m.pct)} ${ROTULO_DO_MODO[m.modo] ?? m.modo}`).join(', ')}`}>
+                      <Ionicons name="hardware-chip-outline" size={12} /> Sensores: {modosDeSensores.map((m) => `${ROTULO_DO_MODO[m.modo] ?? m.modo} ${formatarPct(m.pct)}`).join(' · ')}
+                    </Text>
+                  )}
+                </>
+              )}
+            </View>
+            )}
+
+            {!MOSTRAR_SCORE_DE_PONTOS && (
+            <View style={styles.secao}>
+              <Titulo
+                titulo="Contexto dos lugares por onde você passou"
+                explicacao="Só a parte da região: a faixa do mapa de ocorrências da SSP (bairro × período do dia) dos lugares registrados no seu histórico, recalculada com o mapa atual. Não é o seu nível de risco, que também usa os sensores. O bairro é identificado no próprio celular e não é gravado."
+                onExplicar={explicar}
+              />
+              {!historico.length ? (
+                <Vazio texto="Seus lugares aparecem aqui depois de alguns registros com o monitoramento ativo." />
+              ) : lugaresAtual === undefined ? (
+                <Vazio texto="Identificando os bairros dos seus lugares…" />
+              ) : !lugaresAtual.resumo?.total ? (
+                <Vazio texto="Não foi possível identificar a região dos seus lugares agora." />
+              ) : (
+                <>
+                  <View style={styles.faixaHorizontal} accessibilityLabel={`Contexto dos lugares: ${['alto', 'medio', 'baixo', 'sem_dados'].map((f) => `${formatarPct(lugaresAtual.resumo.pct[f])} ${FAIXA_VISUAL[f].rotulo.toLowerCase()}`).join(', ')}`}>
+                    {['alto', 'medio', 'baixo', 'sem_dados'].filter((f) => lugaresAtual.resumo.contagens[f] > 0).map((f) => (
+                      <View key={f} style={{ flex: lugaresAtual.resumo.contagens[f], backgroundColor: FAIXA_VISUAL[f].cor }} />
+                    ))}
+                  </View>
+                  <View style={styles.legenda}>
+                    {['baixo', 'medio', 'alto', 'sem_dados'].map((f) => (
+                      <View key={f} style={styles.legendaItem}>
+                        <View style={[styles.legendaCor, { backgroundColor: FAIXA_VISUAL[f].cor }]} />
+                        <Text style={styles.legendaTexto}>{FAIXA_VISUAL[f].rotulo} {formatarPct(lugaresAtual.resumo.pct[f])}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={styles.nota}>
+                    {lugaresAtual.resumo.total} {lugaresAtual.resumo.total === 1 ? 'registro' : 'registros'} de localização no período
+                    {lugaresAtual.resumo.pctDaCidade >= 1 ? ` · ${formatarPct(lugaresAtual.resumo.pctDaCidade)} pela estimativa da cidade` : ''}
+                    {lugaresAtual.resumo.pontosDeFora ? ` · ${lugaresAtual.resumo.pontosDeFora} em lugares pouco visitados ficaram de fora` : ''}.
+                    {' '}Contexto da região, não o nível completo.
+                  </Text>
+                </>
+              )}
+            </View>
             )}
 
             {MOSTRAR_SCORE_DE_PONTOS && (
@@ -530,6 +780,92 @@ export default function Dashboard({ navigation }) {
 
         {secao === 'deslocamentos' && (
           <>
+            {!MOSTRAR_SCORE_DE_PONTOS && (
+            <View style={styles.secao}>
+              <Titulo
+                titulo="Seus horários mais expostos"
+                explicacao="Cada quadradinho mostra o nível de risco em que você passou mais tempo naquele dia da semana e parte do dia (o mesmo nível da tela Proteção). Quanto mais forte a cor, maior a parte do tempo nesse nível. Toque para ver as porcentagens."
+                onExplicar={explicar}
+              />
+              {semNiveis ? (
+                <Vazio texto="Ainda não há avaliações no período." />
+              ) : (
+                <>
+                  <View style={styles.grade}>
+                    <View style={styles.gradeLinha}>
+                      <Text style={styles.gradeRotuloLinha} />
+                      {ORDEM_SEMANA.map((dia) => <Text key={dia} style={styles.gradeRotuloColuna}>{DIAS_SEMANA[dia].curto}</Text>)}
+                    </View>
+                    {PERIODOS_GRADE.map((periodo) => (
+                      <View key={periodo.id} style={styles.gradeLinha}>
+                        <Text style={styles.gradeRotuloLinha}>{periodo.rotulo}</Text>
+                        {ORDEM_SEMANA.map((dia) => {
+                          const celula = gradeNiveis.grade[periodo.id][dia]
+                          const n = celula.predominante
+                          const estilo = !celula.total
+                            ? styles.gradeVazia
+                            : !n
+                              ? { backgroundColor: NIVEL_VISUAL.sem_nivel.cor }
+                              : { backgroundColor: NIVEL_VISUAL[n].cor, opacity: 0.35 + (celula.pct[n] / 100) * 0.65 }
+                          return (
+                            <Pressable
+                              key={dia}
+                              onPress={() => setDetalhe({ tipo: 'horarioNivel', dia, periodo, celula })}
+                              style={[styles.gradeCelula, estilo]}
+                              accessibilityRole="button"
+                              accessibilityLabel={`${DIAS_SEMANA[dia].nome}, ${periodo.rotulo}: ${!celula.total ? 'sem avaliações' : n ? `mais tempo em risco ${NIVEL_VISUAL[n].rotulo.toLowerCase()}, ${formatarPct(celula.pct[n])}` : 'sem nível'}. Ver detalhes`}
+                            />
+                          )
+                        })}
+                      </View>
+                    ))}
+                  </View>
+                  {gradeNiveis.pior && (
+                    <Text style={styles.nota}>
+                      {descreverHorario(gradeNiveis.pior)} foi o seu horário mais exposto: {formatarPct(gradeNiveis.pior.celula.pct[gradeNiveis.pior.celula.predominante])} do tempo em risco {NIVEL_VISUAL[gradeNiveis.pior.celula.predominante].rotulo.toLowerCase()}.
+                    </Text>
+                  )}
+                </>
+              )}
+            </View>
+            )}
+
+            {!MOSTRAR_SCORE_DE_PONTOS && (
+            <View style={styles.secao}>
+              <Titulo
+                titulo="Trajetos da sua rotina"
+                explicacao="Os trajetos entre os compromissos da sua rotina, com o nível de risco em que você passou mais tempo nesse horário, nos dias em que eles acontecem (contando as horas cheias que o trajeto toca). Sem avaliação no horário, o app ainda não tem como dizer."
+                onExplicar={explicar}
+              />
+              {compromissos.length === 0 ? (
+                <TouchableOpacity style={styles.convite} onPress={() => navigation.navigate('Routine')}>
+                  <Ionicons name="calendar-outline" size={20} color={TEMA.forte} />
+                  <Text style={styles.conviteTexto}>Cadastre sua rotina para ver o risco dos seus trajetos.</Text>
+                  <Ionicons name="chevron-forward" size={18} color={TEMA.forte} />
+                </TouchableOpacity>
+              ) : trajetosPorNivel.length === 0 ? (
+                <Vazio texto="Cadastre sua Casa nos locais seguros e mais de um compromisso para ver os trajetos." />
+              ) : (
+                trajetosPorNivel.map((t) => {
+                  const n = t.nivel.predominante
+                  const visual = n ? NIVEL_VISUAL[n] : NIVEL_VISUAL.sem_nivel
+                  return (
+                    <View key={t.chave} style={styles.linhaLista}>
+                      <Ionicons name={transporteDe(t.transporte).icone} size={18} color={TEMA.forte} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.linhaNome} numberOfLines={1}>{t.origem} → {t.destino}</Text>
+                        <Text style={styles.linhaDetalhe}>Sai às {horaDosMinutos(t.saida)}{n ? ` · ${formatarPct(t.nivel.pct[n])} do tempo nesse nível` : ''}</Text>
+                      </View>
+                      <View style={[styles.selo, { backgroundColor: visual.fundo }]}>
+                        <Text style={[styles.seloTexto, { color: n ? visual.cor : Brand.muted }]}>{n ? visual.rotulo : 'Sem avaliações'}</Text>
+                      </View>
+                    </View>
+                  )
+                })
+              )}
+            </View>
+            )}
+
             {MOSTRAR_SCORE_DE_PONTOS && (
             <>
             <View style={styles.secao}>
@@ -757,6 +1093,12 @@ const styles = StyleSheet.create({
   barras: { height: ALTURA_BARRAS, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   barraDia: { flex: 1, height: ALTURA_BARRAS, justifyContent: 'flex-end' },
   barraDiaPreenchida: { borderTopLeftRadius: 5, borderTopRightRadius: 5 },
+  barraEmpilhada: { height: ALTURA_BARRAS, borderTopLeftRadius: 5, borderTopRightRadius: 5, overflow: 'hidden' },
+  faixaHorizontal: { height: 14, flexDirection: 'row', borderRadius: 7, overflow: 'hidden', backgroundColor: '#F3EFF1', marginTop: 4 },
+  legenda: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
+  legendaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendaCor: { width: 10, height: 10, borderRadius: 3 },
+  legendaTexto: { fontSize: 11, color: Brand.muted },
   barraDiaVazia: { height: 4, backgroundColor: '#E4EDE5', borderRadius: 2 },
   barrasRotulos: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   barraDiaRotulo: { flex: 1, textAlign: 'center', fontSize: 11, color: Brand.muted, fontWeight: '600' },

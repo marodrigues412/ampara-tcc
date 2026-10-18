@@ -97,6 +97,9 @@ export function riscoDosTrajetos(compromissos, casa, pontos) {
         destino: t.destino,
         transporte: t.transporte,
         saida: t.saida,
+        // Para o selo por nível (relatorioPorNivel.nivelNaJanela).
+        chegada: t.chegada,
+        diasDaSemana: [...t.diasDaSemana],
         risco: media(valores),
         registros: valores.length,
       }
