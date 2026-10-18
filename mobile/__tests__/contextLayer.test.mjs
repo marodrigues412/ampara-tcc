@@ -204,4 +204,7 @@ test('dentro de um local seguro o contexto é baixo, qualquer que seja a faixa d
   assert.equal(seguro(0.06).faixa, 'baixo')
   assert.equal(seguro(0.01).faixa, 'baixo')
   assert.equal(seguro(0.01).localSeguroAplicado, false)
+  // A tela mostra "(local seguro)" sempre que ela está num, mesmo se o mapa já era baixo.
+  assert.equal(seguro(0.01).emLocalSeguro, true)
+  assert.equal(avaliarContexto({ municipio: 'S.PAULO', bairro: 'SE', celula: celula('SE', 0.5) }).emLocalSeguro, false)
 })
