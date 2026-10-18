@@ -6,6 +6,10 @@
 --    Android sem Galaxy Watch) a avaliação é só com o celular, e o context_score antigo
 --    (pontos 0–10) deixa de ser o contexto oficial.
 -- 2. Colunas para reportar cada camada e o modo de sensores separadamente no artigo.
+--    Do contexto, só a faixa, a origem e o motivo de indisponibilidade: a nota exata da
+--    célula não é gravada, porque cruzada com o mapa público apontaria o bairro.
+-- Não apaga nem reescreve linhas: as colunas novas entram vazias, e as checagens novas
+-- só valem para os valores preenchidos.
 alter table public.risk_assessments
   alter column bpm drop not null,
   alter column context_score drop not null,
@@ -15,7 +19,8 @@ alter table public.risk_assessments
   add column if not exists bpm_anomaly numeric(4, 3),
   add column if not exists watch_motion_anomaly numeric(3, 2),
   add column if not exists context_band text,
-  add column if not exists context_cell_score double precision,
+  -- 'bairro' ou 'cidade' (estimativa da cidade, quando o bairro não tem célula).
+  add column if not exists context_origin text,
   add column if not exists context_unavailable_reason text;
 
 do $constraints$
@@ -34,6 +39,11 @@ begin
     alter table public.risk_assessments
       add constraint risk_assessments_context_band_check
       check (context_band in ('baixo', 'medio', 'alto'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'risk_assessments_context_origin_check') then
+    alter table public.risk_assessments
+      add constraint risk_assessments_context_origin_check
+      check (context_origin in ('bairro', 'cidade'));
   end if;
   if not exists (select 1 from pg_constraint where conname = 'risk_assessments_body_score_check') then
     alter table public.risk_assessments

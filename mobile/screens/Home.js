@@ -714,12 +714,10 @@ export default function Home({ navigation }) {
       bpmAnomaly: corpo.sinais.bpm,
       watchMotionAnomaly: corpo.sinais.movimentoRelogio,
       contextBand: contextoDaRegiao?.faixa ?? null,
-      contextCellScore: contextoDaRegiao?.escore ?? null,
+      contextOrigin: contextoDaRegiao?.origem ?? null,
       contextUnavailableReason: contextoDaRegiao ? contextoDaRegiao.motivo : 'calculando',
       hourOfDay: new Date(medidoEm).getHours(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',
-      nearbyCrimeCount: totalCrimesEntorno,
-      crimeDensityPerKm2: totalCrimesEntorno / (Math.PI * RAIO_INICIAL_KM ** 2),
       insideSafeZone,
       activityMode,
       motionRiskScore: experimentalMotionScore === null ? null : Math.round(experimentalMotionScore * 1000) / 100,
@@ -746,7 +744,6 @@ export default function Home({ navigation }) {
     monitoramentoAtivo,
     contextoSimulado,
     riskContextScore,
-    totalCrimesEntorno,
     insideSafeZone,
     activityMode,
     smartwatch.heartRateHistoryReady,
@@ -1099,6 +1096,7 @@ export default function Home({ navigation }) {
                     <>
                       <Text style={styles.topoScoreResto}>Risco </Text>
                       <Text style={[styles.topoScoreNumero, { color: riskAccent }]}>{displayLevel.toLowerCase()}</Text>
+                      {contextoDaRegiao?.origem === 'cidade' && <Text style={styles.topoScoreResto}> · estimativa da cidade</Text>}
                     </>
                   ) : (
                     <Text style={styles.topoScoreResto}>Sem dados da região</Text>
