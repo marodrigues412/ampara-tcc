@@ -1,8 +1,14 @@
-# Ampara
+<div align="center">
+  <img src="site/public/share-ampara.jpg" alt="Ampara: tecnologia que percebe. Proteção que acompanha." width="100%" />
+  <p><strong>Trabalho de Conclusão de Curso em Ciência da Computação</strong><br />Instituto Mauá de Tecnologia · 2026</p>
+  <p><a href="https://ampara.info">Site</a> · <a href="https://www.instagram.com/amparainfo/">Instagram</a> · <a href="mailto:amparainfo2026@gmail.com">Contato</a></p>
+</div>
+
+## Sobre o projeto
 
 O Ampara é um aplicativo acadêmico desenvolvido como Trabalho de Conclusão de Curso em Ciência da Computação no Instituto Mauá de Tecnologia. A proposta é apoiar mulheres durante deslocamentos e atividades do cotidiano, combinando informações de contexto, recursos de acompanhamento e uma rede de confiança escolhida pela própria usuária.
 
-O projeto investiga uma questão importante: como a tecnologia pode contribuir para mais autonomia e apoio sem transferir para a mulher a responsabilidade pela violência e sem prometer uma segurança que nenhum aplicativo pode garantir?
+O projeto investiga como a tecnologia pode contribuir para mais autonomia e apoio sem transferir para a mulher a responsabilidade pela violência e sem prometer uma segurança que nenhum aplicativo pode garantir.
 
 > **Importante:** o Ampara é um protótipo em desenvolvimento. Seu índice é experimental, não é uma avaliação validada de risco e não prevê crimes. O aplicativo não substitui os serviços de emergência e não chama a polícia. Em perigo imediato, ligue para **190**. Para orientação e denúncias de violência contra a mulher, ligue para **180**.
 
@@ -160,12 +166,12 @@ O app pode tratar dados de conta, localização, contatos escolhidos e sinais de
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="site/public/maria-site.webp" width="220" alt="Maria Eduarda Rodrigues" /><br />
+      <img src="site/public/maria-site.webp" height="220" alt="Maria Eduarda Rodrigues" /><br />
       <strong>Maria Eduarda Rodrigues</strong><br />
       <a href="https://github.com/marodrigues412">GitHub</a> · <a href="https://www.linkedin.com/in/marodrigu3s/">LinkedIn</a>
     </td>
     <td align="center" width="50%">
-      <img src="site/public/amanda-site.webp" width="220" alt="Amanda Herculano" /><br />
+      <img src="site/public/amanda-site.webp" height="220" alt="Amanda Herculano" /><br />
       <strong>Amanda Herculano</strong><br />
       <a href="https://github.com/amandaherculano">GitHub</a> · <a href="https://www.linkedin.com/in/amanda-herculano/">LinkedIn</a>
     </td>
