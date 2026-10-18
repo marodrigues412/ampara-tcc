@@ -4,14 +4,25 @@ O sistema é híbrido. Só o movimento do celular usa aprendizado de máquina (I
 
 ## Pipeline
 
-1. **Camada 1, contexto:** faixa do mapa SSP município × bairro × período (`context_risk_map`), com a reserva município × período (`context_risk_map_cidade`) quando o bairro não tem célula. Local seguro (80 m) baixa uma faixa.
+1. **Camada 1, contexto:** faixa do mapa SSP município × bairro × período (`context_risk_map`), com a reserva município × período (`context_risk_map_cidade`) quando o bairro não tem célula. Dentro de um local seguro cadastrado (80 m), o contexto é baixo.
 2. **Camada 2, corpo:** sinais disponíveis na leitura, sem imputar.
    - BPM: z-score contra a última hora, normalizado (z − 0,5)/2 em [0, 1].
    - Movimento do celular: Isolation Forest sobre uma janela de 2,56 s do acelerômetro a 10 Hz (magnitude média, desvio-padrão, pico e jerk máximo).
    - Movimento do relógio: limites próprios do pulso (0 / 0,5 / 1), sem modelo treinado.
-   - Pesos 60/20/20 com relógio; só celular (iPhone, Android sem relógio) = 100% movimento do celular. Modo atividade: movimento com metade do peso.
-3. **Camada 3, fusão:** matriz 3×3 da orientação. O alerta automático só abre quando a matriz dá alto por 5 s contínuos (contagem regressiva de 10 s); moderado reforça o monitoramento em silêncio; baixo não faz nada. Um pico forte do celular (≥ 2,8 g na janela) não abre alerta sozinho: entra na Camada 2 como movimento do celular = 1 e passa pela matriz. Só o SOS manual é imediato.
+   - Pesos 60/20/20 com relógio. Modo atividade: movimento com metade do peso (só celular: o movimento não sobe o corpo).
+   - **Princípio de corroboração** (abaixo): sem relógio, o corpo vai no máximo a médio.
+3. **Camada 3, fusão:** matriz 3×3 da orientação. O nível da matriz passa por um estabilizador: **sobe só depois de 5 s seguidos no nível novo e desce só depois de 10 s estável**. Esse nível é o mesmo na tela e no alerta: a contagem regressiva de 10 s abre quando ele chega a alto. Moderado reforça o monitoramento em silêncio; baixo não faz nada. Só o SOS manual é imediato.
 4. Cada avaliação vai para `risk_assessments` (RLS por usuária) com nível, faixa e origem do contexto e modo de sensores — sem a nota da célula nem o bairro.
+
+## Decisão de projeto: princípio de corroboração (18/10/2026)
+
+O acelerômetro do celular sozinho não tem a mesma confiança que batimento + movimento: chacoalhar o celular, correr para o ônibus ou deixá-lo cair dá um sinal parecido com o de uma agressão, e sem outro sensor não há como distinguir. No teste no iPhone (modo só celular), um chacoalhão levava o corpo a alto e, numa região média, o topo ia de baixo para alto na hora. Por isso:
+
+- **Sem batimento e sem relógio (iPhone, Android sem relógio), o corpo nunca passa de médio.** E só chega a médio se o movimento atípico do celular (Isolation Forest acima de 0,33 ou pico ≥ 2,8 g na janela) se mantiver por pelo menos 10 s seguidos (interrupções de até 1 s não zeram a sequência). Um pico isolado não muda nada. No modo atividade, nem o movimento mantido sobe o corpo.
+- **Com relógio, alto exige confirmação do corpo:** o batimento acima da faixa baixa ou o movimento do relógio (≥ 0,5). Sem confirmação, o corpo fica em médio. Com os pesos de hoje (60/20/20), o celular sozinho não leva o corpo a alto; a regra protege se os pesos mudarem.
+- Consequência na matriz: só celular, região média → no máximo moderado (silencioso); região alta + agitação mantida → alto e alerta (depois de 10 s de agitação e mais 5 s de alto). Em local seguro, o contexto é baixo e o resultado fica em baixo.
+
+É uma escolha das autoras, não está na orientação do TCC. Implementação: `mobile/services/threeLayerRisk.js` (`avaliarCorpo`, `acompanharMovimento`, `estabilizarNivel`), com testes em `mobile/__tests__/alertaSoPelaMatriz.test.mjs`.
 
 ## Treino e avaliação do Isolation Forest (modelo `uci-har-motion-if-v2`)
 
@@ -35,7 +46,9 @@ Simulação com as funções do próprio app, amostra a amostra, sobre o sinal c
 
 Com a v2, a regra de 3 s ficava a 0,3 s do limite; a regra adotada é 5 s contínuos (decisão das autoras, 18/10/2026). Pico acima de 2,8 g não aconteceu em caminhada.
 
-Limites dessa estimativa: são só 33 minutos (zero alertas significa até ~6,7/h com 95% de confiança); as gravações contínuas do UCI HAR têm ~13 s de mediana (máx. 22 s), o que corta sequências longas e impede avaliar regras de 10 s ou mais; o celular estava preso à cintura, não no bolso ou na bolsa. Não mede detecção de violência, emergência ou risco real.
+**Com a corroboração (regra atual):** mesma caminhada, caminho completo do app (janela, Isolation Forest v2 + pico, sequência de 10 s, corroboração, matriz, nível estabilizado, alerta). Com contexto alto e com contexto médio: **0 alertas em 32,9 min (até 6,7/h com 95% de confiança)**, corpo nunca em médio e a tela nunca em alto. A maior sequência de movimento atípico na caminhada durou 5,4 s, metade dos 10 s exigidos. Com contexto alto, a tela fica em moderado (alto × corpo baixo), sem alerta.
+
+Limites dessa estimativa: são só 33 minutos (zero alertas significa até ~6,7/h com 95% de confiança); as gravações contínuas do UCI HAR têm ~13 s de mediana (máx. 22 s), o que corta sequências longas (a de 10 s cabe, mas no limite); o celular estava preso à cintura, não no bolso ou na bolsa. Não mede detecção de violência, emergência ou risco real.
 
 ## Próximos passos antes de uso operacional
 

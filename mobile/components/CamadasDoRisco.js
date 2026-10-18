@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { LayoutAnimation, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Brand } from '../constants/brandTheme'
-import { ROTULOS_DO_MODO } from '../services/threeLayerRisk'
 
 // "Por que seu risco está assim", no score de 3 camadas: contexto da região (mapa SSP
 // por bairro, dia e período), corpo (sensores disponíveis agora) e o cruzamento das
@@ -20,7 +19,23 @@ const MOTIVO_DA_ESTIMATIVA = {
 }
 const PERIODO = { madrugada: 'madrugada', manha: 'manhã', tarde: 'tarde', noite: 'noite' }
 
-const porcento = (valor) => (valor == null ? '—' : `${Math.round(valor * 100)}%`)
+// O corpo em palavras simples, sem números técnicos.
+function descreverCorpo(corpo) {
+  const s = corpo.sinais ?? {}
+  const partes = []
+  if (s.bpm != null) {
+    partes.push(s.bpm > 0.66 ? 'batimento bem acima do seu normal' : s.bpm > 0.33 ? 'batimento um pouco acima do seu normal' : 'batimento normal')
+  }
+  if (s.movimentoRelogio != null) {
+    partes.push(s.movimentoRelogio >= 1 ? 'movimento brusco no relógio' : s.movimentoRelogio >= 0.5 ? 'movimento agitado no relógio' : 'movimento normal no relógio')
+  }
+  if (s.movimentoCelular != null) {
+    partes.push(corpo.movimentoSustentado ? 'movimento agitado há mais de 10 segundos' : 'movimento normal')
+  }
+  const texto = partes.join(', ')
+  const frase = texto.charAt(0).toUpperCase() + texto.slice(1)
+  return corpo.modo === 'so_celular' ? `${frase}. Sem o relógio, o corpo vai no máximo a médio.` : `${frase}.`
+}
 
 function Linha({ icone, cor, fundo, nome, detalhe, faixa }) {
   return (
@@ -59,16 +74,10 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
     ? 'Buscando o bairro…'
     : !contexto.disponivel
       ? MOTIVO_SEM_CONTEXTO[contexto.motivo]
-      : `${contexto.origem === 'cidade' ? `Estimativa da cidade (${MOTIVO_DA_ESTIMATIVA[contexto.motivo]})` : celula.bairro.toLowerCase()} · ${PERIODO[celula.periodo]}${contexto.localSeguroAplicado ? ' · local seguro baixou uma faixa' : ''}`
+      : `${contexto.origem === 'cidade' ? `Estimativa da cidade (${MOTIVO_DA_ESTIMATIVA[contexto.motivo]})` : celula.bairro.toLowerCase()} · ${PERIODO[celula.periodo]}${contexto.localSeguroAplicado ? ' · em local seguro: contexto baixo' : ''}`
 
-  const s = corpo?.sinais ?? {}
-  const sinais = [
-    s.bpm != null && `BPM ${porcento(s.bpm)}`,
-    s.movimentoCelular != null && `celular ${porcento(s.movimentoCelular)}`,
-    s.movimentoRelogio != null && `relógio ${porcento(s.movimentoRelogio)}`,
-  ].filter(Boolean).join(' · ')
   const detalheCorpo = corpo?.disponivel
-    ? `Sensores: ${ROTULOS_DO_MODO[corpo.modo]} · ${sinais} · escore ${porcento(corpo.escore)}`
+    ? descreverCorpo(corpo)
     : 'Aguardando os primeiros segundos de movimento'
 
   return (
@@ -99,7 +108,7 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
             <Text style={styles.nota}>Monitoramento reforçado: o app registra sua posição com mais frequência, sem alertas.</Text>
           )}
           <Text style={styles.nota}>
-            O resultado cruza as duas faixas numa matriz 3×3. A região vem de registros públicos da SSP; o movimento do celular é avaliado por um modelo de detecção de anomalia, e o relógio, por limites fixos. É uma estimativa, não um diagnóstico.
+            O resultado cruza as duas faixas numa matriz 3×3 e só muda depois de alguns segundos estável, para não piscar. A região vem de registros públicos da SSP; o movimento do celular é avaliado por um modelo de detecção de anomalia, e o relógio, por limites fixos. É uma estimativa, não um diagnóstico.
           </Text>
         </View>
       )}

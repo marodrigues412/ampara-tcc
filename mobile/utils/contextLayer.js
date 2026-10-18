@@ -9,7 +9,8 @@
 // - bairro sem célula usa a estimativa da cidade; sem ela também = "indisponível",
 //   nunca "baixo";
 // - o horário não soma de novo por fora: o mapa já separa por período;
-// - local seguro (80 m) baixa uma faixa — extensão nossa, não está na orientação.
+// - dentro de um local seguro cadastrado (80 m), o contexto é baixo — extensão nossa,
+//   não está na orientação (decisão das autoras, 18/10/2026).
 
 export const PERIODOS = ['madrugada', 'manha', 'tarde', 'noite']
 const FAIXAS = ['baixo', 'medio', 'alto']
@@ -156,7 +157,7 @@ export function avaliarContexto({ municipio, bairro, celula, celulaDaCidade = nu
     motivo: motivoDoBairro,
     origem: motivoDoBairro ? 'cidade' : 'bairro',
     faixaDoMapa,
-    faixa: emLocalSeguro ? baixarUmaFaixa(faixaDoMapa) : faixaDoMapa,
+    faixa: emLocalSeguro ? 'baixo' : faixaDoMapa,
     escore: Number(escolhida.escore_contexto),
     celula: escolhida,
     localSeguroAplicado: Boolean(emLocalSeguro) && faixaDoMapa !== 'baixo',
