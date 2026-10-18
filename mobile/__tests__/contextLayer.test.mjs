@@ -54,6 +54,28 @@ test('nomes do geocodificador viram nomes da SSP', () => {
   assert.deepEqual(localDoEndereco({ city: 'São Paulo', district: '' }), { municipio: 'S.PAULO', bairro: null })
 })
 
+test('endereço do iOS (sem formattedAddress) e do Android, com vários resultados', () => {
+  const iphone = [
+    { city: 'São Paulo', district: null, subregion: null, name: 'Av. Paulista, 1000' },
+    { city: 'São Paulo', district: 'Bela Vista', subregion: null },
+  ]
+  assert.deepEqual(localDoEndereco(iphone), { municipio: 'S.PAULO', bairro: 'BELA VISTA' })
+
+  const android = [{
+    city: null, subregion: 'São Paulo', district: null,
+    formattedAddress: 'R. Augusta, 100 - Consolação, São Paulo - SP, 01304-000, Brasil',
+  }]
+  assert.deepEqual(localDoEndereco(android), { municipio: 'S.PAULO', bairro: 'CONSOLACAO' })
+
+  // Cidade do endereço formatado diferente do município: não usa.
+  assert.equal(localDoEndereco([{
+    city: 'São Paulo', district: null,
+    formattedAddress: 'R. A, 1 - Centro, Osasco - SP, 06000-000, Brasil',
+  }]).bairro, null)
+  assert.deepEqual(localDoEndereco([]), { municipio: null, bairro: null })
+  assert.deepEqual(localDoEndereco(null), { municipio: null, bairro: null })
+})
+
 test('acha o bairro por nome exato, abreviado ou sem o complemento de homônimo', () => {
   const celulas = [
     celula('BELA VISTA', 0.1),

@@ -89,14 +89,31 @@ export function baixarUmaFaixa(faixa) {
   return indice <= 0 ? faixa : FAIXAS[indice - 1]
 }
 
-// Endereço do expo-location → chave do mapa. No Android a cidade às vezes vem só em
-// subregion; o bairro vem em district (subLocality) nas duas plataformas.
-export function localDoEndereco(endereco) {
-  if (!endereco) return { municipio: null, bairro: null }
-  return {
-    municipio: municipioDaSsp(endereco.city) ?? municipioDaSsp(endereco.subregion),
-    bairro: normalizarNome(endereco.district) || null,
-  }
+// Bairro dentro do formattedAddress do Android, no formato brasileiro do Google:
+// "R. Augusta, 100 - Bela Vista, São Paulo - SP, 01304-000, Brasil". Só aceita se a
+// cidade logo depois for a mesma do município, para não pegar um pedaço da rua.
+export function bairroDoEnderecoFormatado(texto, municipio) {
+  if (!texto || !municipio) return null
+  const encontrado = String(texto).match(/ - ([^,]+), ([^,]+?) - [A-Z]{2}\b/)
+  if (!encontrado || municipioDaSsp(encontrado[2]) !== municipio) return null
+  return normalizarNome(encontrado[1]) || null
+}
+
+// Endereço(s) do expo-location → chave do mapa. Nas duas plataformas o expo-location
+// põe o bairro em district (subLocality: CLPlacemark no iOS, Address no Android) e a
+// cidade em city (locality), com subregion (subAdministrativeArea) de reserva — no
+// Android a cidade às vezes vem só ali. O geocodificador pode devolver mais de um
+// resultado e o primeiro vir sem bairro, por isso olha todos. Só o Android tem
+// formattedAddress, usado em último caso.
+export function localDoEndereco(enderecos) {
+  const lista = (Array.isArray(enderecos) ? enderecos : [enderecos]).filter(Boolean)
+  const municipio = lista
+    .map((e) => municipioDaSsp(e.city) ?? municipioDaSsp(e.subregion))
+    .find(Boolean) ?? null
+  const bairro = lista.map((e) => normalizarNome(e.district)).find(Boolean)
+    ?? lista.map((e) => bairroDoEnderecoFormatado(e.formattedAddress, municipio)).find(Boolean)
+    ?? null
+  return { municipio, bairro }
 }
 
 // Acha o bairro entre as células de um município/dia/período. Tenta, em ordem:
