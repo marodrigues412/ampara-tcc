@@ -6,7 +6,9 @@ import { Brand } from '../constants/brandTheme'
 // "Por que seu risco está assim", no score de 3 camadas: contexto da região (mapa SSP
 // por bairro, dia e período), corpo (sensores disponíveis agora) e o cruzamento das
 // duas na matriz 3×3. Fechada, mostra as duas faixas numa linha só.
+// "Corpo baixo", mas "região baixa": a concordância muda com o substantivo.
 const ROTULO_DA_FAIXA = { baixo: 'baixo', medio: 'médio', alto: 'alto' }
+const ROTULO_DA_REGIAO = { baixo: 'baixa', medio: 'média', alto: 'alta' }
 const COR_DA_FAIXA = { baixo: Brand.green, medio: Brand.amber, alto: Brand.danger }
 const MOTIVO_SEM_CONTEXTO = {
   fora_da_cobertura: 'Município fora do mapa',
@@ -37,7 +39,7 @@ function descreverCorpo(corpo) {
   return corpo.modo === 'so_celular' ? `${frase}. Sem o relógio, o corpo vai no máximo a médio.` : `${frase}.`
 }
 
-function Linha({ icone, cor, fundo, nome, detalhe, faixa }) {
+function Linha({ icone, cor, fundo, nome, detalhe, faixa, rotulos = ROTULO_DA_FAIXA }) {
   return (
     <View style={styles.linha}>
       <View style={[styles.icone, { backgroundColor: fundo }]}>
@@ -48,7 +50,7 @@ function Linha({ icone, cor, fundo, nome, detalhe, faixa }) {
         {!!detalhe && <Text style={styles.detalhe}>{detalhe}</Text>}
       </View>
       <Text style={[styles.faixa, { color: faixa ? COR_DA_FAIXA[faixa] : '#8A8590' }]}>
-        {faixa ? ROTULO_DA_FAIXA[faixa] : '—'}
+        {faixa ? rotulos[faixa] : '—'}
       </Text>
     </View>
   )
@@ -59,7 +61,7 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
   const textoContexto = !contexto
     ? 'calculando'
     : contexto.disponivel
-      ? `${ROTULO_DA_FAIXA[contexto.faixa]}${contexto.origem === 'cidade' ? ' (estimativa da cidade)' : ''}`
+      ? `${ROTULO_DA_REGIAO[contexto.faixa]}${contexto.emLocalSeguro ? ' (local seguro)' : contexto.origem === 'cidade' ? ' (estimativa da cidade)' : ''}`
       : 'sem dados'
   const textoCorpo = !corpo?.disponivel ? 'calculando' : ROTULO_DA_FAIXA[corpo.faixa]
   const resumo = `Região ${textoContexto} · corpo ${textoCorpo}`
@@ -74,7 +76,7 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
     ? 'Buscando o bairro…'
     : !contexto.disponivel
       ? MOTIVO_SEM_CONTEXTO[contexto.motivo]
-      : `${contexto.origem === 'cidade' ? `Estimativa da cidade (${MOTIVO_DA_ESTIMATIVA[contexto.motivo]})` : celula.bairro.toLowerCase()} · ${PERIODO[celula.periodo]}${contexto.localSeguroAplicado ? ' · em local seguro: contexto baixo' : ''}`
+      : `${contexto.origem === 'cidade' ? `Estimativa da cidade (${MOTIVO_DA_ESTIMATIVA[contexto.motivo]})` : celula.bairro.toLowerCase()} · ${PERIODO[celula.periodo]}${contexto.emLocalSeguro ? ' · local seguro' : ''}`
 
   const detalheCorpo = corpo?.disponivel
     ? descreverCorpo(corpo)
@@ -98,7 +100,7 @@ export default function CamadasDoRisco({ contexto, corpo, resultado, rotuloDoNiv
 
       {aberta && (
         <View>
-          <Linha icone="map-outline" cor="#3F6A86" fundo="#E9EFF2" nome="Região e horário" detalhe={detalheContexto} faixa={contexto?.disponivel ? contexto.faixa : null} />
+          <Linha icone="map-outline" cor="#3F6A86" fundo="#E9EFF2" nome="Região e horário" detalhe={detalheContexto} faixa={contexto?.disponivel ? contexto.faixa : null} rotulos={ROTULO_DA_REGIAO} />
           <Linha icone="pulse-outline" cor={Brand.amber} fundo={Brand.amberSoft} nome="Corpo" detalhe={detalheCorpo} faixa={corpo?.disponivel ? corpo.faixa : null} />
           <View style={styles.linha}>
             <Text style={[styles.nome, styles.total]}>Resultado</Text>

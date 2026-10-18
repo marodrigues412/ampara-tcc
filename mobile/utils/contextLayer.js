@@ -161,5 +161,6 @@ export function avaliarContexto({ municipio, bairro, celula, celulaDaCidade = nu
     escore: Number(escolhida.escore_contexto),
     celula: escolhida,
     localSeguroAplicado: Boolean(emLocalSeguro) && faixaDoMapa !== 'baixo',
+    emLocalSeguro: Boolean(emLocalSeguro),
   }
 }
