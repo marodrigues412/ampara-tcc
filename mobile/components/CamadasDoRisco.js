@@ -50,7 +50,7 @@ function Linha({ icone, cor, fundo, nome, detalhe, faixa, rotulos = ROTULO_DA_FA
         {!!detalhe && <Text style={styles.detalhe}>{detalhe}</Text>}
       </View>
       <Text style={[styles.faixa, { color: faixa ? COR_DA_FAIXA[faixa] : '#8A8590' }]}>
-        {faixa ? rotulos[faixa] : '—'}
+        {faixa ? rotulos[faixa] : ''}
       </Text>
     </View>
   )

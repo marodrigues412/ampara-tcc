@@ -28,7 +28,7 @@ const slides = [
     id: '4',
     aba: 'Perfil',
     title: 'SOS com\num único toque',
-    desc: 'Cadastre seus contatos de emergência e dispare um alerta SOS segurando o botão — sua localização é enviada automaticamente por WhatsApp.',
+    desc: 'Cadastre seus contatos de emergência e dispare um alerta SOS segurando o botão. Sua localização é enviada automaticamente por WhatsApp.',
     image: require('../assets/images/sos_info.png'),
   },
   {

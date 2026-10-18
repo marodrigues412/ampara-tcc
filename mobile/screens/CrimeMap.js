@@ -498,7 +498,8 @@ const styles = StyleSheet.create({
   buscaCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 23, paddingHorizontal: 16, height: 46, backgroundColor: '#FFFFFF', marginBottom: 10 },
   buscaInput: { flex: 1, fontSize: 15, color: Brand.ink },
 
-  periodoTexto: { color: '#776C73', fontSize: 12, marginTop: 8 },
+  // Fonte e período ficam discretos: informação de rodapé, não de destaque.
+  periodoTexto: { color: '#A99FA6', fontSize: 10.5, marginTop: 6, letterSpacing: 0.2 },
 
   mapaArea: { flex: 1, marginHorizontal: 12, marginTop: 10, marginBottom: 8, borderRadius: 28, overflow: 'hidden' },
   mapa: { flex: 1 },

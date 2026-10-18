@@ -52,6 +52,7 @@ import AnelDaLia from '../components/AnelDaLia'
 import CamadasDoRisco from '../components/CamadasDoRisco'
 
 import { dispararAlerta } from '../services/alertService'
+import { nomeDoTelefone } from '../utils/contatos'
 import { FRACAO_DO_ANO } from '../utils/mapaCalor'
 
 // Raio do entorno da usuária: a área cujos crimes entram no score. É o mesmo raio que a
@@ -501,11 +502,12 @@ export default function Home({ navigation }) {
     if (data?.nome) setUserName(data.nome);
   }
   
-  // Só para mostrar a rede de apoio na tela; o envio do SOS busca os contatos de novo.
+  // Para mostrar a rede de apoio na tela e o nome ao lado do número no alerta enviado; o
+  // envio do SOS busca os contatos de novo.
   async function loadContatos() {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
-    const { data } = await supabase.from('emergency_contacts').select('id, nome').eq('user_id', user.id)
+    const { data } = await supabase.from('emergency_contacts').select('id, nome, telefone').eq('user_id', user.id)
     setContatos(data ?? [])
   }
 
@@ -721,7 +723,12 @@ export default function Home({ navigation }) {
       const { enderecos: addressArray } = await buscarEnderecoReverso({ latitude: userLat, longitude: userLon, prioridade: 'protecao', prazoMs: 4_000 });
       if (addressArray && addressArray.length > 0) {
         const a = addressArray[0];
-        enderecoFormatado = `${a.street || a.name || ''}${a.streetNumber ? ', ' + a.streetNumber : ''} - ${a.district || a.subregion || ''}, ${a.city || ''}`;
+        // Sem travessão nem hífen solto: rua e número, bairro, cidade, separados por vírgula.
+        enderecoFormatado = [
+          `${a.street || a.name || ''}${a.streetNumber ? ', ' + a.streetNumber : ''}`,
+          a.district || a.subregion,
+          a.city,
+        ].filter(Boolean).join(', ') || enderecoFormatado;
       }
     } catch (e) {
       console.log("Erro ao buscar endereço reverso no SOS:", e);
@@ -1244,11 +1251,16 @@ export default function Home({ navigation }) {
                         <Ionicons name="logo-whatsapp" size={14} color={Brand.green} />
                         <Text style={styles.feedbackLabel}>Mensagem de WhatsApp enviada para</Text>
                       </View>
-                      {sosFeedbackData.enviados.map((c) => (
-                        <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)}>
-                          <Text style={styles.feedbackContact}>{c}</Text>
-                        </TouchableOpacity>
-                      ))}
+                      {sosFeedbackData.enviados.map((c) => {
+                        const nome = nomeDoTelefone(c, contatos)
+                        return (
+                          <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)} accessibilityLabel={`${nome ? `${nome}, ` : ''}${c}. Toque para ligar`}>
+                            <Text style={styles.feedbackContact}>
+                              {nome ? <>{nome}  <Text style={styles.feedbackContactNumero}>{c}</Text></> : c}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })}
                     </>
                   )}
                   {sosFeedbackData.falhas.length > 0 && (
@@ -1257,11 +1269,16 @@ export default function Home({ navigation }) {
                         <Ionicons name="close-circle" size={14} color={Brand.danger} />
                         <Text style={styles.feedbackLabel}>Não foi possível enviar para · toque para ligar</Text>
                       </View>
-                      {sosFeedbackData.falhas.map((c) => (
-                        <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)}>
-                          <Text style={[styles.feedbackContact, { color: Brand.danger }]}>{c}</Text>
-                        </TouchableOpacity>
-                      ))}
+                      {sosFeedbackData.falhas.map((c) => {
+                        const nome = nomeDoTelefone(c, contatos)
+                        return (
+                          <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)} accessibilityLabel={`${nome ? `${nome}, ` : ''}${c}. Toque para ligar`}>
+                            <Text style={[styles.feedbackContact, { color: Brand.danger }]}>
+                              {nome ? <>{nome}  <Text style={styles.feedbackContactNumero}>{c}</Text></> : c}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })}
                     </>
                   )}
                 </View>
@@ -1392,7 +1409,7 @@ export default function Home({ navigation }) {
               </Text>
 
               <TouchableOpacity style={styles.btnSafe} onPress={handleUserIsSafe}>
-                <Text style={styles.btnSafeText}>Estou bem — Cancelar</Text>
+                <Text style={styles.btnSafeText}>Estou bem, cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1618,6 +1635,7 @@ const styles = StyleSheet.create({
   feedbackText: { fontSize: 14, color: '#333', fontStyle: 'italic' },
   sosFailDetail: { fontSize: 11, color: '#999', textAlign: 'center', marginTop: -12, marginBottom: 16 },
   feedbackContact: { fontSize: 15, color: TEMA.forte, fontWeight: '600', marginTop: 3 },
+  feedbackContactNumero: { fontSize: 13, color: Brand.muted, fontWeight: '400' },
 
   overlayBottom: { flex: 1, backgroundColor: 'rgba(42,29,35,0.5)', justifyContent: 'flex-end' },
   cardModalBottom: { backgroundColor: '#FFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: '90%', overflow: 'hidden', elevation: 20 },

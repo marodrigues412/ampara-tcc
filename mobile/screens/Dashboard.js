@@ -5,6 +5,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { tallyContactAlerts } from '../utils/weeklyCalculator'
+import { nomeDoTelefone } from '../utils/contatos'
 import {
   nivelDoRisco, riscoMedio, riscoPorDia, tendencia, diasMonitorados, riscoDosTrajetos,
   horariosExpostos, descreverHorario, ORDEM_SEMANA, PERIODOS_GRADE,
@@ -79,7 +80,7 @@ const FAIXA_VISUAL = {
   sem_dados: { rotulo: 'Sem dados', cor: '#CFC6CB' },
 }
 
-const formatarRisco = (risco) => (risco == null ? '—' : risco.toFixed(1).replace('.', ','))
+const formatarRisco = (risco) => (risco == null ? 'sem dados' : risco.toFixed(1).replace('.', ','))
 const transporteDe = (id) => TRANSPORTES.find((t) => t.id === id) ?? TRANSPORTES[2]
 const formatarDataHora = (iso) => new Date(iso).toLocaleString('pt-BR', {
   weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
@@ -200,7 +201,6 @@ export default function Dashboard({ navigation }) {
   const trajetos = useMemo(() => riscoDosTrajetos(compromissos, casa, historico), [compromissos, casa, historico])
   const lugares = useMemo(() => lugaresFrequentes(historico), [historico])
   const rankingContatos = tallyContactAlerts(alertas, contatos)
-  const nomePorTelefone = useMemo(() => Object.fromEntries(contatos.map((c) => [c.telefone, c.nome])), [contatos])
   const semHistorico = media == null
   const diasPorNivel = useMemo(() => nivelPorDia(niveis ?? [], dias), [niveis, dias])
   const semNiveis = !diasPorNivel.some((d) => d.total > 0)
@@ -446,7 +446,7 @@ export default function Dashboard({ navigation }) {
     const nivelDoAlerta = String(alerta.nivel_risco ?? '').toLowerCase() === 'crítico' ? 'Alto' : alerta.nivel_risco
     const corDoNivel = { alto: Brand.danger, moderado: Brand.amber, baixo: Brand.green }[String(nivelDoAlerta ?? '').toLowerCase()]
     const temLocal = alerta.latitude != null && alerta.longitude != null
-    const destinatarios = (alerta.recipient_names ?? '').split(',').map((t) => t.trim()).filter(Boolean).map((tel) => nomePorTelefone[tel] || tel)
+    const destinatarios = (alerta.recipient_names ?? '').split(',').map((t) => t.trim()).filter(Boolean).map((tel) => nomeDoTelefone(tel, contatos) || tel)
     const endereco = enderecoAlerta?.id === alerta.id ? enderecoAlerta.texto : undefined
     popup = {
       icone: 'alert-circle-outline',
@@ -595,7 +595,7 @@ export default function Dashboard({ navigation }) {
             <View style={styles.secao}>
               <Titulo
                 titulo="Risco por dia"
-                explicacao="Quanto do tempo monitorado de cada dia ficou em risco baixo, moderado ou alto — o mesmo nível da tela Proteção, que cruza a região e o horário com os sensores. Cinza é tempo sem nível (calculando ou sem dados da região). Toque numa barra para ver o dia. É um resumo do seu histórico no app, não uma previsão."
+                explicacao="Quanto do tempo monitorado de cada dia ficou em risco baixo, moderado ou alto. É o mesmo nível da tela Proteção, que cruza a região e o horário com os sensores. Cinza é tempo sem nível (calculando ou sem dados da região). Toque numa barra para ver o dia. É um resumo do seu histórico no app, não uma previsão."
                 onExplicar={explicar}
               />
               {niveis === null ? (
@@ -771,7 +771,7 @@ export default function Dashboard({ navigation }) {
                     <View style={styles.numeros}>
                       <Numero valor={`${bpmMedio} bpm`} rotulo="média no período" />
                       {MOSTRAR_SCORE_DE_PONTOS && (
-                        <Numero valor={scoreExperimental == null ? '—' : `${formatarRisco(scoreExperimental)}/10`} rotulo="score experimental" />
+                        <Numero valor={scoreExperimental == null ? 'sem dados' : `${formatarRisco(scoreExperimental)}/10`} rotulo="score experimental" />
                       )}
                     </View>
                     <Text style={styles.nota}>{leiturasBpm} leituras de batimento no período.</Text>
@@ -1009,7 +1009,7 @@ export default function Dashboard({ navigation }) {
                       <Text style={styles.linhaNome}>SOS enviado</Text>
                       {!!alerta.recipient_names && (
                         <Text style={styles.linhaDetalhe} numberOfLines={1}>
-                          Para {alerta.recipient_names.split(',').map((t) => t.trim()).filter(Boolean).map((tel) => nomePorTelefone[tel] || tel).join(', ')}
+                          Para {alerta.recipient_names.split(',').map((t) => t.trim()).filter(Boolean).map((tel) => nomeDoTelefone(tel, contatos) || tel).join(', ')}
                         </Text>
                       )}
                     </View>
