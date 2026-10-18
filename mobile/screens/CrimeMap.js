@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Keyboard,
+  View, Text, StyleSheet, TouchableOpacity, TextInput, Keyboard,
   ActivityIndicator, Platform,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
@@ -46,14 +46,7 @@ const MapView = nativeMaps?.default
 const { Circle, Marker } = nativeMaps || {}
 
 // A SSP usa dezenas de descrições ("FURTO - OUTROS", "LESÃO CORPORAL DOLOSA"...). O banco
-// já agrupa em famílias; estas são as que o mapa oferece como filtro.
-const FILTROS_CRIME = [
-  { id: 'roubo', rotulo: 'Roubo' },
-  { id: 'furto', rotulo: 'Furto' },
-  { id: 'violencia', rotulo: 'Violência' },
-]
-
-// Grupos que o mapa mostra quando nenhum filtro está marcado. Ficam de fora:
+// já agrupa em famílias. O mapa mostra sempre estas três, sem filtro por tipo. Ficam de fora:
 // - trânsito: são acidentes (lesão e homicídio culposos), não um risco de ser atacada na
 //   rua, e pintavam de vermelho as avenidas movimentadas;
 // - outros: 92% são tráfico, porte e apreensão de droga ou arma. Não têm vítima e o
@@ -119,13 +112,10 @@ export default function CrimeMap({ route }) {
   const [desenhandoCalor, setDesenhandoCalor] = useState(false)
   const arrastandoRef = useRef(false)
   const fimDesenhoRef = useRef(null)
-  // Roubo e furto respondem pela maior parte das ocorrências e são o que afeta quem anda
-  // na rua. Abrir com os dois mantém a mancha de calor legível em vez de cobrir tudo.
-  const [tiposSelecionados, setTiposSelecionados] = useState(['roubo', 'furto'])
   const [mapaMovido, setMapaMovido] = useState(false)
   const cameraRef = useRef(null)
 
-  const gruposAtivos = tiposSelecionados.length ? tiposSelecionados : GRUPOS_NO_MAPA
+  const gruposAtivos = GRUPOS_NO_MAPA
 
   // A posição é lida ao abrir a aba, e não acompanhada o tempo todo: aqui ela só serve de
   // ponto de partida do mapa. O monitoramento contínuo é trabalho da Home.
@@ -163,7 +153,7 @@ export default function CrimeMap({ route }) {
   useEffect(() => { buscarPeriodoCrimes().then(setPeriodoCrimes) }, [])
   useEffect(() => () => clearTimeout(fimDesenhoRef.current), [])
 
-  // Grade do mapa de calor: acompanha a área visível e o filtro de tipo.
+  // Grade do mapa de calor: acompanha a área visível.
   useEffect(() => {
     let cancelado = false
     async function carregarCalor() {
@@ -190,9 +180,9 @@ export default function CrimeMap({ route }) {
     }
     carregarCalor()
     return () => { cancelado = true }
-    // gruposAtivos deriva de tiposSelecionados.
+    // gruposAtivos é constante (GRUPOS_NO_MAPA).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areaVisivel, centroInicial, tiposSelecionados])
+  }, [areaVisivel, centroInicial])
 
   // Leva o mapa até um ponto e o marca de rosa: vale para a busca e para quem chega de
   // outra tela (um compromisso da rotina, por exemplo).
@@ -273,9 +263,6 @@ export default function CrimeMap({ route }) {
     atualizarAreaVisivel(latitude, longitude, raioKm)
   }
 
-  const alternarTipo = (id) =>
-    setTiposSelecionados((atual) => atual.includes(id) ? atual.filter((t) => t !== id) : [...atual, id])
-
   // --- Desenho do calor (mesmas regras de cor da Home) ---
   const crimesGeoJSON = useMemo(() => ({
     type: 'FeatureCollection',
@@ -327,22 +314,6 @@ export default function CrimeMap({ route }) {
           )}
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtroRow}>
-          {FILTROS_CRIME.map((filtro) => {
-            const ativo = tiposSelecionados.includes(filtro.id)
-            return (
-              <TouchableOpacity
-                key={filtro.id}
-                style={[styles.filtroChip, ativo && styles.filtroChipAtivo]}
-                onPress={() => alternarTipo(filtro.id)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: ativo }}
-              >
-                <Text style={[styles.filtroTexto, ativo && styles.filtroTextoAtivo]}>{filtro.rotulo}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
         <Text style={styles.periodoTexto}>
           Últimos 6 meses{periodoCrimes ? ` (${periodoCrimes})` : ''} · SSP-SP
         </Text>
@@ -527,11 +498,6 @@ const styles = StyleSheet.create({
   buscaCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 23, paddingHorizontal: 16, height: 46, backgroundColor: '#FFFFFF', marginBottom: 10 },
   buscaInput: { flex: 1, fontSize: 15, color: Brand.ink },
 
-  filtroRow: { gap: 8, paddingRight: 20 },
-  filtroChip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20, backgroundColor: '#FFF' },
-  filtroChipAtivo: { backgroundColor: TEMA.forte },
-  filtroTexto: { fontSize: 13, color: TEMA.forte, fontWeight: '600' },
-  filtroTextoAtivo: { color: '#FFF' },
   periodoTexto: { color: '#776C73', fontSize: 12, marginTop: 8 },
 
   mapaArea: { flex: 1, marginHorizontal: 12, marginTop: 10, marginBottom: 8, borderRadius: 28, overflow: 'hidden' },
