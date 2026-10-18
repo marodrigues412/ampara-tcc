@@ -52,6 +52,18 @@ test('loads the committed UCI model artifact in the app inference format', () =>
   assert.ok(score.anomalyScore >= 0 && score.anomalyScore <= 1)
 })
 
+test('model v2: jerk on the same scale the app computes (10 Hz, g/s)', () => {
+  const model = JSON.parse(readFileSync(new URL('../models/isolationForestMotionModel.json', import.meta.url)))
+  assert.equal(model.modelVersion, 'uci-har-motion-if-v2')
+  assert.equal(model.featureNames[3], 'max_jerk_g_per_second')
+  // A v1 tinha média ~18,8 g/s (×50 a 10 Hz); com ×10 a média de treino fica ~3,8 g/s.
+  assert.ok(model.scalerMean[3] > 2 && model.scalerMean[3] < 6, String(model.scalerMean[3]))
+  // Uma caminhada típica pelo cálculo do app: degraus de ~0,4 g entre amostras = 4 g/s.
+  const window = { sampleCount: 26, durationMs: 2500, meanMagnitudeG: 1.03, stdDevMagnitudeG: 0.2, peakMagnitudeG: 1.5, jerkGPerSecond: 4 }
+  const score = scoreIsolationForest(extractPhoneMotionFeatures(window), model)
+  assert.ok(score.anomalyScore < 0.33, `caminhada típica não pode cair em médio/alto: ${score.anomalyScore}`)
+})
+
 test('uses the professor thresholds for body bands', () => {
   assert.equal(classifyScoreBand(0.33), 'baixo')
   assert.equal(classifyScoreBand(0.34), 'medio')
