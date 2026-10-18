@@ -38,7 +38,7 @@ import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
 import { extractPhoneMotionFeatures, scoreIsolationForest } from '../services/isolationForestMotion'
-import { acaoDoNivel, avaliarCorpo, fundirCamadas, movimentoDoRelogio } from '../services/threeLayerRisk'
+import { ALTO_SUSTENTADO_MS, acaoDoNivel, avaliarCorpo, fundirCamadas, movimentoDoRelogio } from '../services/threeLayerRisk'
 import { publicarEstadoDoRisco } from '../services/estadoDoRisco'
 import isolationForestMotionModel from '../models/isolationForestMotionModel.json'
 import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
@@ -63,9 +63,6 @@ const SHOW_PRESENTATION_MODE = false
 // Modo demonstração (estande): simula só o bairro da Camada 1. Aparece no build de
 // desenvolvimento; para um build de release, troque por true.
 const MOSTRAR_DEMONSTRACAO = __DEV__
-// Nível alto precisa durar isso antes de abrir o alerta: uma janela de movimento
-// isolada (2,56 s) não basta. Escolha de engenharia, não está na orientação.
-const ALTO_SUSTENTADO_MS = 3_000
 // Monitoramento reforçado (nível moderado): grava a posição nesse intervalo, sem avisar.
 const INTERVALO_REFORCADO_MS = 60_000
 const VERSAO_DO_SCORE = 'contexto-ssp+corpo-3camadas-v2.0'

@@ -10,7 +10,7 @@ O sistema é híbrido. Só o movimento do celular usa aprendizado de máquina (I
    - Movimento do celular: Isolation Forest sobre uma janela de 2,56 s do acelerômetro a 10 Hz (magnitude média, desvio-padrão, pico e jerk máximo).
    - Movimento do relógio: limites próprios do pulso (0 / 0,5 / 1), sem modelo treinado.
    - Pesos 60/20/20 com relógio; só celular (iPhone, Android sem relógio) = 100% movimento do celular. Modo atividade: movimento com metade do peso.
-3. **Camada 3, fusão:** matriz 3×3 da orientação. Alto sustentado por 3 s contínuos abre a contagem regressiva; moderado reforça o monitoramento em silêncio; baixo não faz nada. SOS manual e impacto forte do celular continuam imediatos.
+3. **Camada 3, fusão:** matriz 3×3 da orientação. Alto sustentado por 5 s contínuos abre a contagem regressiva; moderado reforça o monitoramento em silêncio; baixo não faz nada. SOS manual e impacto forte do celular continuam imediatos.
 4. Cada avaliação vai para `risk_assessments` (RLS por usuária) com nível, faixa e origem do contexto e modo de sensores — sem a nota da célula nem o bairro.
 
 ## Treino e avaliação do Isolation Forest (modelo `uci-har-motion-if-v2`)
@@ -33,7 +33,7 @@ Simulação com as funções do próprio app, amostra a amostra, sobre o sinal c
 | v1 (jerk do app 5× menor que o do treino) | 13,3% | 16,4 alertas/h (IC 95% 7,5–31) | 7,3/h (2,0–19) | — |
 | v2 (jerk igual nos dois) | 2,3% | 0/h (IC 95% 0–6,7) | 0/h (0–6,7) | 2,7 s |
 
-Com a v2, a regra de 3 s fica a 0,3 s do limite. O gatilho de impacto (> 2,8 g) não disparou em caminhada.
+Com a v2, a regra de 3 s ficava a 0,3 s do limite; a regra adotada é 5 s contínuos (decisão das autoras, 18/10/2026). O gatilho de impacto (> 2,8 g) não disparou em caminhada.
 
 Limites dessa estimativa: são só 33 minutos (zero alertas significa até ~6,7/h com 95% de confiança); as gravações contínuas do UCI HAR têm ~13 s de mediana (máx. 22 s), o que corta sequências longas e impede avaliar regras de 10 s ou mais; o celular estava preso à cintura, não no bolso ou na bolsa. Não mede detecção de violência, emergência ou risco real.
 

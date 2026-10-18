@@ -15,6 +15,12 @@ export const PESOS_DO_CORPO = { bpm: 0.6, movimentoCelular: 0.2, movimentoRelogi
 // celular, o movimento voltaria a valer 100% e o modo atividade não teria efeito.
 export const FATOR_DO_MOVIMENTO_EM_ATIVIDADE = 0.5
 
+// Nível alto precisa durar isso, sem interrupção, antes de abrir o alerta automático.
+// Escolha das autoras (18/10/2026) a partir da simulação com o UCI HAR (modelo v2): em
+// caminhada normal, a maior sequência de "alto" foi 2,7 s, e 3 s ficava no limite.
+// SOS manual e impacto forte do celular não esperam (docs/score_bpm_ml.md).
+export const ALTO_SUSTENTADO_MS = 5_000
+
 const RELOGIO_RECENTE_MS = 5_000
 const RELOGIO_MIN_AMOSTRAS = 10
 
