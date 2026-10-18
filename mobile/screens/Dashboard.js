@@ -441,9 +441,10 @@ export default function Dashboard({ navigation }) {
     }
   } else if (detalhe?.tipo === 'alerta') {
     const { alerta } = detalhe
-    // nivel_risco é o rótulo gravado no envio: "Alto", "Moderado", "Baixo" (ou "Crítico"
-    // nos alertas de antes do score de 3 camadas).
-    const corDoNivel = { 'crítico': Brand.danger, alto: Brand.danger, moderado: Brand.amber, baixo: Brand.green }[String(alerta.nivel_risco ?? '').toLowerCase()]
+    // nivel_risco é o rótulo gravado no envio. Os níveis são só baixo, moderado e alto;
+    // alertas de antes do score de 3 camadas guardaram "Crítico" e aparecem como "Alto".
+    const nivelDoAlerta = String(alerta.nivel_risco ?? '').toLowerCase() === 'crítico' ? 'Alto' : alerta.nivel_risco
+    const corDoNivel = { alto: Brand.danger, moderado: Brand.amber, baixo: Brand.green }[String(nivelDoAlerta ?? '').toLowerCase()]
     const temLocal = alerta.latitude != null && alerta.longitude != null
     const destinatarios = (alerta.recipient_names ?? '').split(',').map((t) => t.trim()).filter(Boolean).map((tel) => nomePorTelefone[tel] || tel)
     const endereco = enderecoAlerta?.id === alerta.id ? enderecoAlerta.texto : undefined
@@ -456,7 +457,7 @@ export default function Dashboard({ navigation }) {
           {temLocal && (
             <LinhaDoPopup icone="location-outline" rotulo="Onde foi acionado" valor={endereco === undefined ? 'Buscando endereço…' : endereco ?? `${Number(alerta.latitude).toFixed(5)}, ${Number(alerta.longitude).toFixed(5)}`} />
           )}
-          {!!alerta.nivel_risco && <LinhaDoPopup icone="speedometer-outline" rotulo="Risco no momento" valor={alerta.nivel_risco} cor={corDoNivel} />}
+          {!!nivelDoAlerta && <LinhaDoPopup icone="speedometer-outline" rotulo="Risco no momento" valor={nivelDoAlerta} cor={corDoNivel} />}
           {destinatarios.length > 0 && <LinhaDoPopup icone="people-outline" rotulo="Enviado para" valor={destinatarios.join(', ')} />}
           {!!alerta.message && <LinhaDoPopup icone="chatbox-ellipses-outline" rotulo="Mensagem enviada" valor={alerta.message} />}
         </>

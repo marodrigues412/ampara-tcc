@@ -37,7 +37,7 @@ import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
 import { extractPhoneMotionFeatures, scoreIsolationForest } from '../services/isolationForestMotion'
-import { ALTO_SUSTENTADO_MS, acaoDoNivel, avaliarCorpo, fundirCamadas, movimentoDoRelogio } from '../services/threeLayerRisk'
+import { ALTO_SUSTENTADO_MS, PICO_FORTE_DO_CELULAR_G, acaoDoNivel, avaliarCorpo, fundirCamadas, movimentoDoRelogio } from '../services/threeLayerRisk'
 import { publicarEstadoDoRisco } from '../services/estadoDoRisco'
 import isolationForestMotionModel from '../models/isolationForestMotionModel.json'
 import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
@@ -197,11 +197,14 @@ export default function Home({ navigation }) {
   // Camada 2 (corpo): só os sinais que existem agora. Sem relógio ou com BPM velho, o
   // modo cai sozinho para "só celular"; quando o relógio volta, volta para "completo".
   const watchMotionAnomaly = movimentoDoRelogio(smartwatch.watchMotion, { activityMode })
+  // Pico forte do celular entra aqui, como sinal do corpo, e não como alerta direto.
+  const picoForteCelular = Number(phoneMotionWindow?.peakMagnitudeG) >= PICO_FORTE_DO_CELULAR_G
   const corpo = avaliarCorpo({
     heartRateZScore: heartRateBaseline.available ? heartRateBaseline.zScore : null,
     movimentoCelular: experimentalMotionScore,
     movimentoRelogio: watchMotionAnomaly,
     activityMode,
+    picoForteCelular,
   })
   // Camada 3: matriz 3×3. É o resultado oficial: mostra na tela e abre os alertas.
   const resultadoDoRisco = fundirCamadas({ contexto: contextoDaRegiao, corpo })
@@ -303,7 +306,7 @@ export default function Home({ navigation }) {
   const searchTimeout = useRef(null)
   const [userName, setUserName] = useState("Usuária");
 
-  const { magnitude, isHighRisk } = riskStatus
+  const { magnitude } = riskStatus
 
   const tiposOcorrencia = [
     'Homicídio Doloso',
@@ -336,8 +339,6 @@ export default function Home({ navigation }) {
   const [sosHoldFim, setSosHoldFim] = useState(null)
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
   const [sosFeedbackData, setSosFeedbackData] = useState({ status: 'enviando', mensagem: '', enviados: [], falhas: [], endereco: '', detalhe: '' });
-  const [simpleCheckVisible, setSimpleCheckVisible] = useState(false);
-  const [alertType, setAlertType] = useState('moderado');
 
   // --- Modo Monitoramento (liga/desliga detecção automática de risco) ---
   const [monitoramentoAtivo, setMonitoramentoAtivo] = useState(true);
@@ -469,19 +470,15 @@ export default function Home({ navigation }) {
     return () => clearTimeout(timer)
   }, [monitoramentoAtivo, nivelDoRisco])
 
-  // Gatilhos do alerta: impacto forte do celular (dispara na hora, como antes) ou nível
-  // alto sustentado das 3 camadas.
+  // Único gatilho automático: nível alto das 3 camadas por 5 s seguidos. Pico forte do
+  // celular só conta pela Camada 2; não há atalho por cima da matriz. SOS manual à parte.
   useEffect(() => {
     if (!monitoramentoAtivo) {
       setSustainedHighRisk(false);
       return;
     }
-    if (isHighRisk || altoSustentado) {
-      setSustainedHighRisk(true);
-    } else {
-      setSustainedHighRisk(false);
-    }
-  }, [monitoramentoAtivo, isHighRisk, altoSustentado]);
+    setSustainedHighRisk(altoSustentado);
+  }, [monitoramentoAtivo, altoSustentado]);
 
   // Nível moderado: monitoramento reforçado silencioso — a posição vai para o histórico
   // a cada minuto, mesmo parada, sem nenhum aviso na tela.
@@ -498,31 +495,22 @@ export default function Home({ navigation }) {
     return () => clearInterval(intervalo)
   }, [monitoramentoReforcado, userId])
 
-  // 1️⃣ GATILHO DO MODAL — o tipo sai do nível das 3 camadas (alto: contagem de 10 s;
-  // moderado: confirmação de 30 s; baixo ou sem nível: só "Tudo bem?")
+  // 1️⃣ GATILHO DO MODAL — só para o nível alto sustentado: contagem de 10 s. Moderado é
+  // monitoramento silencioso; baixo não faz nada.
   useEffect(() => {
     if (!monitoramentoAtivo) return;
     if (!sustainedHighRisk || alertaDisparado) return;
-    if (modalVisible || simpleCheckVisible) return;
+    if (modalVisible) return;
 
     const agora = Date.now();
     const emCooldownEnvio = lastAlertSentRef.current && (agora - lastAlertSentRef.current) < 60 * 1000;
     const emCooldownCancelamento = cancelCooldownRef.current && agora < cancelCooldownRef.current;
     if (emCooldownEnvio || emCooldownCancelamento) return;
 
-    if (nivelDoRisco === 'alto') {
-      setAlertType('critico');
-      setCountdown(10);
-      setModalVisible(true);
-    } else if (nivelDoRisco === 'moderado') {
-      setAlertType('moderado');
-      setCountdown(30);
-      setModalVisible(true);
-    } else {
-      setAlertType('simples');
-      setSimpleCheckVisible(true);
-    }
-  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, simpleCheckVisible, alertaDisparado, nivelDoRisco, activityMode, insideSafeZone]);
+    if (nivelDoRisco !== 'alto') return;
+    setCountdown(10);
+    setModalVisible(true);
+  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, alertaDisparado, nivelDoRisco]);
 
   // 2️⃣ O MOTOR SEGURO
   useEffect(() => {
@@ -549,7 +537,7 @@ export default function Home({ navigation }) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [countdown, isHighRisk, modalVisible, alertaDisparado]);
+  }, [countdown, modalVisible, alertaDisparado]);
 
   async function loadUserData() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -623,7 +611,6 @@ export default function Home({ navigation }) {
     if (!value) {
       if (timerRef.current) clearTimeout(timerRef.current)
       setModalVisible(false)
-      setSimpleCheckVisible(false)
       setAlertaDisparado(false)
       setSustainedHighRisk(false)
       cancelCooldownRef.current = Date.now() + 30 * 1000
@@ -849,7 +836,6 @@ export default function Home({ navigation }) {
   const handleUserIsSafe = () => {
     if (timerRef.current) clearTimeout(timerRef.current)
     setModalVisible(false)
-    setSimpleCheckVisible(false)
     setCountdown(30)
     setAlertaDisparado(false)
     setSustainedHighRisk(false)
@@ -1284,10 +1270,10 @@ export default function Home({ navigation }) {
           </>
         )}
         <View style={styles.forceRow}>
-          <Ionicons name="phone-portrait-outline" size={18} color={isHighRisk ? TEMA.forte : Brand.muted} />
-          <Text style={[styles.forceValue, { color: isHighRisk ? TEMA.forte : Brand.ink }]}>{magnitude}G</Text>
+          <Ionicons name="phone-portrait-outline" size={18} color={picoForteCelular ? TEMA.forte : Brand.muted} />
+          <Text style={[styles.forceValue, { color: picoForteCelular ? TEMA.forte : Brand.ink }]}>{magnitude}G</Text>
           <Text style={styles.forceLabel}>Acelerômetro do celular · {experimentalMotionScore == null ? 'aguardando' : `${Math.round(experimentalMotionScore * 100)}% atípico`}</Text>
-          {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
+          {picoForteCelular && <View style={styles.forcePill}><Text style={styles.forcePillText}>Pico forte</Text></View>}
         </View>
         {Platform.OS === 'ios' && (
           <Text style={styles.sensorAvailabilityNote}>A leitura cardíaca e o acelerômetro do relógio ficam disponíveis no Android.</Text>
@@ -1492,54 +1478,25 @@ export default function Home({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* MODAL CHECK SIMPLES — Nível 1 (score ≤ 5) */}
-      <Modal transparent visible={simpleCheckVisible} animationType="fade">
-        <View style={styles.overlayCentered}>
-          <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: Brand.green }]} />
-            <View style={styles.modalInner}>
-              <View style={{ alignItems: 'center', marginBottom: 8 }}>
-                <LiaAvatar size={72} reaction="checagem" />
-              </View>
-              <Text style={[styles.cardTitleCritical, { color: Brand.green }]}>Tudo bem?</Text>
-              <Text style={styles.cardSubtitle}>
-                O Ampara está monitorando você. Confirme que está segura.
-              </Text>
-              <TouchableOpacity style={[styles.btnSafe, { backgroundColor: Brand.green }]} onPress={handleUserIsSafe}>
-                <Text style={styles.btnSafeText}>Sim, estou bem</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btnPrimary, { marginTop: 10, backgroundColor: TEMA.forte }]}
-                onPress={() => { setSimpleCheckVisible(false); executarEnvioDeSocorro(); }}
-              >
-                <Text style={styles.btnPrimaryText}>Preciso de ajuda</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL CRONÔMETRO — Nível 2 (score 5-8) e Nível 3 (score > 8) */}
+      {/* MODAL CRONÔMETRO — nível alto das 3 camadas por 5 s seguidos */}
       <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: alertType === 'critico' ? Brand.danger : Brand.amber }]} />
+            <View style={[styles.modalStrip, { backgroundColor: Brand.danger }]} />
             <View style={styles.modalInner}>
               <View style={{ alignItems: 'center', marginBottom: 8 }}>
-                <LiaAvatar size={72} reaction={alertType === 'critico' ? 'critico' : 'checagem'} />
+                <LiaAvatar size={72} reaction="critico" />
               </View>
               <Text style={styles.cardTitleCritical}>
-                {alertType === 'critico' ? 'Alerta Crítico' : 'Confirma bem-estar?'}
+                Risco alto
               </Text>
               <Text style={styles.cardSubtitle}>
-                {alertType === 'critico'
-                  ? 'Risco alto detectado. Seus contatos serão acionados em:'
-                  : 'Movimento incomum detectado. Confirme que está segura.'}
+                Risco alto detectado. Seus contatos serão acionados em:
               </Text>
 
               <View style={{alignItems: 'center', marginVertical: 10}}>
-                <View style={[styles.timerCircle, { borderColor: alertType === 'critico' ? Brand.danger : Brand.amber }]}>
-                  <Text style={[styles.timerCountText, { color: alertType === 'critico' ? Brand.danger : Brand.amber }]}>{countdown}</Text>
+                <View style={[styles.timerCircle, { borderColor: Brand.danger }]}>
+                  <Text style={[styles.timerCountText, { color: Brand.danger }]}>{countdown}</Text>
                   <Text style={styles.timerSecondsText}>seg</Text>
                 </View>
               </View>
