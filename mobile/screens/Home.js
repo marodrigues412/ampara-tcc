@@ -24,6 +24,7 @@ import * as Location from 'expo-location'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRiskDetection } from '../hooks/useRiskDetection'
+import { useContextLayer } from '../hooks/useContextLayer'
 import { buscarResumoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
@@ -167,6 +168,13 @@ export default function Home({ navigation }) {
 
   const { data, location, riskStatus, currentScore, phoneMotionWindow, gpsSpeedDeltaMps } = useRiskDetection({ insideSafeZone, activityMode })
   const smartwatch = useSmartwatch(userId)
+  // Camada 1 do score de 3 camadas: faixa do mapa bairro × dia × período (SSP).
+  const { contexto: contextoDaRegiao, local: localDoContexto } = useContextLayer({ location, insideSafeZone })
+  const textoDaCamadaContexto = !contextoDaRegiao
+    ? 'calculando'
+    : contextoDaRegiao.disponivel
+      ? `${{ baixo: 'baixo', medio: 'médio', alto: 'alto' }[contextoDaRegiao.faixa]}${contextoDaRegiao.localSeguroAplicado ? ' (local seguro)' : ''}`
+      : 'sem dados da região'
   const motionRisk = useMemo(() => calculateMotionRiskScore({
     phoneMagnitudeG: riskStatus.magnitude,
     watchMotion: smartwatch.watchMotion,
@@ -1183,6 +1191,9 @@ export default function Home({ navigation }) {
                   </Text>
                 </View>
               )}
+              <Text style={styles.experimentalScoreDetail}>
+                Contexto da região{localDoContexto?.bairro ? ` (${localDoContexto.bairro})` : ''}: {textoDaCamadaContexto}
+              </Text>
               <Text style={styles.experimentalScoreDisclaimer}>
                 Prévia exploratória. Não validada, não aciona alertas e não substitui avaliação de segurança.
               </Text>
