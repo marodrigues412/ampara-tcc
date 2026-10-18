@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
+  ALTO_SUSTENTADO_MS,
   acaoDoNivel,
   avaliarCorpo,
   fundirCamadas,
@@ -146,4 +148,17 @@ test('ações por nível', () => {
   assert.equal(acaoDoNivel('moderado'), 'monitoramento_reforcado')
   assert.equal(acaoDoNivel('alto'), 'alerta')
   assert.equal(acaoDoNivel(null), 'nenhuma')
+})
+
+test('persistência: alto por 5 s contínuos; impacto forte e SOS manual não esperam', () => {
+  assert.equal(ALTO_SUSTENTADO_MS, 5_000)
+  const home = readFileSync(new URL('../screens/Home.js', import.meta.url), 'utf8')
+  // O timer recomeça quando o nível muda (dependência nivelDoRisco): mede tempo contínuo.
+  assert.match(home, /setTimeout\(\(\) => setAltoSustentado\(alto\), alto \? ALTO_SUSTENTADO_MS : 0\)/)
+  assert.match(home, /\}, \[monitoramentoAtivo, nivelDoRisco\]\)/)
+  // Impacto forte (isHighRisk) entra direto, sem passar pelo timer.
+  assert.match(home, /if \(isHighRisk \|\| altoSustentado\) \{/)
+  assert.ok(!/const ALTO_SUSTENTADO_MS/.test(home), 'a regra fica num lugar só (threeLayerRisk.js)')
+  // SOS manual: segurar 3 s chama o envio direto, sem depender do nível.
+  assert.match(home, /sosHoldTimerRef\.current = setTimeout\(\(\) => \{[\s\S]*?void executarEnvioDeSocorro\(\)[\s\S]*?\}, SOS_HOLD_MS\)/)
 })
