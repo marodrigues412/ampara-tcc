@@ -98,8 +98,11 @@ export default function ChatBot({ navigation, route }) {
   const [digitando, setDigitando] = useState(false)
   const [sobreVisivel, setSobreVisivel] = useState(false)
   const [tecladoVisivel, setTecladoVisivel] = useState(false)
-  // Com a chave ligada, cada pergunta vai com a localização, o risco, a rotina e o
-  // histórico resumido. Desligada (o padrão), vai só a pergunta.
+  // Com a chave ligada, cada pergunta vai com o contexto de services/contextoDaLia.js:
+  // bairro e cidade, ocorrências da região, nível de risco atual (com origem e
+  // sensores), próximo compromisso e data/hora. A coordenada vai para a função
+  // ampara-chat só para buscar lugares e não chega à IA. Desligada (o padrão), vai só
+  // a pergunta. O texto da chave na tela tem que dizer isso.
   const [personalizar, setPersonalizar] = useState(false)
   const listaRef = useRef(null)
   const reacaoLia = digitando ? 'pensando' : texto.trim() ? 'ouvindo' : mensagens.length === 1 ? 'oi' : 'ociosa'
@@ -132,7 +135,7 @@ export default function ChatBot({ navigation, route }) {
         setMensagens((atual) => [...atual, {
           id: `b${Date.now()}`,
           autor: 'bot',
-          texto: 'Sem acesso à localização, eu ainda uso seu risco, sua rotina e seu histórico, mas não consigo buscar lugares perto de você.',
+          texto: 'Sem acesso à localização, eu ainda uso seu nível de risco e sua rotina, mas não sei seu bairro nem consigo buscar lugares perto de você.',
         }])
       }
     } else {
@@ -261,7 +264,9 @@ export default function ChatBot({ navigation, route }) {
           <View style={styles.flex}>
             <Text style={styles.personalizarTitulo}>Personalizar com meus dados</Text>
             <Text style={styles.personalizarTexto}>
-              {personalizar ? 'Localização, risco, rotina e histórico vão junto com a pergunta' : 'Ligue para eu considerar onde você está e sua rotina'}
+              {personalizar
+                ? 'A Lia recebe sua localização aproximada (bairro e cidade), as ocorrências da região, seu nível de risco atual e seu próximo compromisso. A posição exata só serve para buscar lugares perto e não vai para a IA.'
+                : 'Ligue para a Lia considerar sua localização aproximada (bairro e cidade), seu nível de risco e sua rotina.'}
             </Text>
           </View>
           <Switch
@@ -269,7 +274,7 @@ export default function ChatBot({ navigation, route }) {
             onValueChange={alternarPersonalizar}
             trackColor={{ false: '#E6DCE0', true: TEMA.forte }}
             thumbColor="#FFF"
-            accessibilityLabel="Personalizar as respostas da Lia com meus dados"
+            accessibilityLabel="Personalizar as respostas da Lia com meus dados: compartilha sua localização aproximada, bairro e cidade, as ocorrências da região, seu nível de risco atual e seu próximo compromisso"
           />
         </View>
       </HeaderComCurvas>
