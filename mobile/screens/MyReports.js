@@ -85,7 +85,7 @@ export default function MyReports({ navigation }) {
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>Ocorrência em</Text>
           <Text style={styles.metaValue}>
-            {formatDataOcorrencia(item.data_ocorrencia) || '—'}
+            {formatDataOcorrencia(item.data_ocorrencia) || 'Data não informada'}
             {item.horario ? ` às ${item.horario}` : ''}
           </Text>
         </View>

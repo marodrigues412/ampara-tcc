@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { linhaNoFormatoAntigo, montarLinhaDaAvaliacao } from './riskAssessmentRow'
 
 export const RISK_ASSESSMENT_SAMPLE_INTERVAL_MS = 30_000
 
@@ -9,6 +10,8 @@ export async function getRecentHeartRateSamples(userId, now = Date.now()) {
     .from('risk_assessments')
     .select('bpm, measured_at')
     .eq('user_id', userId)
+    // Avaliações só com o celular (cenários 1 e 2) não têm BPM.
+    .not('bpm', 'is', null)
     .gte('measured_at', new Date(now - 60 * 60 * 1000).toISOString())
     .lte('measured_at', new Date(now + 10_000).toISOString())
     .order('measured_at', { ascending: true })
@@ -21,46 +24,30 @@ export async function getRecentHeartRateSamples(userId, now = Date.now()) {
   }))
 }
 
+const COLUNA_INEXISTENTE = 'PGRST204'
+const VALOR_NULO_PROIBIDO = '23502'
+let bancoSemMigracao = false
+
 export async function saveRiskAssessment(userId, assessment) {
   if (!userId || !assessment?.measuredAt) return
 
-  const { error } = await supabase
-    .from('risk_assessments')
-    .upsert({
-      user_id: userId,
-      measured_at: assessment.measuredAt,
-      bpm: assessment.bpm,
-      baseline_mean_bpm: assessment.baselineMeanBpm,
-      baseline_stddev_bpm: assessment.baselineStdDevBpm,
-      bpm_z_score: assessment.bpmZScore,
-      context_score: assessment.contextScore,
-      experimental_score: assessment.experimentalScore,
-      experimental_risk_level: assessment.experimentalRiskLevel,
-      hour_of_day: assessment.hourOfDay,
-      time_zone: assessment.timeZone,
-      nearby_crime_count: assessment.nearbyCrimeCount,
-      crime_density_per_km2: assessment.crimeDensityPerKm2,
-      inside_safe_zone: assessment.insideSafeZone,
-      activity_mode: assessment.activityMode,
-      motion_risk_score: assessment.motionRiskScore,
-      motion_anomaly_score: assessment.motionAnomalyScore,
-      phone_motion_risk_points: assessment.phoneMotionRiskPoints,
-      watch_motion_risk_points: assessment.watchMotionRiskPoints,
-      phone_mean_magnitude_g: assessment.phoneMeanMagnitudeG,
-      phone_magnitude_stddev_g: assessment.phoneMagnitudeStdDevG,
-      phone_peak_magnitude_g: assessment.phonePeakMagnitudeG,
-      phone_jerk_g_per_second: assessment.phoneJerkGPerSecond,
-      phone_motion_sample_count: assessment.phoneMotionSampleCount,
-      gps_speed_mps: assessment.gpsSpeedMps,
-      gps_speed_delta_mps: assessment.gpsSpeedDeltaMps,
-      watch_motion_rms_mps2: assessment.watchMotionRmsMps2,
-      watch_motion_peak_mps2: assessment.watchMotionPeakMps2,
-      watch_motion_jerk_mps3: assessment.watchMotionJerkMps3,
-      model_version: assessment.modelVersion,
-      source: assessment.source || 'Galaxy Watch',
-    }, { onConflict: 'user_id,measured_at' })
+  const linha = montarLinhaDaAvaliacao(userId, assessment)
 
+  if (!bancoSemMigracao) {
+    const { error } = await upsert(linha)
+    if (!error) return
+    if (error.code !== COLUNA_INEXISTENTE && error.code !== VALOR_NULO_PROIBIDO) throw error
+    bancoSemMigracao = true
+    console.warn('risk_assessments sem a migração do score de 3 camadas; gravando no formato antigo.')
+  }
+
+  if (linha.bpm == null) return
+  const { error } = await upsert(linhaNoFormatoAntigo(linha))
   if (error) throw error
+}
+
+function upsert(linha) {
+  return supabase.from('risk_assessments').upsert(linha, { onConflict: 'user_id,measured_at' })
 }
 
 export async function getDailyRiskAssessmentReport(days = 7) {
@@ -68,4 +55,20 @@ export async function getDailyRiskAssessmentReport(days = 7) {
   const { data, error } = await supabase.rpc('risk_assessment_daily_report', { p_from: from })
   if (error) throw error
   return data || []
+}
+
+// Relatório por nível (data/risk_level_report.sql): uma linha por dia × hora × nível ×
+// modo de sensores. Paginado: 30 dias podem passar das 1.000 linhas que o Supabase
+// devolve de uma vez.
+export async function getRiskLevelReport(from, to = new Date()) {
+  const PAGINA = 1000
+  const linhas = []
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data, error } = await supabase
+      .rpc('risk_level_report', { p_from: from.toISOString(), p_to: to.toISOString(), p_tz: 'America/Sao_Paulo' })
+      .range(inicio, inicio + PAGINA - 1)
+    if (error) throw error
+    linhas.push(...(data || []))
+    if (!data || data.length < PAGINA) return linhas
+  }
 }

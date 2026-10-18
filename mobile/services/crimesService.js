@@ -101,7 +101,7 @@ export async function buscarPeriodoCrimes() {
   if (error || !p) return null;
   const inicio = MESES[p.mes_inicial - 1];
   const fim = `${MESES[p.mes_final - 1]} ${p.ano_final}`;
-  return p.ano_inicial === p.ano_final ? `${inicio}–${fim}` : `${inicio} ${p.ano_inicial}–${fim}`;
+  return p.ano_inicial === p.ano_final ? `${inicio} a ${fim}` : `${inicio} ${p.ano_inicial} a ${fim}`;
 }
 
 // Relatos da comunidade vêm pela função, não pela tabela: a RLS de occurrences só mostra

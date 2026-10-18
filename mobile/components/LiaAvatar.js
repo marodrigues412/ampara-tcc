@@ -67,7 +67,7 @@ const REACTIONS = {
   trajeto: { label: 'trajeto iniciado', eyes: 'open', brows: 'raised', mouth: 'soft', body: 'breathe', badge: 'pin', badgeColor: COLORS.blue, bob: true, ring: '#C9D1E4', ringMode: 'slow' },
   seguro: { label: 'lugar seguro', eyes: 'calm', brows: 'normal', mouth: 'soft', body: 'breathe', badge: 'home', badgeColor: '#3E7C5A', ring: '#7FB896', ringMode: 'steady' },
   checagem: { label: 'área de atenção', eyes: 'open', brows: 'concerned', mouth: 'flat', body: 'breathe', head: 'tilt', badge: 'question', badgeColor: '#9A6316', ring: '#E0A94A', ringMode: 'slow' },
-  critico: { label: 'alerta crítico', eyes: 'open', brows: 'serious', mouth: 'worried', body: 'lean', badge: 'alert', badgeColor: '#B42318', ring: '#F07167', ringMode: 'fast' },
+  critico: { label: 'risco alto', eyes: 'open', brows: 'serious', mouth: 'worried', body: 'lean', badge: 'alert', badgeColor: '#B42318', ring: '#F07167', ringMode: 'fast' },
   contatos: { label: 'contatos avisados', eyes: 'open', brows: 'concerned', mouth: 'soft', body: 'breathe', badge: 'shield', badgeColor: COLORS.blue, ring: '#C9D1E4', ringMode: 'steady' },
   chegou: { label: 'chegou bem', eyes: 'happy', brows: 'raised', mouth: 'open', body: 'bounce', badge: 'check', badgeColor: '#3E7C5A', ring: '#7FB896', ringMode: 'slow', hearts: true },
 }

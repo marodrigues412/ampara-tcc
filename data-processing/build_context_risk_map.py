@@ -12,6 +12,8 @@ from typing import Optional
 
 import pandas as pd
 
+from derive_ssp_period import resolve_ssp_period
+
 
 RMSP_CITIES = {
     "S.PAULO", "S.CAETANO DO SUL", "S.BERNARDO DO CAMPO", "S.ANDRE",
@@ -24,16 +26,16 @@ WEIGHTS = {
     "roubo_em_via_publica": 3,
 }
 PERIODS = ("madrugada", "manha", "tarde", "noite")
-WEEKDAYS = ("segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo")
+MINIMUM_CELL_RECORDS = 5
 SOURCE_COLUMNS = {
-    "DATA_OCORRENCIA_BO", "DESC_PERIODO", "DESCR_PERIODO", "DESCR_SUBTIPOLOCAL", "BAIRRO",
+    "DESC_PERIODO", "DESCR_PERIODO", "HORA_OCORRENCIA_BO", "DESCR_SUBTIPOLOCAL", "BAIRRO",
     "LOGRADOURO", "NOME_MUNICIPIO", "CIDADE", "NOME_DELEGACIA", "RUBRICA",
     "NATUREZA_APURADA", "ANO_ESTATISTICA",
 }
 SOURCE_ALIASES = {
     "ano_estatistica": ("ANO_ESTATISTICA",),
-    "data_ocorrencia": ("DATA_OCORRENCIA_BO",),
     "periodo": ("DESC_PERIODO", "DESCR_PERIODO"),
+    "hora_ocorrencia": ("HORA_OCORRENCIA_BO",),
     "subtipo_local": ("DESCR_SUBTIPOLOCAL",),
     "bairro": ("BAIRRO",),
     "logradouro": ("LOGRADOURO",),
@@ -42,6 +44,22 @@ SOURCE_ALIASES = {
     "rubrica": ("RUBRICA",),
     "natureza_apurada": ("NATUREZA_APURADA",),
 }
+# Contagens somadas por célula, antes da supressão. Somar é seguro entre planilhas.
+COUNT_COLUMNS = [
+    "registros_com_peso", "registros_periodo_informado", "registros_periodo_derivado",
+    "registros_ddm", "total_ponderado",
+]
+RAW_KEYS = ["municipio", "bairro", "periodo"]
+NEIGHBORHOOD_COLUMNS = [
+    "municipio", "bairro", "periodo", "registros_com_peso", "registros_periodo_informado",
+    "registros_periodo_derivado", "registros_ddm", "total_ponderado", "escore_contexto",
+    "nivel_contexto", "percentil_33", "percentil_66",
+]
+CITY_COLUMNS = [
+    "municipio", "periodo", "registros_com_peso", "registros_periodo_informado",
+    "registros_periodo_derivado", "registros_ddm", "total_ponderado", "bairros_com_registro",
+    "total_medio_por_bairro", "escore_contexto", "nivel_contexto", "percentil_33", "percentil_66",
+]
 
 
 def normalize_text(value: object) -> str:
@@ -52,42 +70,43 @@ def normalize_text(value: object) -> str:
     return re.sub(r"\s+", " ", plain)
 
 
-def normalize_period(value: object) -> Optional[str]:
-    period = normalize_text(value)
-    if not period or "hora incerta" in period:
-        return None
-    if "madrugada" in period:
-        return "madrugada"
-    if "manha" in period:
-        return "manha"
-    if "tarde" in period:
-        return "tarde"
-    if "noite" in period:
-        return "noite"
-    return None
+def map_period(period_label: object, occurrence_time: object) -> tuple[Optional[str], str]:
+    """Período do mapa e proveniência (informado / derivado_da_hora / descartado).
 
-
-def normalize_date(series: pd.Series) -> pd.Series:
-    numeric = pd.to_numeric(series, errors="coerce")
-    from_excel = pd.to_datetime(numeric, unit="D", origin="1899-12-30", errors="coerce")
-    from_text = pd.to_datetime(series, errors="coerce", dayfirst=True)
-    return from_excel.fillna(from_text)
+    Usa resolve_ssp_period: rótulo vazio com hora válida vira o período da hora;
+    "em hora incerta", rótulo desconhecido e hora ausente continuam fora.
+    """
+    if isinstance(occurrence_time, float) and pd.isna(occurrence_time):
+        occurrence_time = None
+    period, provenance = resolve_ssp_period(period_label, occurrence_time)
+    if period is None:
+        return None, provenance
+    return normalize_text(period), provenance
 
 
 def _text_mask(series: pd.Series, term: str) -> pd.Series:
     return series.str.contains(term, regex=False, na=False)
 
 
+def _empty_raw_cells() -> pd.DataFrame:
+    return pd.DataFrame(columns=RAW_KEYS + COUNT_COLUMNS)
+
+
 def aggregate_context_cells(records: pd.DataFrame) -> pd.DataFrame:
-    """Return in-memory weighted cells before privacy suppression and normalization."""
+    """Células município × bairro × período, ainda sem supressão nem normalização.
+
+    Registros sem bairro entram com bairro "" — não vão para o mapa de bairros, mas
+    contam na reserva da cidade.
+    """
     required = {
-        "ano_estatistica", "data_ocorrencia", "periodo", "subtipo_local", "bairro",
+        "ano_estatistica", "periodo", "subtipo_local", "bairro",
         "delegacia", "cidade", "logradouro", "rubrica", "natureza_apurada",
     }
     missing = required - set(records.columns)
     if missing:
         raise ValueError(f"Colunas ausentes: {', '.join(sorted(missing))}")
     data = records[list(required)].copy()
+    data["hora_ocorrencia"] = records["hora_ocorrencia"] if "hora_ocorrencia" in records else None
     data["ano_estatistica"] = pd.to_numeric(data["ano_estatistica"], errors="coerce")
     city = data["cidade"].map(lambda value: normalize_text(value).upper())
     data = data[data.ano_estatistica.between(2022, 2026) & city.isin(RMSP_CITIES)].copy()
@@ -95,9 +114,12 @@ def aggregate_context_cells(records: pd.DataFrame) -> pd.DataFrame:
         "vedacao da divulgacao", regex=False, na=False
     )
     data = data[~protected].copy()
+    if data.empty:
+        return _empty_raw_cells()
 
-    data["data"] = normalize_date(data.data_ocorrencia)
-    data["periodo_mapa"] = data.periodo.map(normalize_period)
+    resolved = [map_period(label, hour) for label, hour in zip(data.periodo, data.hora_ocorrencia)]
+    data["periodo_mapa"] = [period for period, _ in resolved]
+    data["proveniencia"] = [provenance for _, provenance in resolved]
     data["bairro_mapa"] = data.bairro.map(normalize_text).str.upper()
     rubric = data.rubrica.map(normalize_text)
     nature = data.natureza_apurada.map(normalize_text)
@@ -111,7 +133,6 @@ def aggregate_context_cells(records: pd.DataFrame) -> pd.DataFrame:
         & _text_mask(rubric, "roub")
         & (_text_mask(nature, "roub") | _text_mask(nature, "latroc"))
     )
-    threat_candidate = _text_mask(rubric, "ameac") | _text_mask(nature, "ameac")
 
     data["categoria"] = pd.Series(index=data.index, dtype="object")
     data.loc[public_robbery, "categoria"] = "roubo_em_via_publica"
@@ -121,71 +142,102 @@ def aggregate_context_cells(records: pd.DataFrame) -> pd.DataFrame:
     data["peso"] = data.categoria.map(WEIGHTS)
     data["ddm"] = data.delegacia.map(normalize_text).str.contains("ddm", regex=False)
 
-    usable = data[
-        data.categoria.notna()
-        & data.peso.notna()
-        & data.data.notna()
-        & data.periodo_mapa.notna()
-        & data.bairro_mapa.ne("")
-    ].copy()
+    usable = data[data.categoria.notna() & data.peso.notna() & data.periodo_mapa.notna()].copy()
     if usable.empty:
-        return pd.DataFrame(columns=[
-            "municipio", "bairro", "dia_semana", "periodo", "registros_com_peso",
-            "registros_ddm", "total_ponderado",
-        ])
+        return _empty_raw_cells()
 
-    usable["municipio_mapa"] = usable.cidade.map(
-        lambda value: normalize_text(value).upper()
-    )
-    usable["dia_semana"] = usable.data.dt.dayofweek.map(dict(enumerate(WEEKDAYS)))
+    usable["municipio"] = usable.cidade.map(lambda value: normalize_text(value).upper())
+    usable["bairro"] = usable.bairro_mapa
     usable["periodo"] = usable.periodo_mapa
-    keys = ["municipio_mapa", "bairro_mapa", "dia_semana", "periodo"]
-    cells = usable.groupby(keys, as_index=False).agg(
+    usable["informado"] = usable.proveniencia.eq("informado")
+    usable["derivado"] = usable.proveniencia.eq("derivado_da_hora")
+    cells = usable.groupby(RAW_KEYS, as_index=False).agg(
         registros_com_peso=("peso", "size"),
+        registros_periodo_informado=("informado", "sum"),
+        registros_periodo_derivado=("derivado", "sum"),
         registros_ddm=("ddm", "sum"),
         total_ponderado=("peso", "sum"),
     )
-    cells = cells.rename(columns={
-        "municipio_mapa": "municipio", "bairro_mapa": "bairro",
-    })
-    cells["total_ponderado"] = cells.total_ponderado.astype(int)
+    for column in COUNT_COLUMNS:
+        cells[column] = cells[column].astype(int)
     return cells
 
 
-def finalize_context_map(cells: pd.DataFrame, minimum_cell_records: int = 5) -> pd.DataFrame:
-    """Suppress small cells, normalize weighted totals, and apply percentile bands."""
+def combine_cells(partials: list[pd.DataFrame]) -> pd.DataFrame:
+    partials = [part for part in partials if not part.empty]
+    if not partials:
+        return _empty_raw_cells()
+    combined = pd.concat(partials, ignore_index=True)
+    return combined.groupby(RAW_KEYS, as_index=False)[COUNT_COLUMNS].sum()
+
+
+def _band(value: float, q33: float, q66: float) -> str:
+    return "baixo" if value < q33 else "medio" if value <= q66 else "alto"
+
+
+def _suppress_ddm(series: pd.Series) -> pd.Series:
+    return series.map(lambda count: int(count) if count >= 5 else "<5 (suprimido)")
+
+
+def finalize_context_map(cells: pd.DataFrame, minimum_cell_records: int = MINIMUM_CELL_RECORDS) -> pd.DataFrame:
+    """Mapa de bairros: suprime células pequenas, normaliza pelo máximo e aplica p33/p66."""
     if minimum_cell_records < 5:
         raise ValueError("O mínimo de publicação precisa ser pelo menos 5 registros")
-    output_columns = [
-        "municipio", "bairro", "dia_semana", "periodo", "registros_com_peso",
-        "registros_ddm", "total_ponderado", "escore_contexto", "nivel_contexto",
-        "percentil_33", "percentil_66",
-    ]
+    cells = cells[(cells.bairro != "") & (cells.registros_com_peso >= minimum_cell_records)].copy()
     if cells.empty:
-        return pd.DataFrame(columns=output_columns)
-    cells = cells[cells.registros_com_peso >= minimum_cell_records].copy()
-    if cells.empty:
-        return pd.DataFrame(columns=output_columns)
+        return pd.DataFrame(columns=NEIGHBORHOOD_COLUMNS)
 
     maximum = float(cells.total_ponderado.max())
     cells["escore_contexto"] = cells.total_ponderado / maximum
     q33, q66 = cells.escore_contexto.quantile([0.33, 0.66]).tolist()
-    cells["nivel_contexto"] = cells.escore_contexto.map(
-        lambda value: "baixo" if value < q33 else "medio" if value <= q66 else "alto"
-    )
+    cells["nivel_contexto"] = cells.escore_contexto.map(lambda value: _band(value, q33, q66))
     cells["percentil_33"] = float(q33)
     cells["percentil_66"] = float(q66)
-    cells["registros_ddm"] = cells.registros_ddm.map(
-        lambda count: int(count) if count >= 5 else "<5 (suprimido)"
+    cells["registros_ddm"] = _suppress_ddm(cells.registros_ddm)
+    return cells[NEIGHBORHOOD_COLUMNS].sort_values(RAW_KEYS).reset_index(drop=True)
+
+
+def finalize_city_fallback(
+    cells: pd.DataFrame,
+    neighborhood_map: pd.DataFrame,
+    minimum_cell_records: int = MINIMUM_CELL_RECORDS,
+) -> pd.DataFrame:
+    """Reserva município × período, para bairro sem célula publicada.
+
+    Total da cidade dividido pelos bairros com algum registro no período ("bairro
+    típico"), na mesma régua do mapa de bairros: dividido pelo mesmo máximo e cortado
+    pelos mesmos p33/p66. Assim a faixa da cidade se compara com a de um bairro, e São
+    Paulo não fica "alto" só por ser maior. Registros sem bairro contam no total.
+    """
+    if minimum_cell_records < 5:
+        raise ValueError("O mínimo de publicação precisa ser pelo menos 5 registros")
+    if cells.empty or neighborhood_map.empty:
+        return pd.DataFrame(columns=CITY_COLUMNS)
+    city = cells.groupby(["municipio", "periodo"], as_index=False)[COUNT_COLUMNS].sum()
+    neighborhoods = (
+        cells[cells.bairro != ""].groupby(["municipio", "periodo"]).bairro.nunique()
+        .rename("bairros_com_registro").reset_index()
     )
-    cells["total_ponderado"] = cells.total_ponderado.astype(int)
-    return cells[output_columns].sort_values(
-        ["municipio", "bairro", "dia_semana", "periodo"]
-    ).reset_index(drop=True)
+    city = city.merge(neighborhoods, on=["municipio", "periodo"], how="left")
+    city["bairros_com_registro"] = city.bairros_com_registro.fillna(0).astype(int)
+    city = city[(city.registros_com_peso >= minimum_cell_records) & (city.bairros_com_registro > 0)].copy()
+    if city.empty:
+        return pd.DataFrame(columns=CITY_COLUMNS)
+
+    maximum = float(neighborhood_map.total_ponderado.max())
+    q33 = float(neighborhood_map.percentil_33.iloc[0])
+    q66 = float(neighborhood_map.percentil_66.iloc[0])
+    city["total_medio_por_bairro"] = city.total_ponderado / city.bairros_com_registro
+    city["escore_contexto"] = (city.total_medio_por_bairro / maximum).clip(upper=1.0)
+    city["nivel_contexto"] = city.escore_contexto.map(lambda value: _band(value, q33, q66))
+    city["percentil_33"] = q33
+    city["percentil_66"] = q66
+    city["registros_ddm"] = _suppress_ddm(city.registros_ddm)
+    return city[CITY_COLUMNS].sort_values(["municipio", "periodo"]).reset_index(drop=True)
 
 
-def prepare_context_map(records: pd.DataFrame, minimum_cell_records: int = 5) -> pd.DataFrame:
-    """Classify conservative source-label candidates and aggregate safe map cells."""
+def prepare_context_map(records: pd.DataFrame, minimum_cell_records: int = MINIMUM_CELL_RECORDS) -> pd.DataFrame:
+    """Classifica os registros e devolve o mapa de bairros publicável."""
     return finalize_context_map(aggregate_context_cells(records), minimum_cell_records)
 
 
@@ -208,9 +260,6 @@ def iter_source_record_frames(input_dir: Path):
             for target, aliases in SOURCE_ALIASES.items():
                 source = next((alias for alias in aliases if alias in frame.columns), None)
                 normalized[target] = frame[source] if source else None
-            for column in ("tipo_local",):
-                if column not in frame:
-                    normalized[column] = None
             found = True
             yield normalized
     if not found:
@@ -223,50 +272,46 @@ def main() -> None:
     parser.add_argument(
         "--output", type=Path, default=Path("data/processed/context_risk_map.csv")
     )
-    parser.add_argument("--minimum-cell-records", type=int, default=5)
+    parser.add_argument(
+        "--city-output", type=Path, default=Path("data/processed/context_risk_map_cidade.csv")
+    )
+    parser.add_argument(
+        "--raw-cells-output", type=Path, default=None,
+        help="Opcional, só para diagnóstico local: células antes da supressão. Não publicar.",
+    )
+    parser.add_argument("--minimum-cell-records", type=int, default=MINIMUM_CELL_RECORDS)
     args = parser.parse_args()
 
-    partials = []
-    for source in iter_source_record_frames(args.input_dir):
-        aggregated = aggregate_context_cells(source)
-        if not aggregated.empty:
-            partials.append(aggregated)
-        del source
-    if partials:
-        keys = ["municipio", "bairro", "dia_semana", "periodo"]
-        combined = pd.concat(partials, ignore_index=True).groupby(keys, as_index=False).agg(
-            registros_com_peso=("registros_com_peso", "sum"),
-            registros_ddm=("registros_ddm", "sum"),
-            total_ponderado=("total_ponderado", "sum"),
-        )
-    else:
-        combined = pd.DataFrame(columns=[
-            "municipio", "bairro", "dia_semana", "periodo", "registros_com_peso",
-            "registros_ddm", "total_ponderado",
-        ])
+    partials = [aggregate_context_cells(source) for source in iter_source_record_frames(args.input_dir)]
+    combined = combine_cells(partials)
+    if args.raw_cells_output:
+        combined.to_csv(args.raw_cells_output, index=False)
     result = finalize_context_map(combined, args.minimum_cell_records)
+    city = finalize_city_fallback(combined, result, args.minimum_cell_records)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(args.output, index=False)
-    published_cities = sorted(result.municipio.unique().tolist())
-    cities_without_cells = sorted(RMSP_CITIES - set(published_cities))
+    city.to_csv(args.city_output, index=False)
     print(json.dumps({
-        "municipios_no_recorte": 9,
-        "municipios_com_celulas_publicaveis": published_cities,
-        "municipios_sem_celulas_publicaveis": cities_without_cells,
-        "linhas_agregadas_publicadas": len(result),
+        "municipios_no_recorte": len(RMSP_CITIES),
+        "celulas_de_bairro_por_municipio": result.municipio.value_counts().sort_index().to_dict(),
+        "celulas_da_cidade_por_municipio": city.municipio.value_counts().sort_index().to_dict(),
+        "registros_com_peso_por_proveniencia": {
+            "informado": int(combined.registros_periodo_informado.sum()),
+            "derivado_da_hora": int(combined.registros_periodo_derivado.sum()),
+        },
         "minimo_por_celula": args.minimum_cell_records,
         "pesos_exemplificados_pelo_orientador": WEIGHTS,
         "periodos": list(PERIODS),
-        "dias_da_semana": list(WEEKDAYS),
         "limites": [
-            "Prévia exploratória, limitada aos nove municípios e às planilhas locais disponíveis.",
-            "Município sem célula publicada tem contexto indisponível, não risco baixo.",
-            "Somente períodos informados pela SSP; período ausente/incerto não é inferido.",
-            "Ameaça fica fora do peso; DDM é indicador separado e suprimido abaixo de cinco.",
+            "Agrupamento município × bairro × período, como na orientação (sem dia da semana).",
+            "Período vazio é derivado da hora exata (derive_ssp_period.py); 'em hora incerta' fica fora.",
+            "Bairro sem célula usa a reserva da cidade (bairro típico); município sem reserva é indisponível.",
+            "Ameaça fica fora: a base pública da SSP praticamente não traz esse registro (limitação da fonte).",
+            "DDM é indicador separado e suprimido abaixo de cinco.",
             "Pesos são exemplos do orientador e ainda precisam de validação metodológica.",
             "A exportação contém apenas agregados, sem coordenadas, endereços ou identificadores.",
         ],
-        "arquivo": str(args.output),
+        "arquivos": [str(args.output), str(args.city_output)],
     }, ensure_ascii=False, indent=2))
 
 

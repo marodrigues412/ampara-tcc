@@ -10,10 +10,11 @@ import { linhaDoTempo } from './rotina'
 import { distanceKm } from './geo'
 import { FRACAO_DO_ANO } from './mapaCalor'
 
-// Mesmas faixas da tela Proteção (Home.js): > 8 crítico, >= 5 moderado.
+// Faixas do score de pontos antigo (> 8 alto, >= 5 moderado), só para o código escondido
+// do relatório. Os níveis do app são baixo, moderado e alto.
 export function nivelDoRisco(risco) {
   if (risco == null) return { rotulo: 'Sem dados', cor: Brand.muted, fundo: '#F3EFF1' }
-  if (risco > 8) return { rotulo: 'Crítico', cor: Brand.danger, fundo: '#FBE3E7' }
+  if (risco > 8) return { rotulo: 'Alto', cor: Brand.danger, fundo: '#FBE3E7' }
   if (risco >= 5) return { rotulo: 'Moderado', cor: Brand.amber, fundo: Brand.amberSoft }
   return { rotulo: 'Baixo', cor: Brand.green, fundo: Brand.mint }
 }
@@ -97,6 +98,9 @@ export function riscoDosTrajetos(compromissos, casa, pontos) {
         destino: t.destino,
         transporte: t.transporte,
         saida: t.saida,
+        // Para o selo por nível (relatorioPorNivel.nivelNaJanela).
+        chegada: t.chegada,
+        diasDaSemana: [...t.diasDaSemana],
         risco: media(valores),
         registros: valores.length,
       }

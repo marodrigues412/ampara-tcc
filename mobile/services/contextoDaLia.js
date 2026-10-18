@@ -1,10 +1,12 @@
 import * as Location from 'expo-location'
 import { supabase } from './supabase'
+import { buscarEnderecoReverso } from './enderecoReverso'
 import { getRecentLocationHistory, getLocationHistoryBetween } from './locationService'
 import { buscarResumoCrimes } from './crimesService'
 import { listarCompromissos, listarLocaisSeguros } from './routineService'
 import { riscoMedio, nivelDoRisco, tendencia, horariosExpostos, descreverHorario, nivelDaRegiao } from '../utils/relatorio'
 import { linhaDoTempo, proximoNosProximosDias, minutosDoDia, horaDosMinutos } from '../utils/rotina'
+import { estadoDoRiscoParaLia } from './estadoDoRisco'
 
 // Contexto da usuária para a Lia, enviado só quando ela liga "Personalizar com meus
 // dados" no chat. Usa as mesmas contas do Relatório, do Mapa e da Rotina, para a Lia
@@ -20,6 +22,11 @@ let guardado = null
 
 const DIAS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
 const formatarRisco = (risco) => risco.toFixed(1).replace('.', ',')
+// O risco atual e o histórico saem do score de pontos 0–10, que não é mais o que a tela
+// Proteção mostra (lá é o nível das 3 camadas). Até o relatório passar para os níveis,
+// a Lia não recebe esse número, para não falar de um segundo score. A função
+// ampara-chat ignora campos vazios.
+const ENVIAR_SCORE_DE_PONTOS = false
 
 async function posicaoAtual() {
   const { status } = await Location.getForegroundPermissionsAsync()
@@ -31,7 +38,8 @@ async function posicaoAtual() {
 
 async function bairroDe({ latitude, longitude }) {
   try {
-    const [endereco] = await Location.reverseGeocodeAsync({ latitude, longitude })
+    const { enderecos } = await buscarEnderecoReverso({ latitude, longitude, prioridade: 'relatorio', prazoMs: 5_000 })
+    const endereco = enderecos?.[0]
     const bairro = endereco?.district || endereco?.subregion
     const cidade = endereco?.city || endereco?.subregion
     return [bairro, cidade].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ') || null
@@ -40,7 +48,7 @@ async function bairroDe({ latitude, longitude }) {
   }
 }
 
-// "8,0 (crítico), registrado há 12 min"
+// "8,0 (alto), registrado há 12 min" (score de pontos antigo; não é enviado)
 function descreverRiscoAtual(historicoDoDia) {
   const ultimo = [...historicoDoDia].reverse().find((p) => p.risco != null)
   if (!ultimo) return null
@@ -80,8 +88,20 @@ function descreverHistorico(semana, semanaAnterior) {
   return partes.join('; ')
 }
 
+// O nível atual muda a qualquer momento: é lido a cada mensagem, fora do guardado.
+// Só rótulos (nível, origem, sensores); nota da célula e bairro não entram.
+function comEstadoAtual(contexto) {
+  const estado = estadoDoRiscoParaLia()
+  return {
+    ...contexto,
+    nivelAtual: estado?.nivelAtual ?? null,
+    origemDoContexto: estado?.origemDoContexto ?? null,
+    modoDosSensores: estado?.modoDosSensores ?? null,
+  }
+}
+
 export async function montarContextoDaLia() {
-  if (guardado && Date.now() - guardado.em < VALIDADE_MS) return guardado.contexto
+  if (guardado && Date.now() - guardado.em < VALIDADE_MS) return comEstadoAtual(guardado.contexto)
 
   const { data } = await supabase.auth.getUser()
   const userId = data?.user?.id
@@ -110,13 +130,13 @@ export async function montarContextoDaLia() {
     longitude: posicao?.longitude ?? null,
     bairro,
     regiao: nivelDaRegiao(resumoDaRegiao)?.rotulo.toLowerCase() ?? null,
-    riscoAtual: descreverRiscoAtual(doDia),
+    riscoAtual: ENVIAR_SCORE_DE_PONTOS ? descreverRiscoAtual(doDia) : null,
     proximoCompromisso: descreverProximoCompromisso(compromissos, casa, agora),
-    historico: descreverHistorico(semana, semanaAnterior),
+    historico: ENVIAR_SCORE_DE_PONTOS ? descreverHistorico(semana, semanaAnterior) : null,
     dataHora: `${DIAS[agora.getDay()]}, ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
   }
   guardado = { em: Date.now(), contexto }
-  return contexto
+  return comEstadoAtual(contexto)
 }
 
 // Quando ela desliga o compartilhamento, o contexto guardado não pode ser reaproveitado.

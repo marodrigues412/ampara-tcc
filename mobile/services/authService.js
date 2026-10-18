@@ -2,10 +2,25 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { supabase } from "./supabase";
 
-// Para onde o provedor devolve a usuária depois do login. No Expo Go vira um endereço
-// exp://..., no app instalado vira mobile://auth-callback (o "scheme" do app.json).
-// Os dois precisam estar liberados nas Redirect URLs do Supabase.
-export const urlDeRetorno = () => Linking.createURL("auth-callback");
+// Para onde o provedor devolve a usuária depois do login: sempre o mesmo endereço,
+// mobile://auth-callback (o "scheme" do app.json), liberado nas Redirect URLs do Supabase.
+//
+// Antes vinha de Linking.createURL, que no Expo Go e no build de desenvolvimento dá
+// exp://<IP do Mac>:8081/--/auth-callback: muda com a rede e não batia com a lista, então
+// o Supabase devolvia para o Site URL (localhost) e a janela nunca voltava ao app. Um
+// endereço fixo funciona em todos os builds: no iPhone, a janela de login do sistema
+// (ASWebAuthenticationSession) fecha sozinha ao chegar no esquema "mobile", mesmo no
+// Expo Go; no Android, o build registra o esquema pelo app.json.
+export const URL_DE_RETORNO = "mobile://auth-callback";
+export const urlDeRetorno = () => URL_DE_RETORNO;
+
+// Log do login social no Metro (só em desenvolvimento), sem tokens nem códigos: mostra
+// para onde o app pediu a volta e como a janela do provedor fechou.
+const semSegredos = (url) => String(url ?? "")
+  .replace(/(code|access_token|refresh_token|provider_token|provider_refresh_token)=[^&#]*/g, "$1=…");
+const registrar = (titulo, dados) => {
+  if (typeof __DEV__ !== "undefined" && __DEV__) console.log(titulo, JSON.stringify(dados));
+};
 
 // O Supabase pode devolver a sessão de duas formas: um "code" para trocar (fluxo PKCE)
 // ou os tokens direto no fragmento da URL. Tratamos as duas para não depender de como o
@@ -65,13 +80,30 @@ export async function entrarComProvedor(provider) {
       queryParams: { prompt: "select_account" },
     },
   });
+  // O redirect_to que vai dentro da URL do provedor é o que o Supabase compara com a lista
+  // de Redirect URLs; se não bater, ele devolve para o Site URL (localhost).
+  // Leitura manual: o URL do React Native não implementa searchParams por completo.
+  const achado = /[?&]redirect_to=([^&#]*)/.exec(data?.url ?? "");
+  const redirectToNaUrl = achado ? decodeURIComponent(achado[1]) : null;
+  registrar("[login] pedido", {
+    provider,
+    urlDeRetorno: redirectTo,
+    redirectToNaUrl,
+    urlDoProvedor: semSegredos(data?.url),
+    erro: error?.message ?? null,
+  });
   if (error) throw error;
 
   const resultado = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  registrar("[login] janela fechou", { tipo: resultado.type, voltouPara: semSegredos(resultado.url) });
   // "cancel" e "dismiss" são a usuária fechando a janela: não é erro, só não entrou.
   if (resultado.type !== "success") return null;
 
-  const sessao = await sessaoDaUrl(resultado.url);
+  const sessao = await sessaoDaUrl(resultado.url).catch((erro) => {
+    registrar("[login] erro ao abrir a sessão", { mensagem: erro?.message });
+    throw erro;
+  });
+  registrar("[login] sessão aberta", { temSessao: Boolean(sessao) });
   await garantirPerfil(sessao);
   return sessao;
 }

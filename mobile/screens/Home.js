@@ -24,6 +24,8 @@ import * as Location from 'expo-location'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { useRiskDetection } from '../hooks/useRiskDetection'
+import { useContextLayer } from '../hooks/useContextLayer'
+import { buscarEnderecoReverso } from '../services/enderecoReverso'
 import { buscarResumoCrimes } from '../services/crimesService'
 import { supabase } from '../services/supabase'
 import { getActivityStatus, updateActivityStatus } from "../services/activityService"
@@ -34,7 +36,9 @@ import { saveLocationPoint } from "../services/locationService"
 import { useSmartwatch } from '../hooks/useSmartwatch'
 import { calculateMotionRiskScore } from '../utils/motionRiskScore'
 import { calculateHeartRateBaseline } from '../services/heartRateBaseline'
-import { extractPhoneMotionFeatures, fuseExperimentalRiskLayers, scoreIsolationForest } from '../services/isolationForestMotion'
+import { extractPhoneMotionFeatures, scoreIsolationForest } from '../services/isolationForestMotion'
+import { acaoDoNivel, avaliarCorpo, estabilizarNivel, fundirCamadas, movimentoDoRelogio } from '../services/threeLayerRisk'
+import { publicarEstadoDoRisco } from '../services/estadoDoRisco'
 import isolationForestMotionModel from '../models/isolationForestMotionModel.json'
 import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
 import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
@@ -45,38 +49,20 @@ import SosHoldOverlay from '../components/SosHoldOverlay'
 import RoutineToday from '../components/RoutineToday'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 import AnelDaLia from '../components/AnelDaLia'
-import CalculoDoRisco from '../components/CalculoDoRisco'
+import CamadasDoRisco from '../components/CamadasDoRisco'
 
 import { dispararAlerta } from '../services/alertService'
+import { nomeDoTelefone } from '../utils/contatos'
 import { FRACAO_DO_ANO } from '../utils/mapaCalor'
 
 // Raio do entorno da usuária: a área cujos crimes entram no score. É o mesmo raio que a
 // aba Mapa usa para resumir uma região.
 const RAIO_INICIAL_KM = 1
-const SHOW_PRESENTATION_MODE = false
+// Monitoramento reforçado (nível moderado): grava a posição nesse intervalo, sem avisar.
+const INTERVALO_REFORCADO_MS = 60_000
+const VERSAO_DO_SCORE = 'contexto-ssp+corpo-3camadas-v2.0'
 const LIVE_HEART_RATE_MS = 10_000
 const SOS_HOLD_MS = 3_000
-const HEART_RATE_STATUS_MAX_AGE_MS = 30_000
-
-const getHeartRateSignalMessage = (sensorStatus) => {
-  if (!sensorStatus || Date.now() - Date.parse(sensorStatus.time) > HEART_RATE_STATUS_MAX_AGE_MS) return null
-  switch (sensorStatus.status) {
-    case -10:
-      return 'Sinal fraco ou movimento excessivo. Ajuste o relógio no pulso e aguarde alguns segundos.'
-    case -8:
-      return 'O sinal do sensor oscilou. Confira o encaixe do relógio no pulso e aguarde uma nova leitura.'
-    case -3:
-      return 'O relógio detectou que está fora do pulso. Recoloque-o para retomar as leituras.'
-    case -2:
-      return 'O relógio detectou movimento durante a medição. As leituras voltam quando o sinal estabilizar.'
-    case -999:
-      return 'Outro sensor está medindo neste momento. O monitoramento contínuo será retomado em seguida.'
-    case 0:
-      return 'O sensor está iniciando uma nova medição.'
-    default:
-      return null
-  }
-}
 
 // De quanto em quanto tempo a Home confere se começou ou acabou um horário programado
 // de atividade. Meio minuto basta: ninguém percebe o modo ligar 30 s depois das 8h.
@@ -157,7 +143,6 @@ export default function Home({ navigation }) {
   const [riskContextScore, setRiskContextScore] = useState(null)
   const [userId, setUserId] = useState(null)
   const [resumoCrimes, setResumoCrimes] = useState({})
-  const [fatoresDoRisco, setFatoresDoRisco] = useState(null)
   const [contatos, setContatos] = useState([])
   const [respostaRapida, setRespostaRapida] = useState(null)
   const totalCrimesEntorno = useMemo(
@@ -165,17 +150,17 @@ export default function Home({ navigation }) {
     [resumoCrimes],
   )
 
-  const { data, location, riskStatus, currentScore, phoneMotionWindow, gpsSpeedDeltaMps } = useRiskDetection({ insideSafeZone, activityMode })
+  const { location, riskStatus, phoneMotionWindow, movimentoCelularSustentado, gpsSpeedDeltaMps } = useRiskDetection()
+  const { magnitude } = riskStatus
   const smartwatch = useSmartwatch(userId)
+  // Camada 1 do score de 3 camadas: faixa do mapa bairro × dia × período (SSP).
+  const { contexto: contextoDaRegiao } = useContextLayer({ location, insideSafeZone })
   const motionRisk = useMemo(() => calculateMotionRiskScore({
     phoneMagnitudeG: riskStatus.magnitude,
     watchMotion: smartwatch.watchMotion,
     activityMode,
   }), [riskStatus.magnitude, smartwatch.watchMotion, activityMode])
   const smartwatchConnected = smartwatch.directWatchStatus === 'connected'
-  const watchMotionDetail = motionRisk.watchIsRecent
-    ? `RMS ${smartwatch.watchMotion.rms.toFixed(1)} m/s²${motionRisk.watchPoints ? ` · relógio +${motionRisk.watchPoints}` : ' · sem elevação'}${motionRisk.corroborationPoints ? ' · conjunto +1' : ''}`
-    : smartwatchConnected ? 'Sem leitura recente' : 'Desconectado'
   const heartRateIsCurrent = smartwatchConnected
     && smartwatch.measurement?.isDirect
     && smartwatch.measurement?.isRecent
@@ -190,45 +175,22 @@ export default function Home({ navigation }) {
     ? scoreIsolationForest(phoneMotionFeatures, isolationForestMotionModel)
     : null
   const experimentalMotionScore = phoneMotionInference?.anomalyScore ?? null
-  const experimentalRisk = heartRateBaseline.available
-    ? fuseExperimentalRiskLayers({
-      heartRateZScore: heartRateBaseline.zScore,
-      contextScore: riskContextScore,
-      motionAnomalyScore: experimentalMotionScore,
-    })
-    : null
-  const experimentalRiskScore = experimentalRisk
-    ? Math.round(experimentalRisk.bodyScore * 100) / 10
-    : null
-  const experimentalRiskVersion = 'bpm-iforest-context-matrix-v1.0'
-  const smartwatchWarning = ['disconnected', 'error', 'development_build_required'].includes(smartwatch.directWatchStatus)
-    ? {
-        title: smartwatch.directWatchStatus === 'development_build_required'
-          ? 'Versão Android necessária'
-          : 'Smartwatch desconectado',
-        message: smartwatch.directWatchStatus === 'development_build_required'
-          ? 'Abra o Ampara instalado no celular para conectar o Galaxy Watch.'
-          : 'Conecte o Galaxy Watch para retomar o envio dos batimentos.',
-      }
-    : smartwatchConnected && smartwatch.monitoringStatus === 'inactive'
-      ? {
-          title: 'Monitoramento cardíaco desligado',
-          message: 'No relógio, toque em “Ativar monitoramento” para voltar a enviar os batimentos.',
-        }
-      : smartwatchConnected && smartwatch.monitoringStatus === 'active' && !heartRateIsCurrent
-        ? {
-            title: getHeartRateSignalMessage(smartwatch.heartRateSensorStatus)
-              ? 'Sinal do sensor oscilando'
-              : 'Sem batimentos recentes',
-            message: getHeartRateSignalMessage(smartwatch.heartRateSensorStatus)
-              || 'O relógio informa que o monitoramento está ativo, mas o celular ainda não recebeu uma leitura recente.',
-          }
-        : smartwatchConnected && smartwatch.monitoringStatus === 'unknown' && !heartRateIsCurrent
-          ? {
-              title: 'Sem confirmação do relógio',
-              message: 'O celular ainda não recebeu o status do monitoramento nem uma leitura recente do Ampara no relógio.',
-            }
-      : null
+  // Camada 2 (corpo): só os sinais que existem agora. Sem relógio ou com BPM velho, o
+  // modo cai sozinho para "só celular"; quando o relógio volta, volta para "completo".
+  const watchMotionAnomaly = movimentoDoRelogio(smartwatch.watchMotion, { activityMode })
+  // Princípio de corroboração (threeLayerRisk.avaliarCorpo): sem relógio, só movimento
+  // atípico mantido por 10 s conta, e o corpo não passa de médio.
+  const corpo = avaliarCorpo({
+    heartRateZScore: heartRateBaseline.available ? heartRateBaseline.zScore : null,
+    movimentoCelular: experimentalMotionScore,
+    movimentoRelogio: watchMotionAnomaly,
+    activityMode,
+    movimentoCelularSustentado,
+  })
+  // Camada 3: matriz 3×3. O nível bruto passa pelo estabilizador abaixo (nivelExibido),
+  // que é o resultado oficial: o mesmo na tela e no alerta.
+  const resultadoDoRisco = fundirCamadas({ contexto: contextoDaRegiao, corpo })
+  const nivelDoRisco = resultadoDoRisco.nivel
   const isReceivingHeartRate = smartwatch.measurement?.isDirect
     && smartwatch.measurement?.isRecent
     && !heartRateFreshnessExpired
@@ -236,12 +198,6 @@ export default function Home({ navigation }) {
     && watchMonitoringWanted
     && !isReceivingHeartRate
     && !watchAlertDismissed
-  const heartRateValue = heartRateIsCurrent ? Math.round(smartwatch.measurement.bpm) : '--'
-  const heartRateDetail = heartRateIsCurrent
-    ? `${smartwatch.measurement.source} · ${formatReadingAge(smartwatch.measurement.time)}`
-    : smartwatch.measurement
-      ? `Última leitura: ${Math.round(smartwatch.measurement.bpm)} bpm · ${formatReadingAge(smartwatch.measurement.time)}`
-      : 'Aguardando leitura automática'
   const smartwatchConnectionText = getSmartwatchConnectionText(
     smartwatch.status,
     smartwatch.directWatchStatus,
@@ -295,7 +251,6 @@ export default function Home({ navigation }) {
   const searchTimeout = useRef(null)
   const [userName, setUserName] = useState("Usuária");
 
-  const { magnitude, isHighRisk } = riskStatus
 
   const tiposOcorrencia = [
     'Homicídio Doloso',
@@ -313,7 +268,6 @@ export default function Home({ navigation }) {
 
   // --- Estados do Score de Risco ---
   const [riskScore, setRiskScore] = useState(0)
-  const [riskLevel, setRiskLevel] = useState("Baixo")
 
   // --- Controle do Cronômetro de Alerta e Feedback SOS ---
   const [countdown, setCountdown] = useState(30)
@@ -329,11 +283,6 @@ export default function Home({ navigation }) {
   const [sosHoldFim, setSosHoldFim] = useState(null)
   const [sosFeedbackVisible, setSosFeedbackVisible] = useState(false);
   const [sosFeedbackData, setSosFeedbackData] = useState({ status: 'enviando', mensagem: '', enviados: [], falhas: [], endereco: '', detalhe: '' });
-  const [simpleCheckVisible, setSimpleCheckVisible] = useState(false);
-  const [alertType, setAlertType] = useState('moderado');
-  const [demoScore, setDemoScore] = useState(null);
-  const [demoBonus, setDemoBonus] = useState(0);
-  const [demoEnvLabel, setDemoEnvLabel] = useState(null);
 
   // --- Modo Monitoramento (liga/desliga detecção automática de risco) ---
   const [monitoramentoAtivo, setMonitoramentoAtivo] = useState(true);
@@ -408,9 +357,8 @@ export default function Home({ navigation }) {
   useEffect(() => {
     if (!location || !userId) return
     const { latitude, longitude, speed } = location.coords
-    const scoreAntigo = currentScore
     setTimeout(() => {
-      saveLocationPoint(userId, latitude, longitude, speed, scoreAntigo, "gps", riscoParaHistoricoRef.current)
+      saveLocationPoint(userId, latitude, longitude, speed, null, "gps", riscoParaHistoricoRef.current)
     }, ESPERA_SCORE_DO_LUGAR_MS)
   }, [location, userId])
 
@@ -435,49 +383,88 @@ export default function Home({ navigation }) {
     // Um instante de espera para o score já refletir a mudança (ele é recalculado no
     // render seguinte ao do modo atividade).
     const { latitude, longitude, speed } = location.coords;
-    const scoreAntigo = currentScore;
     setTimeout(() => {
-      saveLocationPoint(userId, latitude, longitude, speed, scoreAntigo, "recalculo", riscoParaHistoricoRef.current);
+      saveLocationPoint(userId, latitude, longitude, speed, null, "recalculo", riscoParaHistoricoRef.current);
     }, 1_500);
   }, [insideSafeZone, activityMode])
 
-  // Movimento brusco — dispara imediatamente ao detectar pico
+  // Último resultado para o contexto da Lia (só rótulos: nível, origem e sensores).
+  const origemDoContexto = contextoDaRegiao?.origem ?? null
+  // Republica a cada 30 s mesmo sem mudança: a Lia só usa leitura de até 2 min.
+  // Nível mostrado (estabilizarNivel): sobe depois de 5 s seguidos no nível novo, desce
+  // depois de 10 s estável. É o mesmo nível que abre o alerta: tela e alerta nunca
+  // discordam, e o topo não pisca. Avaliado a cada 0,5 s.
+  const [nivelExibido, setNivelExibido] = useState(null)
+  const nivelBrutoRef = useRef(null)
+  const estabilizadorRef = useRef(null)
+  useEffect(() => { nivelBrutoRef.current = monitoramentoAtivo ? nivelDoRisco : null }, [monitoramentoAtivo, nivelDoRisco])
+  useEffect(() => {
+    const avaliar = () => {
+      estabilizadorRef.current = estabilizarNivel(estabilizadorRef.current, { t: Date.now(), nivel: nivelBrutoRef.current })
+      setNivelExibido(estabilizadorRef.current.exibido)
+    }
+    const intervalo = setInterval(avaliar, 500)
+    return () => clearInterval(intervalo)
+  }, [])
+  // Estado do que a tela mostra: sem nível exibido ainda, é "calculando" (ou "sem dados").
+  const estadoExibido = !monitoramentoAtivo
+    ? 'pausado'
+    : nivelExibido ? 'pronto' : resultadoDoRisco.estado === 'sem_contexto' ? 'sem_contexto' : 'calculando'
+
+  useEffect(() => {
+    const publicar = () => publicarEstadoDoRisco({
+      monitoramentoAtivo,
+      nivel: nivelExibido,
+      estado: estadoExibido,
+      origem: origemDoContexto,
+      modo: corpo.modo,
+    })
+    publicar()
+    const intervalo = setInterval(publicar, 30_000)
+    return () => clearInterval(intervalo)
+  }, [monitoramentoAtivo, nivelExibido, estadoExibido, origemDoContexto, corpo.modo])
+
+  // Único gatilho automático: o nível mostrado chegou a alto (5 s seguidos). Não há
+  // atalho por cima da matriz; só o SOS manual é imediato.
   useEffect(() => {
     if (!monitoramentoAtivo) {
       setSustainedHighRisk(false);
       return;
     }
-    if (isHighRisk || riskLevel === "Crítico") {
-      setSustainedHighRisk(true);
-    } else {
-      setSustainedHighRisk(false);
-    }
-  }, [monitoramentoAtivo, isHighRisk, riskLevel]);
+    setSustainedHighRisk(nivelExibido === 'alto');
+  }, [monitoramentoAtivo, nivelExibido]);
 
-  // 1️⃣ GATILHO DO MODAL — 3 níveis baseados no riskScore
+  // Nível moderado: monitoramento reforçado silencioso — a posição vai para o histórico
+  // a cada minuto, mesmo parada, sem nenhum aviso na tela.
+  const monitoramentoReforcado = monitoramentoAtivo && acaoDoNivel(nivelExibido) === 'monitoramento_reforcado'
+  const ultimaLocalizacaoRef = useRef(null)
+  useEffect(() => { ultimaLocalizacaoRef.current = location }, [location])
+  useEffect(() => {
+    if (!monitoramentoReforcado || !userId) return
+    const intervalo = setInterval(() => {
+      const coords = ultimaLocalizacaoRef.current?.coords
+      if (!coords) return
+      saveLocationPoint(userId, coords.latitude, coords.longitude, coords.speed, null, 'reforcado', riscoParaHistoricoRef.current)
+    }, INTERVALO_REFORCADO_MS)
+    return () => clearInterval(intervalo)
+  }, [monitoramentoReforcado, userId])
+
+  // 1️⃣ GATILHO DO MODAL — só para o nível alto sustentado: contagem de 10 s. Moderado é
+  // monitoramento silencioso; baixo não faz nada.
   useEffect(() => {
     if (!monitoramentoAtivo) return;
     if (!sustainedHighRisk || alertaDisparado) return;
-    if (modalVisible || simpleCheckVisible) return;
+    if (modalVisible) return;
 
     const agora = Date.now();
     const emCooldownEnvio = lastAlertSentRef.current && (agora - lastAlertSentRef.current) < 60 * 1000;
     const emCooldownCancelamento = cancelCooldownRef.current && agora < cancelCooldownRef.current;
     if (emCooldownEnvio || emCooldownCancelamento) return;
 
-    if (riskScore > 8) {
-      setAlertType('critico');
-      setCountdown(10);
-      setModalVisible(true);
-    } else if (riskScore >= 5) {
-      setAlertType('moderado');
-      setCountdown(30);
-      setModalVisible(true);
-    } else {
-      setAlertType('simples');
-      setSimpleCheckVisible(true);
-    }
-  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, simpleCheckVisible, alertaDisparado, riskScore, activityMode, insideSafeZone]);
+    if (nivelExibido !== 'alto') return;
+    setCountdown(10);
+    setModalVisible(true);
+  }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, alertaDisparado, nivelExibido]);
 
   // 2️⃣ O MOTOR SEGURO
   useEffect(() => {
@@ -504,7 +491,7 @@ export default function Home({ navigation }) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [countdown, isHighRisk, modalVisible, alertaDisparado]);
+  }, [countdown, modalVisible, alertaDisparado]);
 
   async function loadUserData() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -515,11 +502,12 @@ export default function Home({ navigation }) {
     if (data?.nome) setUserName(data.nome);
   }
   
-  // Só para mostrar a rede de apoio na tela; o envio do SOS busca os contatos de novo.
+  // Para mostrar a rede de apoio na tela e o nome ao lado do número no alerta enviado; o
+  // envio do SOS busca os contatos de novo.
   async function loadContatos() {
     const user = (await supabase.auth.getUser()).data.user
     if (!user) return
-    const { data } = await supabase.from('emergency_contacts').select('id, nome').eq('user_id', user.id)
+    const { data } = await supabase.from('emergency_contacts').select('id, nome, telefone').eq('user_id', user.id)
     setContatos(data ?? [])
   }
 
@@ -578,12 +566,8 @@ export default function Home({ navigation }) {
     if (!value) {
       if (timerRef.current) clearTimeout(timerRef.current)
       setModalVisible(false)
-      setSimpleCheckVisible(false)
       setAlertaDisparado(false)
       setSustainedHighRisk(false)
-      setDemoScore(null)
-      setDemoBonus(0)
-      setDemoEnvLabel(null)
       cancelCooldownRef.current = Date.now() + 30 * 1000
     }
   }
@@ -593,7 +577,11 @@ export default function Home({ navigation }) {
     else if (smartwatch.status === 'permission_required' || smartwatch.status === 'error') smartwatch.connect()
   }
 
-  // --- Score ambiental combinado com movimento dos dois dispositivos ---
+  // --- Score de pontos antigo (0 a 10) ---
+  // Não aparece mais na tela nem abre alertas: o resultado oficial é o de 3 camadas
+  // (resultadoDoRisco). Segue calculado só para a coluna risco do histórico, que o
+  // Dashboard lê, e para context_score em risk_assessments, até essas telas migrarem.
+  // Também é aqui que se descobre se a usuária está num local seguro (80 m).
   useEffect(() => {
     let score = 0
 
@@ -628,47 +616,48 @@ export default function Home({ navigation }) {
     }
 
     setInsideSafeZone(emZonaSegura)
-    // As mesmas parcelas, para a lista "Por que seu risco está assim" da tela.
-    setFatoresDoRisco({ regiao: pontosRegiao, horario: pontosHorario, hora, atividade: activityMode ? -2 : 0, localSeguro: emZonaSegura ? -3 : 0, movimento: motionRisk.total })
     const contextScore = Math.max(0, Math.min(10, score))
     setRiskContextScore(contextScore)
     score += motionRisk.total
     score = Math.max(score, 0)
     score = Math.min(score, 10)
     setRiskScore(score)
-
-    if (score > 8) { setRiskLevel("Crítico") }
-    else if (score >= 5) { setRiskLevel("Moderado") }
-    else { setRiskLevel("Baixo") }
   }, [totalCrimesEntorno, activityMode, location, safeLocations, motionRisk.total])
 
+  // Uma avaliação a cada 30 s, nos três cenários. Com relógio, cada leitura de BPM
+  // também entra (é dela que sai a linha de base da última hora).
   useEffect(() => {
     const measurement = watchMeasurement
-    const measuredAt = Date.parse(measurement?.time)
+    const comBpm = heartRateIsCurrent && measurement?.isDirect && smartwatch.heartRateHistoryReady
+    const medidoEm = comBpm ? Date.parse(measurement?.time) : Date.now()
     if (
       !userId
+      || !monitoramentoAtivo
       || riskContextScore === null
-      || !smartwatch.heartRateHistoryReady
-      || !heartRateIsCurrent
-      || !measurement?.isDirect
-      || !Number.isFinite(measuredAt)
-      || measuredAt - latestSavedRiskAtRef.current < RISK_ASSESSMENT_SAMPLE_INTERVAL_MS
+      || (!comBpm && !corpo.disponivel)
+      || !Number.isFinite(medidoEm)
+      || medidoEm - latestSavedRiskAtRef.current < RISK_ASSESSMENT_SAMPLE_INTERVAL_MS
     ) return
 
-    latestSavedRiskAtRef.current = measuredAt
+    latestSavedRiskAtRef.current = medidoEm
     saveRiskAssessment(userId, {
-      measuredAt: measurement.time,
-      bpm: measurement.bpm,
+      measuredAt: new Date(medidoEm).toISOString(),
+      bpm: comBpm ? measurement.bpm : null,
       baselineMeanBpm: heartRateBaseline.meanBpm,
       baselineStdDevBpm: heartRateBaseline.standardDeviationBpm,
       bpmZScore: heartRateBaseline.zScore,
       contextScore: riskContextScore,
-      experimentalScore: experimentalRiskScore,
-      experimentalRiskLevel: experimentalRisk?.level?.toLowerCase() ?? null,
-      hourOfDay: new Date(measuredAt).getHours(),
+      experimentalRiskLevel: nivelExibido,
+      sensorMode: corpo.modo,
+      bodyScore: corpo.escore,
+      bodyBand: corpo.faixa,
+      bpmAnomaly: corpo.sinais.bpm,
+      watchMotionAnomaly: corpo.sinais.movimentoRelogio,
+      contextBand: contextoDaRegiao?.faixa ?? null,
+      contextOrigin: contextoDaRegiao?.origem ?? null,
+      contextUnavailableReason: contextoDaRegiao ? contextoDaRegiao.motivo : 'calculando',
+      hourOfDay: new Date(medidoEm).getHours(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',
-      nearbyCrimeCount: totalCrimesEntorno,
-      crimeDensityPerKm2: totalCrimesEntorno / (Math.PI * RAIO_INICIAL_KM ** 2),
       insideSafeZone,
       activityMode,
       motionRiskScore: experimentalMotionScore === null ? null : Math.round(experimentalMotionScore * 1000) / 100,
@@ -685,15 +674,15 @@ export default function Home({ navigation }) {
       watchMotionRmsMps2: motionRisk.watchIsRecent ? smartwatch.watchMotion.rms : null,
       watchMotionPeakMps2: motionRisk.watchIsRecent ? smartwatch.watchMotion.peak : null,
       watchMotionJerkMps3: motionRisk.watchIsRecent ? smartwatch.watchMotion.jerk : null,
-      modelVersion: `${experimentalRiskVersion}:${isolationForestMotionModel.modelVersion}`,
-      source: measurement.source,
+      modelVersion: `${VERSAO_DO_SCORE}:${isolationForestMotionModel.modelVersion}`,
+      source: comBpm ? measurement.source : 'Celular',
     }).catch(error => {
-      console.warn('Não foi possível salvar a avaliação experimental:', error.message)
+      console.warn('Não foi possível salvar a avaliação de risco:', error.message)
     })
   }, [
     userId,
+    monitoramentoAtivo,
     riskContextScore,
-    totalCrimesEntorno,
     insideSafeZone,
     activityMode,
     smartwatch.heartRateHistoryReady,
@@ -702,9 +691,9 @@ export default function Home({ navigation }) {
     heartRateBaseline.meanBpm,
     heartRateBaseline.standardDeviationBpm,
     heartRateBaseline.zScore,
-    experimentalRiskScore,
-    experimentalRisk?.level,
-    experimentalRiskVersion,
+    nivelExibido,
+    corpo,
+    contextoDaRegiao,
     experimentalMotionScore,
     motionRisk.phonePoints,
     motionRisk.watchPoints,
@@ -730,16 +719,22 @@ export default function Home({ navigation }) {
     
     let enderecoFormatado = "Endereço não identificado (Apenas GPS)";
     try {
-      const addressArray = await Location.reverseGeocodeAsync({ latitude: userLat, longitude: userLon });
+      // Prazo curto: o SOS não pode esperar o geocodificador. Sem endereço, vai só o GPS.
+      const { enderecos: addressArray } = await buscarEnderecoReverso({ latitude: userLat, longitude: userLon, prioridade: 'protecao', prazoMs: 4_000 });
       if (addressArray && addressArray.length > 0) {
         const a = addressArray[0];
-        enderecoFormatado = `${a.street || a.name || ''}${a.streetNumber ? ', ' + a.streetNumber : ''} - ${a.district || a.subregion || ''}, ${a.city || ''}`;
+        // Sem travessão nem hífen solto: rua e número, bairro, cidade, separados por vírgula.
+        enderecoFormatado = [
+          `${a.street || a.name || ''}${a.streetNumber ? ', ' + a.streetNumber : ''}`,
+          a.district || a.subregion,
+          a.city,
+        ].filter(Boolean).join(', ') || enderecoFormatado;
       }
     } catch (e) {
       console.log("Erro ao buscar endereço reverso no SOS:", e);
     }
 
-    const textoMensagem = `🚨 ALERTA AMPARA: ${userName} pode estar em perigo! Risco: ${riskLevel}. Local: ${enderecoFormatado}. Mapa: ${linkMapa}`;
+    const textoMensagem = `🚨 ALERTA AMPARA: ${userName} pode estar em perigo! Risco: ${rotuloDoNivelNoAlerta}. Local: ${enderecoFormatado}. Mapa: ${linkMapa}`;
 
     setSosFeedbackData({ status: 'enviando', mensagem: textoMensagem, enviados: [], falhas: [], endereco: enderecoFormatado, detalhe: '' });
     setSosFeedbackVisible(true);
@@ -750,7 +745,7 @@ export default function Home({ navigation }) {
       endereco: enderecoFormatado,
       latitude: userLat,
       longitude: userLon,
-      nivelRisco: riskLevel,
+      nivelRisco: rotuloDoNivelNoAlerta,
       mensagem: textoMensagem,
     });
 
@@ -801,7 +796,6 @@ export default function Home({ navigation }) {
   const handleUserIsSafe = () => {
     if (timerRef.current) clearTimeout(timerRef.current)
     setModalVisible(false)
-    setSimpleCheckVisible(false)
     setCountdown(30)
     setAlertaDisparado(false)
     setSustainedHighRisk(false)
@@ -830,7 +824,7 @@ export default function Home({ navigation }) {
     let loc = await Location.getCurrentPositionAsync({})
     const { latitude, longitude } = loc.coords
     setOccCoords({ latitude, longitude })
-    const address = await Location.reverseGeocodeAsync({ latitude, longitude })
+    const { enderecos: address } = await buscarEnderecoReverso({ latitude, longitude, prioridade: 'protecao', prazoMs: 8_000 })
     if (address && address.length > 0) { const a = address[0]; setOccEndereco(`${a.street || ''}${a.streetNumber ? ', ' + a.streetNumber : ''}, ${a.district || ''}, ${a.city || ''}`); }
     setLoadingGPS(false)
   }
@@ -912,19 +906,27 @@ export default function Home({ navigation }) {
     setOccData(new Date().toLocaleDateString('pt-BR'))
   }
 
-  const displayScore = monitoramentoAtivo ? riskScore : 0
-  const calculandoScore = monitoramentoAtivo && !resumoPronto
+  // O que a tela mostra é o nível da matriz. Sem uma das camadas não há nível:
+  // "calculando" (primeiros segundos) ou "sem dados da região" (bairro fora do mapa).
+  const nivelNaTela = monitoramentoAtivo ? nivelExibido : null
+  const calculandoScore = monitoramentoAtivo && estadoExibido === 'calculando'
+  const semDadosDaRegiao = monitoramentoAtivo && resultadoDoRisco.estado === 'sem_contexto'
+  // O anel enche um terço por nível.
+  const anelDoNivel = { baixo: 10 / 3, moderado: 20 / 3, alto: 10 }[nivelNaTela] ?? null
   const horarioAgora = horarioAtivoAgora(horariosAtividade, new Date())
   const textoAtividade = activityMode
     ? (horarioAgora ? `Até ${horarioAgora.hora_fim.slice(0, 5)} · ${horarioAgora.nome}` : 'Exercício ativo')
     : (descreverProximoHorario(horariosAtividade, new Date()) ?? 'Para exercícios')
-  const displayLevel = displayScore > 8 ? 'Crítico' : displayScore >= 5 ? 'Moderado' : 'Baixo'
-  const riskAccent = !monitoramentoAtivo ? '#9A8C93' : displayLevel === 'Crítico' ? Brand.danger : displayLevel === 'Moderado' ? Brand.amber : Brand.green
+  const displayLevel = { baixo: 'Baixo', moderado: 'Moderado', alto: 'Alto' }[nivelNaTela]
+    ?? (semDadosDaRegiao ? 'Sem dados da região' : 'Não calculado')
+  // A AWS corta o nível em 12 caracteres no SMS.
+  const rotuloDoNivelNoAlerta = nivelNaTela ? displayLevel : semDadosDaRegiao ? 'Sem dados' : 'Calculando'
+  const riskAccent = { baixo: Brand.green, moderado: Brand.amber, alto: Brand.danger }[nivelNaTela] ?? '#9A8C93'
   const liaReaction = !monitoramentoAtivo
     ? 'ociosa'
     : insideSafeZone
       ? 'seguro'
-      : displayLevel === 'Crítico'
+      : displayLevel === 'Alto'
         ? 'critico'
         : displayLevel === 'Moderado'
           ? 'checagem'
@@ -940,7 +942,9 @@ export default function Home({ navigation }) {
       ? 'Estou olhando sua região e o horário. Já te conto como está seu risco.'
       : insideSafeZone
         ? 'Você está em um dos seus locais seguros. Pode ficar tranquila, eu sigo acompanhando.'
-        : displayLevel === 'Crítico'
+        : semDadosDaRegiao
+          ? 'Não tenho dados de ocorrências deste bairro agora, então não estimo o risco da região. Sigo de olho no seu movimento, e o SOS funciona normalmente.'
+        : displayLevel === 'Alto'
           ? 'Seu risco está alto agora. Procure um lugar iluminado e movimentado. Se precisar, segure o SOS.'
           : displayLevel === 'Moderado'
             ? 'Atenção redobrada por aqui. Prefira ruas movimentadas e mantenha o celular à mão.'
@@ -956,7 +960,7 @@ export default function Home({ navigation }) {
     ? []
     : !monitoramentoAtivo
       ? RESPOSTAS_RAPIDAS.pausado
-      : displayLevel === 'Baixo' ? RESPOSTAS_RAPIDAS.tranquilo : RESPOSTAS_RAPIDAS.atencao
+      : nivelNaTela === 'baixo' ? RESPOSTAS_RAPIDAS.tranquilo : RESPOSTAS_RAPIDAS.atencao
 
   const responderRapido = (resposta) => {
     if (resposta.pergunta) {
@@ -966,27 +970,6 @@ export default function Home({ navigation }) {
     }
   }
 
-  // Cada parcela do score, na ordem em que aparece na lista "Por que seu risco está assim".
-  const f = fatoresDoRisco
-  const listaDeFatores = f ? [
-    {
-      id: 'horario', icone: 'moon-outline', cor: '#6E5A9E', fundo: '#EFEAF5', pontos: f.horario, curto: 'Horário',
-      nome: f.hora < 6 ? 'Horário: madrugada' : f.hora >= 22 ? 'Horário: noite avançada' : f.hora >= 18 ? 'Horário: noite' : 'Horário: dia',
-    },
-    {
-      id: 'regiao', icone: 'map-outline', cor: '#3F6A86', fundo: '#E9EFF2', pontos: f.regiao, curto: 'Região',
-      nome: f.regiao >= 4 ? 'Região: muitos registros' : f.regiao >= 2 ? 'Região: registros moderados' : 'Região: poucos registros',
-    },
-    {
-      id: 'movimento', icone: 'pulse-outline', cor: Brand.amber, fundo: Brand.amberSoft, pontos: f.movimento, curto: 'Movimento',
-      nome: f.movimento > 0 ? 'Movimento brusco detectado' : 'Movimento normal',
-    },
-    {
-      id: 'local', icone: 'home-outline', cor: Brand.green, fundo: Brand.mint, pontos: f.localSeguro, curto: 'Local seguro',
-      nome: f.localSeguro ? 'Em um local seguro' : 'Fora de um local seguro',
-    },
-    ...(f.atividade ? [{ id: 'atividade', icone: 'fitness-outline', cor: Brand.green, fundo: Brand.mint, pontos: f.atividade, curto: 'Atividade', nome: 'Modo atividade ligado' }] : []),
-  ] : []
 
   const regiao = resumoPronto ? nivelDaRegiao(resumoCrimes) : null
   // Posição do marcador na barra de cores: a densidade da região entre 0 e 1,5 vez o
@@ -994,23 +977,6 @@ export default function Home({ navigation }) {
   const densidadeRegiao = ['roubo', 'furto', 'violencia'].reduce((soma, id) => soma + (resumoCrimes[id] ?? 0), 0) / Math.PI
   const posicaoNaRegiao = Math.round(Math.min(densidadeRegiao / (700 * FRACAO_DO_ANO * 1.5), 1) * 92)
 
-  const simularNivel = (score) => {
-    setDemoEnvLabel(null)
-    setDemoBonus(0)
-    setDemoScore(score)
-  }
-
-  const setDemoEnvironment = (bonus, label) => {
-    setDemoScore(null)
-    setDemoBonus(bonus)
-    setDemoEnvLabel(label)
-  }
-
-  const resetDemo = () => {
-    setDemoScore(null)
-    setDemoBonus(0)
-    setDemoEnvLabel(null)
-  }
 
   return (
     <View style={styles.container}>
@@ -1022,9 +988,9 @@ export default function Home({ navigation }) {
             <TouchableOpacity
               onPress={() => navigation.navigate('Assistente')}
               accessibilityRole="button"
-              accessibilityLabel={`Conversar com a Lia. Risco ${calculandoScore ? 'sendo calculado' : monitoramentoAtivo ? `${displayScore} de 10, ${displayLevel}` : 'pausado'}`}
+              accessibilityLabel={`Conversar com a Lia. Risco ${calculandoScore ? 'sendo calculado' : monitoramentoAtivo ? displayLevel : 'pausado'}`}
             >
-              <AnelDaLia score={calculandoScore || !monitoramentoAtivo ? null : displayScore} cor={riskAccent} reacao={liaReaction} />
+              <AnelDaLia score={anelDoNivel} cor={riskAccent} reacao={liaReaction} />
             </TouchableOpacity>
             <View style={styles.topoTextos}>
               <Text style={styles.topoData}>Proteção · {dataDeHoje}</Text>
@@ -1036,8 +1002,17 @@ export default function Home({ navigation }) {
                 </View>
               ) : (
                 <Text style={styles.topoScore}>
-                  <Text style={[styles.topoScoreNumero, { color: riskAccent }]}>{monitoramentoAtivo ? displayScore : '–'}</Text>
-                  <Text style={styles.topoScoreResto}>{monitoramentoAtivo ? ` / 10 · risco ${displayLevel.toLowerCase()}` : '  alertas pausados'}</Text>
+                  {!monitoramentoAtivo ? (
+                    <Text style={styles.topoScoreResto}>Alertas pausados</Text>
+                  ) : nivelNaTela ? (
+                    <>
+                      <Text style={styles.topoScoreResto}>Risco </Text>
+                      <Text style={[styles.topoScoreNumero, { color: riskAccent }]}>{displayLevel.toLowerCase()}</Text>
+                      {contextoDaRegiao?.origem === 'cidade' && <Text style={styles.topoScoreResto}> · estimativa da cidade</Text>}
+                    </>
+                  ) : (
+                    <Text style={styles.topoScoreResto}>Sem dados da região</Text>
+                  )}
                 </Text>
               )}
             </View>
@@ -1060,14 +1035,8 @@ export default function Home({ navigation }) {
         </View>
 
         {/* ── CÁLCULO DO RISCO ── */}
-        {monitoramentoAtivo && !calculandoScore && fatoresDoRisco && (
-          <CalculoDoRisco
-            fatores={listaDeFatores}
-            total={displayScore}
-            rotuloDoNivel={displayLevel}
-            corDoNivel={riskAccent}
-            corDaAba={TEMA.forte}
-          />
+        {monitoramentoAtivo && (
+          <CamadasDoRisco contexto={contextoDaRegiao} corpo={corpo} corDaAba={TEMA.forte} />
         )}
 
         {/* ── MODOS ── */}
@@ -1161,61 +1130,10 @@ export default function Home({ navigation }) {
           )}
         </TouchableOpacity>
 
-        <>
-        <Text style={styles.mapSectionTitle}>Sensores do dispositivo</Text>
+        {/* Só a conexão do Galaxy Watch (Android), sem números técnicos: o corpo aparece
+            em palavras em "Por que seu risco está assim". */}
         {Platform.OS === 'android' && (
           <>
-            <View style={styles.experimentalScorePanel}>
-              <View style={styles.experimentalScoreHeading}>
-                <Text style={styles.experimentalScoreTitle}>Score experimental · BPM + movimento ML</Text>
-                <Text style={styles.experimentalScoreVersion}>{experimentalRiskVersion}</Text>
-              </View>
-              {experimentalRiskScore == null ? (
-                <Text style={styles.experimentalScoreValueUnavailable}>
-                  Aguardando histórico pessoal de BPM por quase 1 hora
-                </Text>
-              ) : (
-                <View style={styles.experimentalScoreResult}>
-                  <Text style={styles.experimentalScoreValue}>{experimentalRiskScore}/10</Text>
-                  <Text style={styles.experimentalScoreLevel}>{experimentalRisk.level}</Text>
-                  <Text style={styles.experimentalScoreDetail}>
-                    BPM {heartRateBaseline.zScore >= 0 ? '+' : ''}{heartRateBaseline.zScore.toFixed(1)} desvios · movimento {experimentalMotionScore == null ? 'aguardando' : `${Math.round(experimentalMotionScore * 100)}% atípico`} · contexto heurístico {riskContextScore}/10
-                  </Text>
-                </View>
-              )}
-              <Text style={styles.experimentalScoreDisclaimer}>
-                Prévia exploratória. Não validada, não aciona alertas e não substitui avaliação de segurança.
-              </Text>
-            </View>
-            <View style={styles.heartRatePanel}>
-              <Ionicons
-                name={heartRateIsCurrent ? 'heart' : 'heart-outline'}
-                size={23}
-                color={heartRateIsCurrent ? TEMA.forte : '#9A8C93'}
-              />
-              <Text style={styles.heartRateLabel}>FREQUÊNCIA CARDÍACA</Text>
-              <View style={styles.heartRateValueRow}>
-                <Text style={[styles.heartRateValue, !heartRateIsCurrent && styles.heartRateValueUnavailable]}>
-                  {heartRateValue}
-                </Text>
-                <Text style={styles.heartRateUnit}>bpm</Text>
-              </View>
-              <Text style={[styles.heartRateDetail, !heartRateIsCurrent && styles.heartRateDetailStale]}>
-                {heartRateDetail}
-              </Text>
-              <Text style={styles.heartRateBaselineDetail}>
-                {!heartRateIsCurrent
-                  ? 'Aguardando BPM atual para comparar com sua média'
-                  : heartRateBaseline.available
-                  ? `${heartRateBaseline.zScore >= 0 ? '+' : ''}${heartRateBaseline.zScore.toFixed(1)} desvios da sua média da última hora`
-                  : heartRateBaseline.sampleCount < 20
-                    ? `Formando sua média pessoal · ${heartRateBaseline.sampleCount}/20 leituras`
-                    : heartRateBaseline.baselineReady
-                      ? 'Sua média estável não permite calcular o desvio agora'
-                      : `Histórico pessoal: ${heartRateBaseline.coverageMinutes} min · precisa cobrir quase 1 hora`}
-              </Text>
-            </View>
-
             <TouchableOpacity
               style={[
                 styles.smartwatchConnectionButton,
@@ -1245,124 +1163,9 @@ export default function Home({ navigation }) {
                 />
               )}
             </TouchableOpacity>
-
-            {smartwatchWarning && (
-              <View
-                accessibilityRole="alert"
-                accessibilityLiveRegion="polite"
-                style={styles.smartwatchWarning}
-              >
-                <Ionicons name="warning" size={20} color="#A65D00" />
-                <View style={styles.smartwatchWarningTexts}>
-                  <Text style={styles.smartwatchWarningTitle}>{smartwatchWarning.title}</Text>
-                  <Text style={styles.smartwatchWarningMessage}>{smartwatchWarning.message}</Text>
-                </View>
-              </View>
-            )}
-
-            {Platform.OS === 'android' && (
-              <View style={styles.watchMotionRow}>
-                <Ionicons name="watch-outline" size={18} color={motionRisk.watchIsRecent ? Brand.green : Brand.muted} />
-                <Text style={styles.watchMotionValue}>
-                  {motionRisk.watchIsRecent ? `${smartwatch.watchMotion.peak.toFixed(1)} m/s²` : '—'}
-                </Text>
-                <View style={styles.watchMotionTexts}>
-                  <Text style={styles.watchMotionTitle}>Acelerômetro do relógio</Text>
-                  <Text style={styles.watchMotionDetail}>{watchMotionDetail}</Text>
-                </View>
-              </View>
-            )}
           </>
         )}
-        <View style={styles.forceRow}>
-          <Ionicons name="phone-portrait-outline" size={18} color={isHighRisk ? TEMA.forte : Brand.muted} />
-          <Text style={[styles.forceValue, { color: isHighRisk ? TEMA.forte : Brand.ink }]}>{magnitude}G</Text>
-          <Text style={styles.forceLabel}>Acelerômetro do celular{motionRisk.phonePoints > 0 ? ` · +${motionRisk.phonePoints}` : ''}</Text>
-          {isHighRisk && <View style={styles.forcePill}><Text style={styles.forcePillText}>Alto</Text></View>}
-        </View>
-        {Platform.OS === 'ios' && (
-          <Text style={styles.sensorAvailabilityNote}>A leitura cardíaca e o acelerômetro do relógio ficam disponíveis no Android.</Text>
-        )}
 
-        </>
-
-        {/* Mantido oculto para possível reutilização futura; não participa do score real. */}
-        {SHOW_PRESENTATION_MODE && (
-        <View style={styles.demoPanel}>
-          <View style={styles.demoPanelHeader}>
-            <Ionicons name="flask-outline" size={16} color={TEMA.forte} />
-            <Text style={styles.demoPanelTitle}>Modo Apresentação</Text>
-          </View>
-
-          {/* Seção 1: Ambiente + sacudir */}
-          <Text style={styles.demoSectionLabel}>① Simular ambiente · depois sacuda o celular</Text>
-          <View style={styles.demoBtnRow}>
-            <TouchableOpacity
-              style={[
-                styles.demoBtn,
-                { borderColor: '#E6A200', borderWidth: demoEnvLabel === 'risco-dia' ? 2.5 : 1.5 },
-                demoEnvLabel === 'risco-dia' && { backgroundColor: '#FFF8E6' }
-              ]}
-              onPress={() => setDemoEnvironment(1, 'risco-dia')}
-            >
-              {demoEnvLabel === 'risco-dia'
-                ? <Ionicons name="checkmark-circle" size={18} color="#E6A200" />
-                : <Ionicons name="sunny-outline" size={16} color="#E6A200" />
-              }
-              <Text style={[styles.demoBtnText, { color: '#E6A200' }]}>Risco (dia)</Text>
-              <Text style={styles.demoBtnSub}>Sacuda → Moderado</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.demoBtn,
-                { borderColor: Brand.danger, borderWidth: demoEnvLabel === 'risco-noite' ? 2.5 : 1.5 },
-                demoEnvLabel === 'risco-noite' && { backgroundColor: '#FDEAEA' }
-              ]}
-              onPress={() => setDemoEnvironment(3, 'risco-noite')}
-            >
-              {demoEnvLabel === 'risco-noite'
-                ? <Ionicons name="checkmark-circle" size={18} color={Brand.danger} />
-                : <Ionicons name="moon-outline" size={16} color={Brand.danger} />
-              }
-              <Text style={[styles.demoBtnText, { color: Brand.danger }]}>Risco noturno</Text>
-              <Text style={styles.demoBtnSub}>Sacuda → Crítico</Text>
-            </TouchableOpacity>
-          </View>
-
-          {demoEnvLabel && (
-            <View style={styles.demoEnvActive}>
-              <Ionicons name="radio-outline" size={13} color="#27AE60" />
-              <Text style={styles.demoEnvActiveText}>
-                {demoEnvLabel === 'risco-dia' ? 'Região de risco (dia) ativa' : 'Risco noturno ativo'} · Sacuda para acionar
-              </Text>
-            </View>
-          )}
-
-          {/* Seção 2: Acionamento direto */}
-          <Text style={[styles.demoSectionLabel, { marginTop: 14 }]}>② Ou acione diretamente</Text>
-          <View style={styles.demoBtnRow}>
-            <TouchableOpacity style={[styles.demoBtn, { borderColor: '#27AE60' }]} onPress={() => simularNivel(3)}>
-              <Text style={[styles.demoBtnText, { color: '#27AE60' }]}>Nível 1</Text>
-              <Text style={styles.demoBtnSub}>Tudo bem?</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.demoBtn, { borderColor: '#E6A200' }]} onPress={() => simularNivel(6)}>
-              <Text style={[styles.demoBtnText, { color: '#E6A200' }]}>Nível 2</Text>
-              <Text style={styles.demoBtnSub}>Confirmar (30s)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.demoBtn, { borderColor: Brand.danger }]} onPress={() => simularNivel(9)}>
-              <Text style={[styles.demoBtnText, { color: Brand.danger }]}>Nível 3</Text>
-              <Text style={styles.demoBtnSub}>Alerta (10s)</Text>
-            </TouchableOpacity>
-          </View>
-
-          {(demoScore !== null || demoEnvLabel !== null) && (
-            <TouchableOpacity style={styles.demoResetBtn} onPress={resetDemo}>
-              <Ionicons name="refresh-outline" size={14} color={TEMA.forte} />
-              <Text style={styles.demoResetText}>Resetar demo</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        )}
 
       </ScrollView>
 
@@ -1440,11 +1243,16 @@ export default function Home({ navigation }) {
                         <Ionicons name="logo-whatsapp" size={14} color={Brand.green} />
                         <Text style={styles.feedbackLabel}>Mensagem de WhatsApp enviada para</Text>
                       </View>
-                      {sosFeedbackData.enviados.map((c) => (
-                        <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)}>
-                          <Text style={styles.feedbackContact}>{c}</Text>
-                        </TouchableOpacity>
-                      ))}
+                      {sosFeedbackData.enviados.map((c) => {
+                        const nome = nomeDoTelefone(c, contatos)
+                        return (
+                          <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)} accessibilityLabel={`${nome ? `${nome}, ` : ''}${c}. Toque para ligar`}>
+                            <Text style={styles.feedbackContact}>
+                              {nome ? <>{nome}  <Text style={styles.feedbackContactNumero}>{c}</Text></> : c}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })}
                     </>
                   )}
                   {sosFeedbackData.falhas.length > 0 && (
@@ -1453,11 +1261,16 @@ export default function Home({ navigation }) {
                         <Ionicons name="close-circle" size={14} color={Brand.danger} />
                         <Text style={styles.feedbackLabel}>Não foi possível enviar para · toque para ligar</Text>
                       </View>
-                      {sosFeedbackData.falhas.map((c) => (
-                        <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)}>
-                          <Text style={[styles.feedbackContact, { color: Brand.danger }]}>{c}</Text>
-                        </TouchableOpacity>
-                      ))}
+                      {sosFeedbackData.falhas.map((c) => {
+                        const nome = nomeDoTelefone(c, contatos)
+                        return (
+                          <TouchableOpacity key={c} onPress={() => Linking.openURL(`tel:${c}`)} accessibilityLabel={`${nome ? `${nome}, ` : ''}${c}. Toque para ligar`}>
+                            <Text style={[styles.feedbackContact, { color: Brand.danger }]}>
+                              {nome ? <>{nome}  <Text style={styles.feedbackContactNumero}>{c}</Text></> : c}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })}
                     </>
                   )}
                 </View>
@@ -1560,54 +1373,25 @@ export default function Home({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* MODAL CHECK SIMPLES — Nível 1 (score ≤ 5) */}
-      <Modal transparent visible={simpleCheckVisible} animationType="fade">
-        <View style={styles.overlayCentered}>
-          <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: Brand.green }]} />
-            <View style={styles.modalInner}>
-              <View style={{ alignItems: 'center', marginBottom: 8 }}>
-                <LiaAvatar size={72} reaction="checagem" />
-              </View>
-              <Text style={[styles.cardTitleCritical, { color: Brand.green }]}>Tudo bem?</Text>
-              <Text style={styles.cardSubtitle}>
-                O Ampara está monitorando você. Confirme que está segura.
-              </Text>
-              <TouchableOpacity style={[styles.btnSafe, { backgroundColor: Brand.green }]} onPress={handleUserIsSafe}>
-                <Text style={styles.btnSafeText}>Sim, estou bem</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btnPrimary, { marginTop: 10, backgroundColor: TEMA.forte }]}
-                onPress={() => { setSimpleCheckVisible(false); executarEnvioDeSocorro(); }}
-              >
-                <Text style={styles.btnPrimaryText}>Preciso de ajuda</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL CRONÔMETRO — Nível 2 (score 5-8) e Nível 3 (score > 8) */}
+      {/* MODAL CRONÔMETRO — nível alto das 3 camadas por 5 s seguidos */}
       <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.overlayCentered}>
           <View style={styles.cardModal}>
-            <View style={[styles.modalStrip, { backgroundColor: alertType === 'critico' ? Brand.danger : Brand.amber }]} />
+            <View style={[styles.modalStrip, { backgroundColor: Brand.danger }]} />
             <View style={styles.modalInner}>
               <View style={{ alignItems: 'center', marginBottom: 8 }}>
-                <LiaAvatar size={72} reaction={alertType === 'critico' ? 'critico' : 'checagem'} />
+                <LiaAvatar size={72} reaction="critico" />
               </View>
               <Text style={styles.cardTitleCritical}>
-                {alertType === 'critico' ? 'Alerta Crítico' : 'Confirma bem-estar?'}
+                Risco alto
               </Text>
               <Text style={styles.cardSubtitle}>
-                {alertType === 'critico'
-                  ? `Score ${displayScore}/10 · Risco alto detectado. Seus contatos serão acionados em:`
-                  : `Score ${displayScore}/10 · Movimento incomum detectado. Confirme que está segura.`}
+                Risco alto detectado. Seus contatos serão acionados em:
               </Text>
 
               <View style={{alignItems: 'center', marginVertical: 10}}>
-                <View style={[styles.timerCircle, { borderColor: alertType === 'critico' ? Brand.danger : Brand.amber }]}>
-                  <Text style={[styles.timerCountText, { color: alertType === 'critico' ? Brand.danger : Brand.amber }]}>{countdown}</Text>
+                <View style={[styles.timerCircle, { borderColor: Brand.danger }]}>
+                  <Text style={[styles.timerCountText, { color: Brand.danger }]}>{countdown}</Text>
                   <Text style={styles.timerSecondsText}>seg</Text>
                 </View>
               </View>
@@ -1617,7 +1401,7 @@ export default function Home({ navigation }) {
               </Text>
 
               <TouchableOpacity style={styles.btnSafe} onPress={handleUserIsSafe}>
-                <Text style={styles.btnSafeText}>Estou bem — Cancelar</Text>
+                <Text style={styles.btnSafeText}>Estou bem, cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1768,16 +1552,6 @@ const styles = StyleSheet.create({
   heartRateUnit: { marginLeft: 6, color: Brand.muted, fontSize: 18, fontWeight: '600' },
   heartRateDetail: { minHeight: 18, color: Brand.green, fontSize: 12, fontWeight: '600', textAlign: 'center' },
   heartRateBaselineDetail: { minHeight: 16, marginTop: 4, color: Brand.muted, fontSize: 11, textAlign: 'center' },
-  experimentalScorePanel: { marginHorizontal: 22, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Brand.line },
-  experimentalScoreHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  experimentalScoreTitle: { color: Brand.ink, fontSize: 13, fontWeight: '700' },
-  experimentalScoreVersion: { color: Brand.muted, fontSize: 10 },
-  experimentalScoreResult: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 5 },
-  experimentalScoreValue: { color: Brand.roseDeep, fontSize: 22, fontWeight: '800' },
-  experimentalScoreLevel: { color: Brand.ink, fontSize: 13, fontWeight: '600' },
-  experimentalScoreValueUnavailable: { marginTop: 5, color: Brand.muted, fontSize: 12 },
-  experimentalScoreDetail: { color: Brand.muted, fontSize: 11 },
-  experimentalScoreDisclaimer: { marginTop: 4, color: Brand.muted, fontSize: 10, lineHeight: 14 },
   heartRateDetailStale: { color: Brand.amber },
   smartwatchConnectionButton: { minHeight: 66, marginHorizontal: 22, marginTop: 0, marginBottom: 14, paddingHorizontal: 0, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Brand.line, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'transparent' },
   smartwatchConnectionButtonConnected: { borderColor: Brand.line },
@@ -1853,6 +1627,7 @@ const styles = StyleSheet.create({
   feedbackText: { fontSize: 14, color: '#333', fontStyle: 'italic' },
   sosFailDetail: { fontSize: 11, color: '#999', textAlign: 'center', marginTop: -12, marginBottom: 16 },
   feedbackContact: { fontSize: 15, color: TEMA.forte, fontWeight: '600', marginTop: 3 },
+  feedbackContactNumero: { fontSize: 13, color: Brand.muted, fontWeight: '400' },
 
   overlayBottom: { flex: 1, backgroundColor: 'rgba(42,29,35,0.5)', justifyContent: 'flex-end' },
   cardModalBottom: { backgroundColor: '#FFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: '90%', overflow: 'hidden', elevation: 20 },
@@ -1879,17 +1654,4 @@ const styles = StyleSheet.create({
   timerSecondsText: { fontSize: 11, color: '#666', fontWeight: '600' },
   alertWarningText: { fontSize: 13, color: '#666', textAlign: 'center', marginVertical: 15, paddingHorizontal: 10 },
 
-  demoPanel: { marginHorizontal: 20, marginTop: 16, marginBottom: 8, backgroundColor: '#EEF6FC', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#B8D6E8' },
-  demoPanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  demoPanelTitle: { fontSize: 13, fontWeight: '700', color: Brand.blue },
-  demoSectionLabel: { fontSize: 11, color: '#5A8FAF', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 },
-  demoBtnRow: { flexDirection: 'row', gap: 8 },
-  demoBtn: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 10, alignItems: 'center', backgroundColor: '#FFF', gap: 2 },
-  demoBtnActive: { backgroundColor: '#F0F8FF' },
-  demoBtnText: { fontSize: 12, fontWeight: '700' },
-  demoBtnSub: { fontSize: 10, color: '#888' },
-  demoEnvActive: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EAF5EC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
-  demoEnvActiveText: { fontSize: 11, color: '#27AE60', fontWeight: '600', flex: 1 },
-  demoResetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 12 },
-  demoResetText: { fontSize: 12, color: '#5A8FAF', fontWeight: '600' },
 })
