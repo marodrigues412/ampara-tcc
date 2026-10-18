@@ -56,3 +56,19 @@ export async function getDailyRiskAssessmentReport(days = 7) {
   if (error) throw error
   return data || []
 }
+
+// Relatório por nível (data/risk_level_report.sql): uma linha por dia × hora × nível ×
+// modo de sensores. Paginado: 30 dias podem passar das 1.000 linhas que o Supabase
+// devolve de uma vez.
+export async function getRiskLevelReport(from, to = new Date()) {
+  const PAGINA = 1000
+  const linhas = []
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data, error } = await supabase
+      .rpc('risk_level_report', { p_from: from.toISOString(), p_to: to.toISOString(), p_tz: 'America/Sao_Paulo' })
+      .range(inicio, inicio + PAGINA - 1)
+    if (error) throw error
+    linhas.push(...(data || []))
+    if (!data || data.length < PAGINA) return linhas
+  }
+}
