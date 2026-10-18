@@ -44,7 +44,7 @@ const BASE_RESPOSTAS = [
   },
   {
     palavras: ['assédio', 'assedio', 'importun', 'denunciar', 'denúncia', 'denuncia'],
-    texto: 'Importunação sexual é crime (Lei 13.718/2018). Você pode denunciar:\n\n• Ligue 180 — Central de Atendimento à Mulher\n• Delegacia da Mulher ou delegacia comum\n• Delegacia Eletrônica da Polícia Civil\n\nSe acontecer no transporte público, procure um funcionário e peça para acionar a segurança.',
+    texto: 'Importunação sexual é crime (Lei 13.718/2018). Você pode denunciar:\n\n• Ligue 180: Central de Atendimento à Mulher\n• Delegacia da Mulher ou delegacia comum\n• Delegacia Eletrônica da Polícia Civil\n\nSe acontecer no transporte público, procure um funcionário e peça para acionar a segurança.',
   },
   {
     palavras: ['registrar', 'relato', 'relatar', 'ocorrência', 'ocorrencia'],

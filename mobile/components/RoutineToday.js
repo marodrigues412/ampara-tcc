@@ -79,7 +79,7 @@ export default function RoutineToday({ navigation, cor = TemaDaAba['Proteção']
   const proximoHoje = doDia.find((c) => minutosDoDia(c.hora_chegada) > minutoAgora)
 
   const detalheDe = (c) => {
-    const horario = `${c.hora_chegada.slice(0, 5)} – ${c.hora_saida.slice(0, 5)}`
+    const horario = `${c.hora_chegada.slice(0, 5)} às ${c.hora_saida.slice(0, 5)}`
     if (c === emAndamento) return { texto: horario, etiqueta: 'agora' }
     if (c !== proximoHoje) return { texto: horario, etiqueta: null }
     const trajeto = trajetoPara(c)
@@ -156,7 +156,7 @@ export default function RoutineToday({ navigation, cor = TemaDaAba['Proteção']
         <>
           {doDia.length === 0 && <Text style={styles.aviso}>Nada na sua rotina hoje.</Text>}
           {linha(futuro.compromisso, {
-            texto: `${futuro.compromisso.hora_chegada.slice(0, 5)} – ${futuro.compromisso.hora_saida.slice(0, 5)}`,
+            texto: `${futuro.compromisso.hora_chegada.slice(0, 5)} às ${futuro.compromisso.hora_saida.slice(0, 5)}`,
             etiqueta: futuro.adiante === 1 ? 'amanhã' : DIAS_SEMANA[futuro.dia.getDay()].nome.toLowerCase(),
           }, false, 'futuro')}
         </>
