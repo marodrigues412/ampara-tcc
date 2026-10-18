@@ -48,7 +48,7 @@ async function bairroDe({ latitude, longitude }) {
   }
 }
 
-// "8,0 (crítico), registrado há 12 min"
+// "8,0 (alto), registrado há 12 min" (score de pontos antigo; não é enviado)
 function descreverRiscoAtual(historicoDoDia) {
   const ultimo = [...historicoDoDia].reverse().find((p) => p.risco != null)
   if (!ultimo) return null

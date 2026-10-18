@@ -18,8 +18,14 @@ export const FATOR_DO_MOVIMENTO_EM_ATIVIDADE = 0.5
 // Nível alto precisa durar isso, sem interrupção, antes de abrir o alerta automático.
 // Escolha das autoras (18/10/2026) a partir da simulação com o UCI HAR (modelo v2): em
 // caminhada normal, a maior sequência de "alto" foi 2,7 s, e 3 s ficava no limite.
-// SOS manual e impacto forte do celular não esperam (docs/score_bpm_ml.md).
+// Só o SOS manual não espera (docs/score_bpm_ml.md).
 export const ALTO_SUSTENTADO_MS = 5_000
+
+// Pico forte do celular (magnitude >= 2,8 g na janela de 2,56 s). Não abre alerta
+// sozinho: entra na Camada 2 como movimento do celular = 1 e passa pela matriz como
+// qualquer outro sinal (contexto baixo + corpo alto = moderado, sem alerta). Antes, um
+// gatilho de impacto abria o alerta direto, por cima da matriz.
+export const PICO_FORTE_DO_CELULAR_G = 2.8
 
 const RELOGIO_RECENTE_MS = 5_000
 const RELOGIO_MIN_AMOSTRAS = 10
@@ -70,10 +76,13 @@ export const ROTULOS_DO_MODO = {
 // - movimentoRelogio: saída de movimentoDoRelogio, [0, 1].
 // O modo sai das leituras disponíveis agora, não do tipo de aparelho: o relógio
 // desconectou, cai para só celular; voltou, volta para completo.
-export function avaliarCorpo({ heartRateZScore = null, movimentoCelular = null, movimentoRelogio = null, activityMode = false }) {
+// picoForteCelular: a janela do celular teve pico >= PICO_FORTE_DO_CELULAR_G; o
+// movimento do celular passa a valer 1 (mesmo sem o Isolation Forest pronto).
+export function avaliarCorpo({ heartRateZScore = null, movimentoCelular = null, movimentoRelogio = null, activityMode = false, picoForteCelular = false }) {
+  const movimentoDoModelo = valorFinito(movimentoCelular) === null ? null : limitar(Number(movimentoCelular))
   const sinais = {
     bpm: normalizeHeartRateAnomaly(valorFinito(heartRateZScore)),
-    movimentoCelular: valorFinito(movimentoCelular) === null ? null : limitar(Number(movimentoCelular)),
+    movimentoCelular: picoForteCelular ? 1 : movimentoDoModelo,
     movimentoRelogio: valorFinito(movimentoRelogio) === null ? null : limitar(Number(movimentoRelogio)),
   }
   const modo = modoDosSensores(sinais)
@@ -102,6 +111,24 @@ export function fundirCamadas({ contexto, corpo }) {
   if (!contexto.disponivel) return { estado: 'sem_contexto', nivel: null }
   if (!corpo?.disponivel) return { estado: 'calculando', nivel: null }
   return { estado: 'pronto', nivel: NIVEIS[contexto.faixa][corpo.faixa] }
+}
+
+// Regra do alerta automático, para uma sequência de leituras [{ t (ms), nivel }]:
+// abre quando o nível fica "alto" por ALTO_SUSTENTADO_MS seguidos, uma vez por
+// sequência. Devolve os instantes em que abriria. É a mesma regra do timer da Home.
+export function alertasPorPersistencia(leituras, minimoMs = ALTO_SUSTENTADO_MS) {
+  const alertas = []
+  let inicio = null
+  let disparou = false
+  for (const { t, nivel } of leituras) {
+    if (nivel === 'alto') {
+      if (inicio === null) { inicio = t; disparou = false }
+      if (!disparou && t - inicio >= minimoMs) { alertas.push(t); disparou = true }
+    } else {
+      inicio = null
+    }
+  }
+  return alertas
 }
 
 // Ação de cada nível. Áudio e sugestão de PM no alto ficam para depois da Eureka.

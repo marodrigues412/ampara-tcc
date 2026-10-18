@@ -11,10 +11,11 @@ export const useRiskDetection = () => {
   const [location, setLocation] = useState(null);
   const [gpsSpeedDeltaMps, setGpsSpeedDeltaMps] = useState(null)
   const previousGpsSpeedRef = useRef(null)
-  const [riskStatus, setRiskStatus] = useState({ isHighRisk: false, magnitude: 0 });
+  // Só a magnitude, para mostrar na tela. O pico forte vira sinal do corpo na Home
+  // (threeLayerRisk.PICO_FORTE_DO_CELULAR_G); não existe mais gatilho de impacto aqui.
+  const [riskStatus, setRiskStatus] = useState({ magnitude: 0 });
   const [errorMsg, setErrorMsg] = useState(null);
 
-  const RISK_THRESHOLD = 2.8;
 
   useEffect(() => {
     let stepSub;
@@ -46,10 +47,7 @@ export const useRiskDetection = () => {
       // O score de 3 camadas é calculado na Home (services/threeLayerRisk.js); aqui fica
       // só a janela de movimento e o gatilho de impacto forte.
 
-      setRiskStatus({
-        magnitude: mag.toFixed(2),
-        isHighRisk: mag > RISK_THRESHOLD && stepCount >= 0 
-      });
+      setRiskStatus({ magnitude: mag.toFixed(2) });
     });
 
     return () => {
