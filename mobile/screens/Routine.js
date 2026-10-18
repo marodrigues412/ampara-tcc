@@ -142,7 +142,7 @@ export default function Routine({ navigation }) {
                     <Ionicons name={iconeDoTipo(item.compromisso.tipo)} size={20} color={TEMA.forte} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.compromissoHora}>
-                        {item.compromisso.hora_chegada.slice(0, 5)} – {item.compromisso.hora_saida.slice(0, 5)}
+                        {item.compromisso.hora_chegada.slice(0, 5)} às {item.compromisso.hora_saida.slice(0, 5)}
                       </Text>
                       <Text style={styles.compromissoNome}>{item.compromisso.nome}</Text>
                       <Text style={styles.compromissoLocal} numberOfLines={1}>{item.compromisso.local_nome}</Text>
@@ -180,7 +180,7 @@ export default function Routine({ navigation }) {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.itemNome, !c.ativo && styles.desativado]}>{c.nome}</Text>
                   <Text style={[styles.itemDetalhe, !c.ativo && styles.desativado]}>
-                    {descreverRecorrencia(c)} · {c.hora_chegada.slice(0, 5)}–{c.hora_saida.slice(0, 5)}
+                    {descreverRecorrencia(c)} · {c.hora_chegada.slice(0, 5)} às {c.hora_saida.slice(0, 5)}
                   </Text>
                 </View>
                 <Switch
@@ -212,7 +212,7 @@ export default function Routine({ navigation }) {
                 <Ionicons name={iconeDoTipo(modelo.tipo)} size={22} color={TEMA.forte} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemNome}>{modelo.nome}</Text>
-                  <Text style={styles.itemDetalhe}>{descreverRecorrencia(modelo)} · {modelo.hora_chegada}–{modelo.hora_saida}</Text>
+                  <Text style={styles.itemDetalhe}>{descreverRecorrencia(modelo)} · {modelo.hora_chegada} às {modelo.hora_saida}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#B99AA5" />
               </TouchableOpacity>

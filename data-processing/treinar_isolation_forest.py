@@ -23,6 +23,9 @@ FEATURE_NAMES = [
     "max_jerk_g_per_second",
 ]
 SAMPLE_DECIMATION = 5  # UCI-HAR: 50 Hz; app: Accelerometer Expo a 10 Hz.
+SOURCE_SAMPLING_HZ = 50
+TRAINING_SAMPLING_HZ = SOURCE_SAMPLING_HZ // SAMPLE_DECIMATION  # 10 Hz
+MODEL_VERSION = "uci-har-motion-if-v2"
 ACTIVITY_NAMES = {
     1: "walking",
     2: "walking_upstairs",
@@ -71,13 +74,21 @@ def load_motion_features(dataset_dir: Path, split: str) -> tuple[np.ndarray, np.
             magnitude.mean(axis=1),
             magnitude.std(axis=1),
             magnitude.max(axis=1),
-            np.abs(np.diff(magnitude, axis=1)).max(axis=1) * 50.0,
+            # Jerk em g/s: diferença entre amostras vizinhas ÷ intervalo entre elas. Depois
+            # da redução a 10 Hz o intervalo é 0,1 s, então multiplica por 10 — igual ao
+            # app (mobile/utils/motionWindowFeatures.js). A v1 multiplicava por 50 (a taxa
+            # de antes da redução): o modelo aprendeu jerks 5× maiores que os do app.
+            max_jerk_g_per_second(magnitude),
         )
     )
     labels = np.loadtxt(dataset_dir / split / f"y_{suffix}.txt", dtype=np.int64)
     subjects = np.loadtxt(dataset_dir / split / f"subject_{suffix}.txt", dtype=np.int64)
     normal = np.isin(labels, tuple(ACTIVITY_NAMES)) & np.isfinite(features).all(axis=1)
     return features[normal], labels[normal], subjects[normal]
+
+
+def max_jerk_g_per_second(magnitude_10hz: np.ndarray) -> np.ndarray:
+    return np.abs(np.diff(magnitude_10hz, axis=1)).max(axis=1) * TRAINING_SAMPLING_HZ
 
 
 def average_path_length(sample_count: int) -> float:
@@ -164,13 +175,13 @@ def main() -> None:
     model = {
         "schemaVersion": 1,
         "algorithm": "IsolationForest",
-        "modelVersion": "uci-har-motion-if-v1",
+        "modelVersion": MODEL_VERSION,
         "dataset": "UCI Human Activity Recognition Using Smartphones",
         "datasetDoi": "10.24432/C54S4K",
         "datasetLicense": "CC BY 4.0",
         "normalActivityLabels": list(ACTIVITY_NAMES.values()),
         "featureNames": FEATURE_NAMES,
-        "trainingSamplingHz": 10,
+        "trainingSamplingHz": TRAINING_SAMPLING_HZ,
         "windowDurationSeconds": 2.56,
         "scalerMean": scaler.mean_.tolist(),
         "scalerScale": scaler.scale_.tolist(),
@@ -186,7 +197,8 @@ def main() -> None:
         "datasetDoi": model["datasetDoi"],
         "datasetLicense": model["datasetLicense"],
         "features": FEATURE_NAMES,
-        "trainingSamplingHz": 10,
+        "jerkDefinition": "max |Δ magnitude| entre amostras vizinhas a 10 Hz × 10 (g/s), igual ao app",
+        "trainingSamplingHz": TRAINING_SAMPLING_HZ,
         "windowDurationSeconds": 2.56,
         "activityFilter": list(ACTIVITY_NAMES.values()),
         "trainSubjects": sorted(np.unique(train_subjects).astype(int).tolist()),
@@ -207,6 +219,9 @@ def main() -> None:
             "byActivity": activity_metrics,
             "interpretation": "Normal-only holdout estimates outlier rates, not sensitivity to violence or emergency events.",
         },
+        "correcoes": [
+            "v2 (18/10/2026): o jerk da v1 era multiplicado por 50 depois da redução a 10 Hz (o certo é 10), ficando 5× maior que o jerk calculado no app. Como o fator era o mesmo no treino e na avaliação e as features são padronizadas, a v2 tem as mesmas árvores e limites e reproduz a avaliação offline da v1 (1,49% acima do limite moderado). O erro estava na integração: o app entregava ao modelo um jerk 5× menor que o do treino, o que fazia caminhada normal parecer anômala no celular (ver docs/score_bpm_ml.md).",
+        ],
         "limitations": [
             "UCI-HAR contains smartphone inertial signals, but no heart-rate or GPS labels/features.",
             "The source phone was carried at the waist; Ampara phone placement may differ.",

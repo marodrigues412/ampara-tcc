@@ -1,5 +1,5 @@
 {
-  "modelVersion": "uci-har-motion-if-v1",
+  "modelVersion": "uci-har-motion-if-v2",
   "algorithm": "IsolationForest",
   "dataset": "UCI Human Activity Recognition Using Smartphones",
   "datasetDoi": "10.24432/C54S4K",
@@ -10,6 +10,7 @@
     "peak_magnitude_g",
     "max_jerk_g_per_second"
   ],
+  "jerkDefinition": "max |Δ magnitude| entre amostras vizinhas a 10 Hz × 10 (g/s), igual ao app",
   "trainingSamplingHz": 10,
   "windowDurationSeconds": 2.56,
   "activityFilter": [
@@ -105,6 +106,9 @@
     },
     "interpretation": "Normal-only holdout estimates outlier rates, not sensitivity to violence or emergency events."
   },
+  "correcoes": [
+    "v2 (18/10/2026): o jerk da v1 era multiplicado por 50 depois da redução a 10 Hz (o certo é 10), ficando 5× maior que o jerk calculado no app. Como o fator era o mesmo no treino e na avaliação e as features são padronizadas, a v2 tem as mesmas árvores e limites e reproduz a avaliação offline da v1 (1,49% acima do limite moderado). O erro estava na integração: o app entregava ao modelo um jerk 5× menor que o do treino, o que fazia caminhada normal parecer anômala no celular (ver docs/score_bpm_ml.md)."
+  ],
   "limitations": [
     "UCI-HAR contains smartphone inertial signals, but no heart-rate or GPS labels/features.",
     "The source phone was carried at the waist; Ampara phone placement may differ.",

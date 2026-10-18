@@ -9,19 +9,25 @@ import { perguntarAIA } from './chatService'
 
 const chaveDoCache = (userId, dias) => {
   const hoje = new Date()
-  return `ampara:resumoLia:${userId}:${dias}:${hoje.getFullYear()}-${hoje.getMonth() + 1}-${hoje.getDate()}`
+  // "niveis": resumos de antes (0 a 10) guardados hoje não podem reaparecer.
+  return `ampara:resumoLia:niveis:${userId}:${dias}:${hoje.getFullYear()}-${hoje.getMonth() + 1}-${hoje.getDate()}`
 }
 
-// dados: { dias, riscoMedio, faixa, variacao, horarioMaisExposto, diasMonitorados, alertas, preparo }
+// dados: { dias, tempoMonitorado, porNivel, tempoEmAlto, variacaoDoAlto, horarioMaisExposto,
+//          diasComRegistro, alertas, preparo } — tudo já em texto. Sem números de 0 a 10:
+// o risco do app é um nível (baixo, moderado, alto).
 const montarPergunta = (d) => [
   'Escreva um resumo curto (no máximo 2 frases) do período de segurança de uma usuária do app Ampara,',
   'em tom acolhedor e sem alarmismo, falando diretamente com ela ("você").',
+  'O risco do app é um nível (baixo, moderado ou alto) que cruza a região e o horário com os sensores do corpo; não use notas de 0 a 10.',
   'Se fizer sentido, termine com uma sugestão prática e simples. Não invente nenhum dado além destes:',
   `- período: últimos ${d.dias} dias`,
-  `- risco médio: ${d.riscoMedio} de 10 (faixa ${d.faixa}; quanto maior, mais risco)`,
-  d.variacao ? `- em relação ao período anterior: ${d.variacao}` : null,
+  `- tempo monitorado: ${d.tempoMonitorado}`,
+  `- tempo em cada nível: ${d.porNivel}`,
+  `- tempo em risco alto: ${d.tempoEmAlto}`,
+  d.variacaoDoAlto ? `- em relação ao período anterior: ${d.variacaoDoAlto}` : null,
   d.horarioMaisExposto ? `- horário mais exposto: ${d.horarioMaisExposto}` : null,
-  `- dias com o monitoramento ativo: ${d.diasMonitorados} de ${d.dias}`,
+  `- dias com avaliações: ${d.diasComRegistro} de ${d.dias}`,
   `- alertas SOS enviados: ${d.alertas}`,
   d.preparo ? `- itens de preparo pendentes: ${d.preparo}` : null,
 ].filter(Boolean).join('\n')
