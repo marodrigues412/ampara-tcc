@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, AppRegistry, View } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './services/supabase'
+// Importado aqui para a tarefa de localização em segundo plano existir antes da 1ª posição.
+import './services/monitoramentoEmSegundoPlano'
+
+// Tarefa que nunca termina: enquanto ela roda, o Android não pausa os timers do JS com o
+// app em segundo plano. O módulo ampara-watch a liga e desliga junto com o monitoramento.
+AppRegistry.registerHeadlessTask('AmparaMonitor', () => () => new Promise(() => {}))
 import { useFonts } from 'expo-font'
 import { Fraunces_500Medium_Italic } from '@expo-google-fonts/fraunces'
 

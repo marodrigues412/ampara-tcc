@@ -33,6 +33,17 @@
     },
     "plugins": [
       "./modules/ampara-watch/plugin",
+      [
+        "expo-location",
+        {
+          "isAndroidForegroundServiceEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false,
+          "locationWhenInUsePermission": "O Ampara usa sua localização para mostrar o risco da região, o mapa de ocorrências e enviar sua posição no SOS.",
+          "locationAlwaysAndWhenInUsePermission": "O Ampara usa sua localização para mostrar o risco da região, o mapa de ocorrências e enviar sua posição no SOS.",
+          "locationAlwaysPermission": "O Ampara usa sua localização para mostrar o risco da região, o mapa de ocorrências e enviar sua posição no SOS.",
+          "motionUsagePermission": "O Ampara usa os sensores de movimento para perceber movimentos bruscos que podem indicar uma situação de risco."
+        }
+      ],
       "react-native-health-connect",
       [
         "expo-build-properties",

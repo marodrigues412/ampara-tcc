@@ -4,7 +4,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReactContext
+import com.facebook.react.bridge.UiThreadUtil
+import com.facebook.react.jstasks.HeadlessJsTaskConfig
+import com.facebook.react.jstasks.HeadlessJsTaskContext
 import com.google.android.gms.wearable.Wearable
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -13,9 +21,80 @@ import org.json.JSONObject
 class AmparaWatchModule : Module() {
   private var receiver: BroadcastReceiver? = null
 
+  // Monitoramento com o app em segundo plano. Os timers do JS param quando a Activity
+  // pausa (JavaTimerManager) e dependem do Choreographer, que não anda com a tela apagada.
+  // Então o relógio do caminho crítico (nível sustentado, contagem, envio) vem daqui:
+  // um tique por segundo numa thread própria, com wake lock parcial para a CPU não dormir.
+  // A headless task que nunca termina mantém os demais timers do JS vivos quando dá.
+  // Quem mantém o processo vivo é o serviço em primeiro plano do expo-location.
+  private var wakeLock: PowerManager.WakeLock? = null
+  private var tickThread: HandlerThread? = null
+  private var tickHandler: Handler? = null
+  private var headlessTaskId: Int? = null
+
+  private fun startKeepAlive(intervalMs: Long) {
+    val context = appContext.reactContext ?: return
+    if (tickHandler != null) return
+
+    val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Ampara:Monitoramento").apply {
+      setReferenceCounted(false)
+      acquire()
+    }
+
+    val thread = HandlerThread("AmparaMonitorTick").apply { start() }
+    val handler = Handler(thread.looper)
+    tickThread = thread
+    tickHandler = handler
+    val tick = object : Runnable {
+      override fun run() {
+        sendEvent("onMonitorTick", mapOf("t" to System.currentTimeMillis()))
+        handler.postDelayed(this, intervalMs)
+      }
+    }
+    handler.post(tick)
+
+    val reactContext = context as? ReactContext ?: return
+    UiThreadUtil.runOnUiThread {
+      try {
+        headlessTaskId = HeadlessJsTaskContext.getInstance(reactContext)
+          .startTask(HeadlessJsTaskConfig(MONITOR_TASK, Arguments.createMap(), 0, true))
+      } catch (error: Exception) {
+        headlessTaskId = null
+      }
+    }
+  }
+
+  private fun stopKeepAlive() {
+    tickHandler?.removeCallbacksAndMessages(null)
+    tickThread?.quitSafely()
+    tickHandler = null
+    tickThread = null
+    if (wakeLock?.isHeld == true) wakeLock?.release()
+    wakeLock = null
+
+    val taskId = headlessTaskId ?: return
+    headlessTaskId = null
+    val reactContext = appContext.reactContext as? ReactContext ?: return
+    UiThreadUtil.runOnUiThread {
+      val tasks = HeadlessJsTaskContext.getInstance(reactContext)
+      if (tasks.isTaskRunning(taskId)) tasks.finishTask(taskId)
+    }
+  }
+
+  companion object {
+    // Precisa bater com o AppRegistry.registerHeadlessTask do App.js.
+    const val MONITOR_TASK = "AmparaMonitor"
+  }
+
   override fun definition() = ModuleDefinition {
     Name("AmparaWatch")
-    Events("onHeartRate", "onMonitorStatus", "onHeartRateStatus", "onWatchMotion")
+    Events("onHeartRate", "onMonitorStatus", "onHeartRateStatus", "onWatchMotion", "onMonitorTick")
+
+    Function("startBackgroundKeepAlive") { intervalMs: Int -> startKeepAlive(intervalMs.toLong().coerceAtLeast(250L)) }
+    Function("stopBackgroundKeepAlive") { stopKeepAlive() }
+
+    OnDestroy { stopKeepAlive() }
 
     OnStartObserving {
       val context = appContext.reactContext ?: return@OnStartObserving
