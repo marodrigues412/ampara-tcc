@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Accelerometer, Pedometer } from 'expo-sensors';
 import * as Location from 'expo-location';
+import { aguardarLocalizacao } from '../services/permissaoLocalizacao';
 import { appendPhoneMotionSample, summarizePhoneMotionWindow } from '../utils/motionWindowFeatures';
 import { extractPhoneMotionFeatures, scoreIsolationForest } from '../services/isolationForestMotion';
 import { PICO_FORTE_DO_CELULAR_G, acompanharMovimento, movimentoAtipico } from '../services/threeLayerRisk';
@@ -88,23 +89,27 @@ export const useRiskDetection = () => {
     // Com o app em segundo plano o watchPositionAsync é pausado pelo expo-location; as
     // posições passam a chegar pela tarefa do serviço em primeiro plano.
     const pararSegundoPlano = assinarLocalizacaoEmSegundoPlano(updateLocation);
+    let cancelado = false;
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        let loc = await Location.getCurrentPositionAsync({});
-        updateLocation(loc)
+      // Espera a liberação em vez de pedir sozinho: o pedido do sistema vem da tela que
+      // explica a localização (ou do aviso da Proteção), para ela entender antes.
+      await aguardarLocalizacao();
+      if (cancelado) return;
+      let loc = await Location.getCurrentPositionAsync({});
+      if (cancelado) return;
+      updateLocation(loc)
 
-        locationSub = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Balanced, distanceInterval: 50, timeInterval: 5 * 60 * 1000 },
-          (newLoc) => {
-            updateLocation(newLoc)
-          }
-        );
-      }
+      locationSub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, distanceInterval: 50, timeInterval: 5 * 60 * 1000 },
+        (newLoc) => {
+          updateLocation(newLoc)
+        }
+      );
     })();
 
     return () => {
       pararSegundoPlano();
+      cancelado = true;
       if (locationSub) locationSub.remove();
     };
   }, []);

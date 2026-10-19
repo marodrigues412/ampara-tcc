@@ -5,10 +5,10 @@ import {
   Platform, ScrollView, Image
 } from 'react-native'
 import { supabase } from '../services/supabase'
-import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
+import { Brand, CremeDoSite, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 
-const TEMA = TemaDaAba['Proteção']
+const TEMA = TemaDaAba.Entrada
 
 export default function RegisterScreen({ onBack }) {
   const [nome, setNome] = useState('')
@@ -87,14 +87,14 @@ export default function RegisterScreen({ onBack }) {
           bounces={false}
           showsVerticalScrollIndicator={false}
         >
-          <HeaderComCurvas aba="Proteção" semMarca style={styles.hero}>
+          <HeaderComCurvas aba="Entrada" semMarca style={styles.hero}>
             <Image
               source={require('../assets/images/maos-ampara-azul.png')}
               style={styles.logo}
               resizeMode="contain"
             />
             <Text style={styles.brand}>Ampara</Text>
-            <Text style={styles.lema}>Você não está sozinha.</Text>
+            <Text style={styles.lema}>Vamos criar sua conta</Text>
           </HeaderComCurvas>
 
           <View style={styles.card}>
@@ -145,11 +145,11 @@ export default function RegisterScreen({ onBack }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Brand.canvas },
+  root: { flex: 1, backgroundColor: CremeDoSite },
   kav: { flex: 1 },
   scroll: { flexGrow: 1 },
 
-  hero: { alignItems: 'center', paddingTop: 70, paddingBottom: 34, borderBottomLeftRadius: 40, borderBottomRightRadius: 40, marginBottom: 26 },
+  hero: { alignItems: 'center', paddingTop: 50, paddingBottom: 28, marginBottom: 10 },
   logo: {
     width: 66,
     height: 66,
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   input: {
-    backgroundColor: '#F7F4F5',
+    backgroundColor: '#FFFFFF',
     borderRadius: 22,
     paddingVertical: 14,
     paddingHorizontal: 18,

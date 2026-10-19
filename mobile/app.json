@@ -61,7 +61,7 @@
           "image": "./assets/images/maos-ampara-azul.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF"
+          "backgroundColor": "#F8F4F1"
         }
       ],
       "expo-font",

@@ -16,7 +16,7 @@ import { buscarEnderecoReverso } from '../services/enderecoReverso'
 import MapView, { Marker, Circle } from 'react-native-maps'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 
 // Cores da seção de onde a tela é aberta.
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
   header: { marginHorizontal: -20, marginTop: -20, marginBottom: 12 },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CremeDoSite,
     padding: 20
   },
 
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    backgroundColor: '#F7F4F5',
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 14,
     fontSize: 16

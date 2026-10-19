@@ -24,8 +24,14 @@ export const TemaDaAba = {
   Mapa: { fundo: '#E9EFF2', curva: '#CFDCE4', forte: '#3F6A86' },
   Dashboard: { fundo: '#EAF1EA', curva: '#CFE2D3', forte: '#287861' },
   Assistente: { fundo: '#EFEAF5', curva: '#DDD3EB', forte: '#6E5A9E' },
-  Perfil: { fundo: '#F8F4F1', curva: '#E6DDD6', forte: '#273963' },
+  // O fundo do Perfil era o creme; com o app todo em creme, ganhou um azul bem claro.
+  Perfil: { fundo: '#E9EDF5', curva: '#D6DDEB', forte: '#273963' },
+  // Telas antes do login: o creme do site (--paper), com o rosa da marca.
+  Entrada: { fundo: '#F8F4F1', curva: '#ECE2DC', forte: '#BD5574' },
 }
+
+// Fundo creme das telas antes do login, igual ao do site.
+export const CremeDoSite = '#F8F4F1'
 
 // Cor dos ícones e rótulos das abas que não estão abertas.
 export const CorAbaInativa = '#776C73'

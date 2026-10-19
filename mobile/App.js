@@ -1,5 +1,8 @@
+// Primeiro import de propósito: troca a fonte dos estilos antes de as telas criá-los.
+import './utils/fontesGlobais'
 import React, { useState, useEffect } from 'react'
-import { ActivityIndicator, AppRegistry, View } from 'react-native'
+import { AppRegistry, View } from 'react-native'
+import * as Linking from 'expo-linking'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './services/supabase'
 // Importado aqui para a tarefa de localização em segundo plano existir antes da 1ª posição.
@@ -10,9 +13,17 @@ import './services/monitoramentoEmSegundoPlano'
 AppRegistry.registerHeadlessTask('AmparaMonitor', () => () => new Promise(() => {}))
 import { useFonts } from 'expo-font'
 import { Fraunces_500Medium_Italic } from '@expo-google-fonts/fraunces'
+import { Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold, Nunito_800ExtraBold } from '@expo-google-fonts/nunito'
 
 import LoginScreen from './screens/LoginScreen'
-import OnboardingScreen from './screens/OnboardingScreen'
+import Abertura from './screens/Abertura'
+import BoasVindas from './screens/BoasVindas'
+import Apresentacao from './screens/Apresentacao'
+import NovaSenha from './screens/NovaSenha'
+import PermissaoLocalizacao from './screens/PermissaoLocalizacao'
+import { CHAVE_BOAS_VINDAS, ehLinkDeNovaSenha, sessaoDaUrl } from './services/authService'
+import { precisaExplicarLocalizacao } from './services/permissaoLocalizacao'
+import { CremeDoSite } from './constants/brandTheme'
 import Dashboard from './screens/Dashboard'
 import Home from './screens/Home'
 import CrimeMap from './screens/CrimeMap'
@@ -34,6 +45,12 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import AmparaTabBar from './components/AmparaTabBar'
+import TreinoSos from './screens/TreinoSos'
+
+// TEMPORÁRIO, para testes e apresentação: a boas-vindas aparece em toda abertura do app,
+// mesmo para quem já entrou. Voltar para false quando a fase de testes acabar: aí ela
+// aparece só na primeira vez e depois de sair da conta.
+const BOAS_VINDAS_SEMPRE = true
 
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
@@ -58,56 +75,121 @@ function Tabs() {
 // 🔹 App principal
 export default function App() {
   const [session, setSession] = useState(null)
-  const [sessionCarregada, setSessionCarregada] = useState(false)
-  const [onboardingSeen, setOnboardingSeen] = useState(null)
-  // Fonte do nome da Lia. Se não carregar, o texto aparece na fonte do sistema.
-  useFonts({ Fraunces_500Medium_Italic })
+  // null enquanto lê o AsyncStorage e a sessão salva; a abertura cobre essa espera.
+  const [boasVindasVista, setBoasVindasVista] = useState(null)
+  const [sessaoLida, setSessaoLida] = useState(false)
+  const [aberturaFeita, setAberturaFeita] = useState(false)
+  const [comecarNoCadastro, setComecarNoCadastro] = useState(false)
+  // "Criar minha conta" passa pelos 3 slides de apresentação antes do cadastro.
+  const [naApresentacao, setNaApresentacao] = useState(false)
+  // Veio do link de "Esqueci minha senha": entra direto na tela de senha nova.
+  const [criandoSenha, setCriandoSenha] = useState(false)
+  // null = ainda conferindo; true = mostrar a explicação antes do pedido do sistema.
+  const [explicarLocalizacao, setExplicarLocalizacao] = useState(null)
+  // Nunito em todo o app e Fraunces no nome da Lia. Se der erro ao carregar, o app segue
+  // com a fonte do sistema em vez de ficar parado.
+  const [fontesCarregadas, erroDasFontes] = useFonts({
+    Fraunces_500Medium_Italic, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold, Nunito_800ExtraBold,
+  })
+  const fontesProntas = fontesCarregadas || Boolean(erroDasFontes)
 
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    // finally, como na versão da Maria: mesmo com erro na leitura, o app não fica parado.
+    supabase.auth.getSession()
+      .then(({ data }) => setSession(data.session))
+      .finally(() => setSessaoLida(true))
+    AsyncStorage.getItem(CHAVE_BOAS_VINDAS)
+      .then((valor) => setBoasVindasVista(!BOAS_VINDAS_SEMPRE && valor === 'sim'))
+      .catch(() => setBoasVindasVista(false))
+
+    const { data: listener } = supabase.auth.onAuthStateChange((evento, session) => {
       setSession(session)
-    })
-    let ativo = true
-    supabase.auth.getSession().then(({ data }) => {
-      if (ativo) setSession(data.session)
-    }).finally(() => {
-      if (ativo) setSessionCarregada(true)
-    })
-    AsyncStorage.getItem('ampara:onboarding-completo').then((valor) => {
-      if (ativo) setOnboardingSeen(valor === 'true')
-    }).catch(() => {
-      if (ativo) setOnboardingSeen(false)
+      // Ao sair pelo Perfil a marca foi apagada: relê para a boas-vindas voltar. O
+      // cadastro também sai da conta logo depois de criá-la, mas lá a marca continua.
+      if (evento === 'SIGNED_OUT') {
+        AsyncStorage.getItem(CHAVE_BOAS_VINDAS)
+          .then((v) => {
+            const vista = !BOAS_VINDAS_SEMPRE && v === 'sim'
+            setBoasVindasVista(vista)
+            // Voltando para a boas-vindas, o logo do Ampara vem antes, como na abertura.
+            if (!vista) setAberturaFeita(false)
+          })
+          .catch(() => {})
+      }
     })
 
+    // Link do e-mail de nova senha, com o app fechado (getInitialURL) ou aberto (evento).
+    const abrirLink = async (url) => {
+      if (!ehLinkDeNovaSenha(url)) return
+      try {
+        const sessao = await sessaoDaUrl(url)
+        setSession(sessao)
+        setCriandoSenha(true)
+      } catch (erro) {
+        console.log('Link de nova senha inválido:', erro?.message)
+      }
+    }
+    Linking.getInitialURL().then((url) => url && abrirLink(url))
+    const assinaturaLink = Linking.addEventListener('url', ({ url }) => abrirLink(url))
+
     return () => {
-      ativo = false
       listener.subscription.unsubscribe()
+      assinaturaLink.remove()
     }
   }, [])
 
-  const concluirOnboarding = async () => {
-    try {
-      await AsyncStorage.setItem('ampara:onboarding-completo', 'true')
-    } catch {}
-    setOnboardingSeen(true)
+  // Ao entrar, confere se o sistema ainda não perguntou sobre a localização.
+  const usuarioId = session?.user?.id
+  useEffect(() => {
+    if (!usuarioId) return
+    let ativo = true
+    precisaExplicarLocalizacao()
+      .then((precisa) => { if (ativo) setExplicarLocalizacao(precisa) })
+      .catch(() => { if (ativo) setExplicarLocalizacao(false) })
+    return () => { ativo = false }
+  }, [usuarioId])
+
+  const marcarBoasVindas = (cadastro) => {
+    setComecarNoCadastro(cadastro)
+    setBoasVindasVista(true)
+    AsyncStorage.setItem(CHAVE_BOAS_VINDAS, 'sim').catch(() => {})
   }
 
-  // O provedor fica por fora de tudo: login e onboarding também usam o header com
-  // as margens da área segura (notch e barra de status).
-  if (!sessionCarregada || onboardingSeen === null) {
+  // O provedor fica por fora de tudo: as telas de entrada também usam a área segura.
+  if (!fontesProntas || !aberturaFeita || boasVindasVista === null || !sessaoLida) {
     return (
       <SafeAreaProvider>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' }}>
-          <ActivityIndicator color="#283D68" />
-        </View>
+        {!fontesProntas || aberturaFeita
+          ? <View style={{ flex: 1, backgroundColor: CremeDoSite }} />
+          : <Abertura onFim={() => setAberturaFeita(true)} />}
       </SafeAreaProvider>
     )
   }
 
-  if (!onboardingSeen) {
+  if (!boasVindasVista && (!session || BOAS_VINDAS_SEMPRE)) {
     return (
       <SafeAreaProvider>
-        <OnboardingScreen onDone={concluirOnboarding} />
+        {naApresentacao
+          ? <Apresentacao onFim={() => { setNaApresentacao(false); marcarBoasVindas(true) }} />
+          : <BoasVindas onCriarConta={() => setNaApresentacao(true)} onEntrar={() => marcarBoasVindas(false)} />}
+      </SafeAreaProvider>
+    )
+  }
+
+  if (session && criandoSenha) {
+    return (
+      <SafeAreaProvider>
+        <NovaSenha onConcluir={() => setCriandoSenha(false)} />
+      </SafeAreaProvider>
+    )
+  }
+
+  if (session && explicarLocalizacao !== false) {
+    return (
+      <SafeAreaProvider>
+        {explicarLocalizacao
+          ? <PermissaoLocalizacao onConcluir={() => setExplicarLocalizacao(false)} />
+          : <View style={{ flex: 1, backgroundColor: CremeDoSite }} />}
       </SafeAreaProvider>
     )
   }
@@ -116,7 +198,7 @@ export default function App() {
     <SafeAreaProvider>
     <NavigationContainer>
       {!session ? (
-        <LoginScreen onLogin={setSession} />
+        <LoginScreen onLogin={setSession} comecarNoCadastro={comecarNoCadastro} />
       ) : (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           
@@ -135,6 +217,7 @@ export default function App() {
           <Stack.Screen name="HelpGuide" component={HelpGuide} />
           <Stack.Screen name="ChatBot" component={ChatBot} />
           <Stack.Screen name="LiaAppearance" component={LiaAppearance} />
+          <Stack.Screen name="TreinoSos" component={TreinoSos} />
 
         </Stack.Navigator>
       )}

@@ -42,12 +42,13 @@ import { acaoDoNivel, avaliarCorpo, estabilizarNivel, fundirCamadas, movimentoDo
 import { publicarEstadoDoRisco } from '../services/estadoDoRisco'
 import isolationForestMotionModel from '../models/isolationForestMotionModel.json'
 import { RISK_ASSESSMENT_SAMPLE_INTERVAL_MS, saveRiskAssessment } from '../services/riskAssessmentService'
-import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
+import { Brand, FonteDaLia, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import { nivelDaRegiao } from '../utils/relatorio'
 import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
 import SosHoldOverlay from '../components/SosHoldOverlay'
 import RoutineToday from '../components/RoutineToday'
+import { pedirLocalizacao, situacaoDaLocalizacao } from '../services/permissaoLocalizacao'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 import AnelDaLia from '../components/AnelDaLia'
 import CamadasDoRisco from '../components/CamadasDoRisco'
@@ -56,6 +57,8 @@ import { dispararAlerta } from '../services/alertService'
 import { assinarTiqueDoMonitor, desligarMonitoramentoEmSegundoPlano, ligarMonitoramentoEmSegundoPlano } from '../services/monitoramentoEmSegundoPlano'
 import { nomeDoTelefone } from '../utils/contatos'
 import { FRACAO_DO_ANO } from '../utils/mapaCalor'
+import PrimeirosPassos from '../components/PrimeirosPassos'
+import TourDaProtecao from '../components/TourDaProtecao'
 
 // Raio do entorno da usuária: a área cujos crimes entram no score. É o mesmo raio que a
 // aba Mapa usa para resumir uma região.
@@ -149,6 +152,8 @@ export default function Home({ navigation }) {
   const [resumoCrimes, setResumoCrimes] = useState({})
   const [contatos, setContatos] = useState([])
   const [respostaRapida, setRespostaRapida] = useState(null)
+  // 'liberada', 'pode-pedir' ou 'bloqueada' (só pelas configurações do celular).
+  const [situacaoLocal, setSituacaoLocal] = useState(null)
   const totalCrimesEntorno = useMemo(
     () => Object.values(resumoCrimes).reduce((soma, n) => soma + n, 0),
     [resumoCrimes],
@@ -243,6 +248,9 @@ export default function Home({ navigation }) {
   // Lembra se fomos nós que ligamos o modo atividade pelo horário: só nesse caso ele é
   // desligado sozinho no fim. Se a usuária ligou na mão, ela decide quando desligar.
   const ligadoPeloHorarioRef = useRef(false)
+  // Alvos do tour da primeira visita (TourDaProtecao).
+  const refAnelDoTour = useRef(null)
+  const refSosDoTour = useRef(null)
   const dentroDoHorarioRef = useRef(false)
   // --- Estados do Registro de Ocorrência ---
   const [reportModalVisible, setReportModalVisible] = useState(false)
@@ -328,6 +336,7 @@ export default function Home({ navigation }) {
       loadActivity();
       loadHorariosAtividade();
       loadContatos();
+      situacaoDaLocalizacao().then(setSituacaoLocal).catch(() => {});
     }, [])
   );
 
@@ -982,10 +991,19 @@ export default function Home({ navigation }) {
   // O que a tela mostra é o nível da matriz. Sem uma das camadas não há nível:
   // "calculando" (primeiros segundos) ou "sem dados da região" (bairro fora do mapa).
   const nivelNaTela = monitoramentoAtivo ? nivelExibido : null
-  const calculandoScore = monitoramentoAtivo && estadoExibido === 'calculando'
+  // Sem localização não há região para calcular: em vez de "Calculando" para sempre, a
+  // tela avisa e oferece ativar.
+  const semLocalizacao = situacaoLocal != null && situacaoLocal !== 'liberada'
+  const calculandoScore = monitoramentoAtivo && estadoExibido === 'calculando' && !semLocalizacao
   const semDadosDaRegiao = monitoramentoAtivo && resultadoDoRisco.estado === 'sem_contexto'
   // O anel enche um terço por nível.
   const anelDoNivel = { baixo: 10 / 3, moderado: 20 / 3, alto: 10 }[nivelNaTela] ?? null
+
+  const ativarLocalizacao = async () => {
+    if (situacaoLocal === 'bloqueada') { Linking.openSettings(); return }
+    await pedirLocalizacao()
+    setSituacaoLocal(await situacaoDaLocalizacao())
+  }
   const horarioAgora = horarioAtivoAgora(horariosAtividade, new Date())
   const textoAtividade = activityMode
     ? (horarioAgora ? `Até ${horarioAgora.hora_fim.slice(0, 5)} · ${horarioAgora.nome}` : 'Exercício ativo')
@@ -1011,7 +1029,9 @@ export default function Home({ navigation }) {
   // O que a Lia diz no balão, de acordo com o estado do risco.
   const falaDaLia = !monitoramentoAtivo
     ? 'O monitoramento está pausado. Ligue quando sair para eu voltar a acompanhar seu risco.'
-    : calculandoScore
+    : semLocalizacao
+      ? 'Sem a localização eu não consigo ver sua região nem mandar seu endereço no SOS. Ative quando puder.'
+      : calculandoScore
       ? 'Estou olhando sua região e o horário. Já te conto como está seu risco.'
       : insideSafeZone
         ? 'Você está em um dos seus locais seguros. Pode ficar tranquila, eu sigo acompanhando.'
@@ -1059,11 +1079,12 @@ export default function Home({ navigation }) {
         <HeaderComCurvas aba="Proteção">
           <View style={styles.topoLinha}>
             <TouchableOpacity
+              ref={refAnelDoTour}
               onPress={() => navigation.navigate('Assistente')}
               accessibilityRole="button"
               accessibilityLabel={`Conversar com a Lia. Risco ${calculandoScore ? 'sendo calculado' : monitoramentoAtivo ? displayLevel : 'pausado'}`}
             >
-              <AnelDaLia score={anelDoNivel} cor={riskAccent} reacao={liaReaction} />
+              <AnelDaLia score={semLocalizacao ? null : anelDoNivel} cor={riskAccent} reacao={liaReaction} />
             </TouchableOpacity>
             <View style={styles.topoTextos}>
               <Text style={styles.topoData}>Proteção · {dataDeHoje}</Text>
@@ -1077,6 +1098,8 @@ export default function Home({ navigation }) {
                 <Text style={styles.topoScore}>
                   {!monitoramentoAtivo ? (
                     <Text style={styles.topoScoreResto}>Alertas pausados</Text>
+                  ) : semLocalizacao ? (
+                    <Text style={styles.topoScoreResto}>Sem localização</Text>
                   ) : nivelNaTela ? (
                     <>
                       <Text style={styles.topoScoreResto}>Risco </Text>
@@ -1091,6 +1114,22 @@ export default function Home({ navigation }) {
             </View>
           </View>
         </HeaderComCurvas>
+
+        {/* ── AVISO DE LOCALIZAÇÃO ── */}
+        {semLocalizacao && (
+          <TouchableOpacity style={styles.avisoLocal} onPress={ativarLocalizacao} accessibilityRole="button">
+            <View style={styles.avisoLocalIcone}>
+              <Ionicons name="navigate-outline" size={18} color={TemaDaAba.Mapa.forte} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.avisoLocalTitulo}>Localização desligada</Text>
+              <Text style={styles.avisoLocalTexto}>
+                {situacaoLocal === 'bloqueada' ? 'Toque para abrir as configurações do celular e permitir.' : 'Toque para permitir e o Ampara calcular seu risco.'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={TemaDaAba.Mapa.forte} />
+          </TouchableOpacity>
+        )}
 
         {/* ── FALA DA LIA ── */}
         <View style={styles.falaLinha}>
@@ -1107,8 +1146,11 @@ export default function Home({ navigation }) {
           ))}
         </View>
 
+        {/* ── PRIMEIROS PASSOS (some quando tudo estiver feito) ── */}
+        <PrimeirosPassos navigation={navigation} />
+
         {/* ── CÁLCULO DO RISCO ── */}
-        {monitoramentoAtivo && (
+        {monitoramentoAtivo && !semLocalizacao && (
           <CamadasDoRisco contexto={contextoDaRegiao} corpo={corpo} corDaAba={TEMA.forte} />
         )}
 
@@ -1276,6 +1318,7 @@ export default function Home({ navigation }) {
 
       <View style={[styles.floatingContainer, sosHolding && styles.floatingContainerHolding]} pointerEvents="box-none">
         <Pressable
+          ref={refSosDoTour}
           style={[styles.fabHelp, sosHolding && styles.fabHelpHolding]}
           onPressIn={beginSosHold}
           onPressOut={cancelSosHold}
@@ -1298,6 +1341,14 @@ export default function Home({ navigation }) {
         title={helpInfo?.title}
         message={helpInfo?.message}
         onClose={() => setHelpInfo(null)}
+      />
+
+      {/* Tour da primeira visita: anel, SOS e barra de abas. Não abre por cima de um alerta. */}
+      <TourDaProtecao
+        refAnel={refAnelDoTour}
+        refSos={refSosDoTour}
+        pronto={!modalVisible && !reportModalVisible && !sosFeedbackVisible && !sosHolding}
+        onTreinarSos={() => navigation.navigate('TreinoSos')}
       />
 
       {/* MODAL FEEDBACK SOS */}
@@ -1568,10 +1619,14 @@ export default function Home({ navigation }) {
 
 const styles = StyleSheet.create({
   flexOne: { flex: 1 },
-  container: { flex: 1, backgroundColor: Brand.canvas },
+  container: { flex: 1, backgroundColor: CremeDoSite },
 
   // Header com a Lia no anel de risco
   topoLinha: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  avisoLocal: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 20, marginTop: 16, padding: 14, borderRadius: 22, backgroundColor: TemaDaAba.Mapa.fundo },
+  avisoLocalIcone: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  avisoLocalTitulo: { fontSize: 14, fontWeight: '700', color: TemaDaAba.Mapa.forte },
+  avisoLocalTexto: { fontSize: 12, color: '#5E6B75', marginTop: 1 },
   topoTextos: { flex: 1 },
   topoData: { fontSize: 12.5, color: '#776C73' },
   nomeLia: { fontFamily: FonteDaLia, fontSize: 28, lineHeight: 34 },
@@ -1750,8 +1805,8 @@ const styles = StyleSheet.create({
   occScrollContent: { flexGrow: 1, padding: 22, paddingTop: 0 },
   occLabel: { color: TEMA.forte, fontWeight: '700', marginTop: 15, marginBottom: 8, fontSize: 14 },
   inputRow: { flexDirection: 'row', gap: 10 },
-  inputFlex: { flex: 1, borderRadius: 18, padding: 14, fontSize: 15, backgroundColor: '#FAF6F7' },
-  input: { borderRadius: 18, padding: 14, fontSize: 15, backgroundColor: '#FAF6F7', marginTop: 5 },
+  inputFlex: { flex: 1, borderRadius: 18, padding: 14, fontSize: 15, backgroundColor: '#FFFFFF' },
+  input: { borderRadius: 18, padding: 14, fontSize: 15, backgroundColor: '#FFFFFF', marginTop: 5 },
   gpsBtn: { backgroundColor: TEMA.fundo, width: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 18 },
   typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 5 },
   typeButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20, backgroundColor: '#F3EFF1' },

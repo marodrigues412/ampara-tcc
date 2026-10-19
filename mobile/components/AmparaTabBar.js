@@ -2,7 +2,7 @@ import React from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { CorAbaInativa, TemaDaAba } from '../constants/brandTheme'
+import { CorAbaInativa, CremeDoSite, TemaDaAba } from '../constants/brandTheme'
 
 // O ícone é o mesmo com a aba aberta ou não: só a cor muda.
 const ICONES = {
@@ -59,7 +59,7 @@ export default function AmparaTabBar({ state, descriptors, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  barra: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingTop: 10, paddingHorizontal: 6 },
+  barra: { flexDirection: 'row', backgroundColor: CremeDoSite, paddingTop: 10, paddingHorizontal: 6 },
   aba: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 48 },
   iconeAtivo: { transform: [{ translateY: -2 }] },
   rotulo: { fontSize: 11, fontWeight: '500' },

@@ -2,7 +2,7 @@ import React from 'react'
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import HeaderComCurvas from '../components/HeaderComCurvas'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 
 // Aberta depois do envio do SOS. Segue o tema da Proteção, de onde o alerta parte.
 const TEMA = TemaDaAba['Proteção']
@@ -122,7 +122,7 @@ export default function HelpGuide({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: CremeDoSite },
   content: { paddingBottom: 48 },
   secao: { marginHorizontal: 20, marginTop: 22 },
   secaoTopo: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },

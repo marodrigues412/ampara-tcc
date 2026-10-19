@@ -1,7 +1,7 @@
 import React from 'react'
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 
 // Cores da seção de onde a tela é aberta.
@@ -153,7 +153,7 @@ export default function LegalNotice({ navigation }) {
 const styles = StyleSheet.create({
   // O header vai de ponta a ponta: as margens negativas desfazem o padding da tela.
   header: { marginHorizontal: -22, marginBottom: 14 },
-  container: { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 22 },
+  container: { flex: 1, backgroundColor: CremeDoSite, paddingHorizontal: 22 },
   topo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 6 },
   voltar: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   voltarTexto: { color: TEMA.forte, fontSize: 15, fontWeight: '600' },

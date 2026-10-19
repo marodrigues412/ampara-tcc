@@ -24,11 +24,12 @@ import { buscarResumoCrimes } from '../services/crimesService'
 import { resumoDaLia } from '../services/resumoDaLia'
 import { contextoDosLugares } from '../services/contextoDosLugaresService'
 import { buscarEnderecoReverso } from '../services/enderecoReverso'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 import PopupAmpara, { LinhaDoPopup } from '../components/PopupAmpara'
 import LiaHelpModal from '../components/LiaHelpModal'
 import LiaAvatar from '../components/LiaAvatar'
+import DicaDaLia from '../components/DicaDaLia'
 
 // Relatório: o histórico da usuária na MESMA escala da tela Proteção (0 a 10, maior =
 // mais risco), lido da coluna risco do histórico. Contas em utils/relatorio.js.
@@ -534,6 +535,12 @@ export default function Dashboard({ navigation }) {
         </HeaderComCurvas>
 
         <View style={styles.conteudo}>
+        <DicaDaLia
+          id="relatorio"
+          aba="Dashboard"
+          texto="Aqui você vê como foi seu risco nos últimos dias. Toque numa barra do gráfico ou num quadradinho dos horários para ver os detalhes."
+          style={{ marginTop: 14 }}
+        />
         <View style={styles.abas} accessibilityRole="tablist">
           {SECOES.map((s) => (
             <Pressable
@@ -1056,7 +1063,7 @@ export default function Dashboard({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: CremeDoSite },
   centro: { justifyContent: 'center', alignItems: 'center' },
   conteudo: { paddingHorizontal: 20 },
 

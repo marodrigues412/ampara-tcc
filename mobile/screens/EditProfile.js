@@ -9,7 +9,7 @@ import {
   ScrollView
 } from 'react-native'
 import { supabase } from '../services/supabase'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 
 // Cores da seção de onde a tela é aberta.
@@ -125,7 +125,7 @@ export default function EditProfile({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF'
+    backgroundColor: CremeDoSite
   },
 
   header: { marginHorizontal: -20, marginTop: -60, marginBottom: 20 },
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    backgroundColor: '#F7F4F5',
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 12,
     marginBottom: 15,

@@ -10,7 +10,7 @@ import { salvarCompromisso, excluirCompromisso, listarLocaisSeguros, criarLocalS
 import { useAddressSearch } from '../hooks/useAddressSearch'
 import { TIPOS_COMPROMISSO, TRANSPORTES, COMPROMISSO_VAZIO, dataLocal, abrirNoMapa } from '../utils/rotina'
 import { DIAS_SEMANA } from '../utils/activitySchedule'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 
 // Cores da seção de onde a tela é aberta.
@@ -398,7 +398,7 @@ export default function RoutineCommitment({ navigation, route }) {
 const styles = StyleSheet.create({
   // O header vai de ponta a ponta: as margens negativas desfazem o padding da tela.
   header: { marginHorizontal: -22, marginBottom: 14 },
-  container: { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 22 },
+  container: { flex: 1, backgroundColor: CremeDoSite, paddingHorizontal: 22 },
   topo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 6 },
   voltar: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   voltarTexto: { color: TEMA.forte, fontSize: 15, fontWeight: '600' },
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
 
   rotulo: { fontSize: 12, fontWeight: '700', color: Brand.muted, textTransform: 'uppercase', marginTop: 20, marginBottom: 8 },
   ajuda: { fontSize: 12, color: Brand.muted, lineHeight: 17, marginTop: 4 },
-  input: { backgroundColor: '#F7F4F5', borderRadius: 18, padding: 13, fontSize: 15, color: Brand.ink },
+  input: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 13, fontSize: 15, color: Brand.ink },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 18, borderWidth: 0, backgroundColor: '#FFF' },
@@ -416,12 +416,12 @@ const styles = StyleSheet.create({
   chipTexto: { fontSize: 13, color: TEMA.forte, fontWeight: '600' },
   chipTextoAtivo: { color: '#FFF' },
 
-  buscaCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F7F4F5', borderRadius: 18, paddingHorizontal: 12, height: 48 },
+  buscaCaixa: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 18, paddingHorizontal: 12, height: 48 },
   buscaInput: { flex: 1, fontSize: 15, color: Brand.ink },
   sugestao: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 },
   sugestaoNome: { fontSize: 14, color: Brand.ink, fontWeight: '600' },
   sugestaoTexto: { fontSize: 12, color: Brand.muted, marginTop: 1 },
-  localEscolhido: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F7F4F5', borderRadius: 18, padding: 12 },
+  localEscolhido: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 12 },
   localNome: { fontSize: 15, color: Brand.ink, fontWeight: '600' },
   localEndereco: { fontSize: 12, color: Brand.muted, marginTop: 2 },
   verRegiao: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
@@ -434,12 +434,12 @@ const styles = StyleSheet.create({
   diaMarcado: { backgroundColor: TEMA.forte, borderColor: TEMA.forte },
   diaTexto: { color: Brand.muted, fontWeight: '700' },
   diaTextoMarcado: { color: '#FFF' },
-  campoHora: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F7F4F5', borderRadius: 18, padding: 13, marginTop: 10 },
+  campoHora: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 13, marginTop: 10 },
   campoHoraAberto: { borderColor: TEMA.forte, backgroundColor: TEMA.fundo },
   campoHoraTexto: { fontSize: 15, color: Brand.ink, fontWeight: '600' },
 
   horas: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  hora: { flex: 1, backgroundColor: '#F7F4F5', borderRadius: 18, paddingVertical: 10, alignItems: 'center' },
+  hora: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 18, paddingVertical: 10, alignItems: 'center' },
   valorHora: { fontSize: 26, color: Brand.ink, marginTop: 2, fontVariant: ['tabular-nums'] },
 
   linhaSwitch: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 22 },

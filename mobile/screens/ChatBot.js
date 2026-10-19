@@ -11,8 +11,9 @@ import LiaAvatar from '../components/LiaAvatar'
 import LiaHelpModal from '../components/LiaHelpModal'
 import { conversarComLia } from '../services/chatService'
 import { montarContextoDaLia, esquecerContextoDaLia } from '../services/contextoDaLia'
-import { Brand, FonteDaLia, TemaDaAba } from '../constants/brandTheme'
+import { Brand, FonteDaLia, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
+import DicaDaLia from '../components/DicaDaLia'
 
 const TEMA = TemaDaAba.Assistente
 
@@ -303,6 +304,14 @@ export default function ChatBot({ navigation, route }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          ListHeaderComponent={
+            <DicaDaLia
+              id="lia"
+              aba="Assistente"
+              texto="Pode me perguntar sobre o app, sua região ou lugares de apoio. Ligue Personalizar com meus dados para eu considerar onde você está e sua rotina."
+              style={{ marginBottom: 4 }}
+            />
+          }
           ListFooterComponent={
             digitando ? (
               <View style={styles.linha}>
@@ -368,7 +377,7 @@ export default function ChatBot({ navigation, route }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: CremeDoSite },
 
   cabecalhoLia: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   cabecalhoTextos: { flex: 1 },
@@ -405,7 +414,7 @@ const styles = StyleSheet.create({
   sugestao: { backgroundColor: TEMA.fundo, borderRadius: 20, paddingVertical: 9, paddingHorizontal: 14 },
   sugestaoTexto: { fontSize: 13, color: TEMA.forte, fontWeight: '600' },
 
-  barraEnvio: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 12, backgroundColor: '#FFF' },
+  barraEnvio: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 12, backgroundColor: CremeDoSite },
   campo: {
     flex: 1,
     maxHeight: 110,

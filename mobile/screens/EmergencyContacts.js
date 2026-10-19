@@ -14,8 +14,9 @@ FlatList
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
 import { getPhoneContacts } from '../services/contactService'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
+import { NUNITO } from '../utils/fontesGlobais'
 
 // Cores da seção de onde a tela é aberta.
 const TEMA = TemaDaAba.Perfil
@@ -332,9 +333,9 @@ return (
   <Modal visible={contactsModalVisible} animationType="slide">
     <ScrollView style={{ paddingTop: 80, paddingHorizontal: 20, backgroundColor: '#FFFFFF' }}>
       <TouchableOpacity onPress={() => setContactsModalVisible(false)}>
-        <Text style={{ color: TEMA.forte, fontSize: 18, marginBottom: 25 }}>← Voltar</Text>
+        <Text style={{ color: TEMA.forte, fontSize: 18, marginBottom: 25, fontFamily: NUNITO.semibold }}>← Voltar</Text>
       </TouchableOpacity>
-      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Selecionar contato</Text>
+      <Text style={{ fontSize: 28, fontFamily: NUNITO.extrabold, marginBottom: 16, color: TEMA.forte }}>Selecionar contato</Text>
       <TextInput
         style={styles.searchInput}
         value={contactSearch}
@@ -401,7 +402,7 @@ return (
       <View style={[styles.modal, { maxHeight: '75%' }]}>
         <Text style={styles.modalTitle}>Selecionar país</Text>
         <Text style={styles.confirmHint}>
-          O número <Text style={{ fontWeight: 'bold' }}>{pendingContact?.rawNumber}</Text> não tem código de país.{'\n'}Selecione o país correto:
+          O número <Text style={{ fontFamily: NUNITO.bold }}>{pendingContact?.rawNumber}</Text> não tem código de país.{'\n'}Selecione o país correto:
         </Text>
         <TextInput
           style={styles.searchInput}
@@ -501,7 +502,7 @@ const styles = StyleSheet.create({
   // O header vai de ponta a ponta: as margens negativas desfazem o padding da tela.
   header: { marginHorizontal: -20, marginTop: -20, marginBottom: 16 },
 
-container: { flex: 1, backgroundColor: '#FFFFFF' },
+container: { flex: 1, backgroundColor: CremeDoSite },
 
 back: { color: TEMA.forte, marginBottom: 10 },
 
@@ -513,7 +514,7 @@ card: { paddingVertical: 4, marginBottom: 20 },
 
 label: { marginTop: 10, color: TEMA.forte, fontSize: 16 },
 
-input: { backgroundColor: '#F7F4F5', borderRadius: 18, padding: 14, marginTop: 5 },
+input: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, marginTop: 5 },
 
 phoneRow: { flexDirection: 'row', gap: 8, marginTop: 5 },
 
@@ -521,7 +522,7 @@ ddiButton: {
   flexDirection: 'row',
   alignItems: 'center',
   gap: 4,
-  backgroundColor: '#F7F4F5',
+  backgroundColor: '#FFFFFF',
   borderRadius: 18,
   paddingHorizontal: 12,
   paddingVertical: 14
@@ -533,7 +534,7 @@ ddiChevron: { fontSize: 12, color: '#999' },
 
 phoneInput: {
   flex: 1,
-  backgroundColor: '#F7F4F5',
+  backgroundColor: '#FFFFFF',
   borderRadius: 18,
   padding: 14,
   fontSize: 15

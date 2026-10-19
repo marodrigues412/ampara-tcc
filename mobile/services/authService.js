@@ -22,10 +22,14 @@ const registrar = (titulo, dados) => {
   if (typeof __DEV__ !== "undefined" && __DEV__) console.log(titulo, JSON.stringify(dados));
 };
 
+// Marca no AsyncStorage que a boas-vindas já foi vista neste celular. Sair da conta
+// apaga a marca, e a boas-vindas volta a aparecer.
+export const CHAVE_BOAS_VINDAS = "ampara:boasVindasVista";
+
 // O Supabase pode devolver a sessão de duas formas: um "code" para trocar (fluxo PKCE)
 // ou os tokens direto no fragmento da URL. Tratamos as duas para não depender de como o
 // cliente foi configurado.
-async function sessaoDaUrl(url) {
+export async function sessaoDaUrl(url) {
   const { queryParams } = Linking.parse(url);
   if (queryParams?.error_description) throw new Error(queryParams.error_description);
 
@@ -107,3 +111,13 @@ export async function entrarComProvedor(provider) {
   await garantirPerfil(sessao);
   return sessao;
 }
+
+// "Esqueci minha senha": o Supabase manda um e-mail com um link que volta para o app
+// (mesmo endereço de retorno do login com Google, já liberado nas Redirect URLs).
+export async function pedirNovaSenha(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: urlDeRetorno() });
+  if (error) throw error;
+}
+
+// O link de recuperação chega com type=recovery no fragmento (#...) da URL.
+export const ehLinkDeNovaSenha = (url) => typeof url === "string" && /[#&?]type=recovery/.test(url);

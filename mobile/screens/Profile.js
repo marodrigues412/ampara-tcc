@@ -2,12 +2,16 @@ import React, { useCallback, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../services/supabase'
+import { CHAVE_BOAS_VINDAS } from '../services/authService'
 import { listarCompromissos, listarLocaisSeguros } from '../services/routineService'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 import SecaoRecolhida from '../components/SecaoRecolhida'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import LiaAvatar from '../components/LiaAvatar'
+import DicaDaLia from '../components/DicaDaLia'
+import { reverTutorial, treinoDoSosFeito } from '../services/tutorial'
 
 const TEMA = TemaDaAba.Perfil
 const CORES_DA_REDE = [['#BD5574', '#F7E7EC'], ['#6E5A9E', '#EFEAF5'], ['#3F6A86', '#E9EFF2']]
@@ -29,6 +33,7 @@ export default function Profile({ navigation }) {
   const [contatos, setContatos] = useState([])
   const [locais, setLocais] = useState([])
   const [compromissos, setCompromissos] = useState([])
+  const [treinou, setTreinou] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // Recarrega ao voltar das telas de edição, para os resumos refletirem a mudança.
@@ -38,11 +43,12 @@ export default function Profile({ navigation }) {
       const { data: userData } = await supabase.auth.getUser()
       const atual = userData?.user
       if (!atual) { if (ativo) setLoading(false); return }
-      const [perfil, rede, seguros, rotina] = await Promise.all([
+      const [perfil, rede, seguros, rotina, treino] = await Promise.all([
         supabase.from('user_profiles').select('*').eq('id', atual.id).single(),
         supabase.from('emergency_contacts').select('id, nome, telefone').eq('user_id', atual.id),
         listarLocaisSeguros(atual.id),
         listarCompromissos(atual.id),
+        treinoDoSosFeito(),
       ])
       if (!ativo) return
       if (perfil.error && perfil.error.code !== 'PGRST116') console.log(perfil.error)
@@ -51,15 +57,28 @@ export default function Profile({ navigation }) {
       setContatos(rede.data ?? [])
       setLocais(seguros)
       setCompromissos(rotina)
+      setTreinou(treino)
       setLoading(false)
     })()
     return () => { ativo = false }
   }, []))
 
+  const reverDicas = async () => {
+    await reverTutorial()
+    Alert.alert('Dicas de volta', 'O tour da Proteção e as dicas da Lia vão aparecer de novo na próxima visita de cada aba, e os primeiros passos voltam para a Proteção.')
+  }
+
   const handleLogout = () => {
     Alert.alert('Sair da conta', 'Tem certeza que deseja sair?', [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Sair', style: 'destructive', onPress: async () => { await supabase.auth.signOut() } },
+      {
+        text: 'Sair',
+        style: 'destructive',
+        onPress: async () => {
+          await AsyncStorage.removeItem(CHAVE_BOAS_VINDAS).catch(() => {})
+          await supabase.auth.signOut()
+        },
+      },
     ])
   }
 
@@ -79,6 +98,7 @@ export default function Profile({ navigation }) {
   const passos = [
     { feito: contatos.length > 0, texto: 'Cadastre quem deve receber seu alerta SOS', tela: 'EmergencyContacts' },
     { feito: temCasa, texto: 'Cadastre sua casa como local seguro', tela: 'SafeLocations' },
+    { feito: treinou, texto: 'Treine o SOS: é o mesmo gesto, sem enviar nada', tela: 'TreinoSos' },
     { feito: ativos.length > 0, texto: 'Cadastre sua rotina para eu acompanhar seus trajetos', tela: 'Routine' },
   ]
   const feitos = passos.filter((p) => p.feito).length
@@ -117,6 +137,13 @@ export default function Profile({ navigation }) {
           ))}
         </View>
       </HeaderComCurvas>
+
+      <DicaDaLia
+        id="perfil"
+        aba="Perfil"
+        texto="Aqui ficam sua rede de apoio, seus locais seguros e sua rotina. Toque numa seção para abrir. Em Como usar o Ampara você treina o SOS."
+        style={{ marginHorizontal: 20, marginTop: 14 }}
+      />
 
       {/* A Lia conta quanto o Ampara está pronto e qual é o próximo passo. */}
       <TouchableOpacity
@@ -190,6 +217,15 @@ export default function Profile({ navigation }) {
         {link('Personalizar a Lia', 'LiaAppearance', 'sparkles-outline')}
       </SecaoRecolhida>
 
+      <SecaoRecolhida icone="school-outline" titulo="Como usar o Ampara" resumo={treinou ? 'Treino do SOS feito' : 'Treine o SOS e reveja as dicas'} pendente={!treinou} cor={COR_DA_SECAO.rede[0]} fundo={COR_DA_SECAO.rede[1]}>
+        <Text style={styles.nota}>Treine o SOS quando quiser: é o mesmo gesto do alerta, e nada é enviado.</Text>
+        {link(treinou ? 'Treinar o SOS de novo' : 'Treinar o SOS', 'TreinoSos', 'alert-circle-outline')}
+        <TouchableOpacity style={styles.linha} onPress={reverDicas} accessibilityRole="button">
+          <Ionicons name="bulb-outline" size={18} color={TEMA.forte} />
+          <Text style={[styles.linkTexto, { color: TEMA.forte }]}>Rever as dicas da Lia</Text>
+        </TouchableOpacity>
+      </SecaoRecolhida>
+
       <SecaoRecolhida icone="information-circle-outline" titulo="Sobre o Ampara" resumo="Avisos e limitações" cor={COR_DA_SECAO.sobre[0]} fundo={COR_DA_SECAO.sobre[1]}>
         {link('Avisos e limitações', 'LegalNotice', 'document-text-outline')}
       </SecaoRecolhida>
@@ -203,8 +239,8 @@ export default function Profile({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: CremeDoSite },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: CremeDoSite },
   topo: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#FFF', fontSize: 22, fontWeight: '800' },

@@ -13,9 +13,10 @@ import {
   OPACIDADE_CAMADA_CALOR,
 } from '../utils/mapaCalor'
 import { distanceKm } from '../utils/geo'
-import { Brand, TemaDaAba } from '../constants/brandTheme'
+import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
 import ApoioPorPerto from '../components/ApoioPorPerto'
+import DicaDaLia from '../components/DicaDaLia'
 
 const TEMA = TemaDaAba.Mapa
 
@@ -119,8 +120,6 @@ export default function CrimeMap({ route }) {
   const [mapaMovido, setMapaMovido] = useState(false)
   const cameraRef = useRef(null)
 
-  const gruposAtivos = GRUPOS_NO_MAPA
-
   // A posição é lida ao abrir a aba, e não acompanhada o tempo todo: aqui ela só serve de
   // ponto de partida do mapa. O monitoramento contínuo é trabalho da Home.
   useFocusEffect(useCallback(() => {
@@ -167,7 +166,7 @@ export default function CrimeMap({ route }) {
       // chega sem cor e o calor parece ir "aparecendo" conforme a usuária move o mapa.
       const raioBusca = Math.min(alvo.raioKm * MARGEM_BUSCA, RAIO_MAXIMO_KM)
       setCalorCarregando(true)
-      const { celulas, celulaGraus: tamanho } = await buscarMapaCalor(alvo.latitude, alvo.longitude, raioBusca, gruposAtivos)
+      const { celulas, celulaGraus: tamanho } = await buscarMapaCalor(alvo.latitude, alvo.longitude, raioBusca, GRUPOS_NO_MAPA)
       if (cancelado) return
       setCalorCarregando(false)
       // Em falha, celulas vem nulo e o mapa mantém o que já estava desenhado.
@@ -184,8 +183,6 @@ export default function CrimeMap({ route }) {
     }
     carregarCalor()
     return () => { cancelado = true }
-    // gruposAtivos é constante (GRUPOS_NO_MAPA).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areaVisivel, centroInicial])
 
   // Leva o mapa até um ponto e o marca de rosa: vale para a busca e para quem chega de
@@ -330,11 +327,17 @@ export default function CrimeMap({ route }) {
         </View>
 
         <Text style={styles.periodoTexto}>
-          Últimos 6 meses{periodoCrimes ? ` (${periodoCrimes})` : ''} · SSP-SP
+          Roubos, furtos e violência · últimos 6 meses{periodoCrimes ? ` (${periodoCrimes})` : ''} · SSP-SP
         </Text>
       </HeaderComCurvas>
 
       <View style={styles.mapaArea}>
+        <DicaDaLia
+          id="mapa"
+          aba="Mapa"
+          texto="As manchas mais quentes são onde houve mais roubos, furtos e violência nos últimos 6 meses. Em Apoio por perto, embaixo, você acha delegacias, farmácias e hospitais."
+          style={styles.dica}
+        />
         {!centroInicial ? (
           <View style={styles.localizando}>
             <View style={styles.carregando} accessibilityLiveRegion="polite">
@@ -505,7 +508,7 @@ export default function CrimeMap({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: CremeDoSite },
   topo: { paddingBottom: 14 },
   titulo: { fontSize: 22, color: TEMA.forte, fontWeight: '800', marginBottom: 10 },
 
@@ -517,6 +520,8 @@ const styles = StyleSheet.create({
 
   mapaArea: { flex: 1, marginHorizontal: 12, marginTop: 10, marginBottom: 8, borderRadius: 28, overflow: 'hidden' },
   mapa: { flex: 1 },
+  // A dica fica por cima do mapa, logo abaixo da busca, até ela tocar em Entendi.
+  dica: { position: 'absolute', top: 10, left: 10, right: 10, zIndex: 9, elevation: 6 },
   localizando: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: TEMA.fundo },
 
   sugestoes: { position: 'absolute', top: 8, left: 8, right: 8, backgroundColor: '#FFF', borderRadius: 20, paddingVertical: 4, elevation: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, zIndex: 10 },
