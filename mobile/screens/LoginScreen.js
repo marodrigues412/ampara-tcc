@@ -42,88 +42,89 @@ export default function LoginScreen({ onLogin }) {
     return <RegisterScreen onBack={() => setIsRegistering(false)} />
   }
 
+  const conteudo = (
+    <ScrollView
+      contentContainerStyle={styles.scroll}
+      keyboardShouldPersistTaps="handled"
+      bounces={false}
+      showsVerticalScrollIndicator={false}
+    >
+      <HeaderComCurvas aba="Proteção" semMarca style={styles.hero}>
+        <Image
+          source={require('../assets/images/maos-ampara-azul.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.brand}>Ampara</Text>
+        <Text style={styles.lema}>Você não está sozinha.</Text>
+      </HeaderComCurvas>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Entrar</Text>
+
+        <TextInput
+          placeholder="E-mail"
+          placeholderTextColor="#AAA"
+          value={email}
+          onChangeText={setEmail}
+          style={styles.input}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+
+        <TextInput
+          placeholder="Senha"
+          placeholderTextColor="#AAA"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          style={styles.input}
+        />
+
+        <TouchableOpacity style={styles.button} onPress={handleLogin}>
+          <Text style={styles.buttonText}>Entrar</Text>
+        </TouchableOpacity>
+
+        {/* O botão da Apple foi removido: o provedor exige o Apple Developer Program
+            (US$ 99/ano), e um botão que só devolve erro é pior do que não existir. Para
+            voltar, é só reativar o provedor no Supabase e chamar handleProvedor('apple') —
+            o authService já é genérico. */}
+        <View style={styles.divisorRow}>
+          <Text style={styles.divisorTexto}>ou entre com</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.provedorBtn, styles.provedorGoogle]}
+          onPress={() => handleProvedor('google')}
+          disabled={provedorCarregando !== null}
+        >
+          {provedorCarregando === 'google'
+            ? <ActivityIndicator size="small" color={TEMA.forte} />
+            : <>
+                <Ionicons name="logo-google" size={18} color={TEMA.forte} />
+                <Text style={styles.provedorTextoGoogle}>Google</Text>
+              </>}
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => setIsRegistering(true)} style={styles.registerRow}>
+          <Text style={styles.registerText}>
+            Ainda não tem uma conta?{' '}
+            <Text style={styles.registerLink}>Cadastre-se aqui</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.navyFill} />
+    </ScrollView>
+  )
+
   return (
     <View style={styles.root}>
-      <KeyboardAvoidingView
-        style={styles.kav}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          bounces={false}
-          showsVerticalScrollIndicator={false}
-        >
-          <HeaderComCurvas aba="Proteção" semMarca style={styles.hero}>
-            <Image
-              source={require('../assets/images/maos-ampara-azul.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={styles.brand}>Ampara</Text>
-            <Text style={styles.lema}>Você não está sozinha.</Text>
-          </HeaderComCurvas>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Entrar</Text>
-
-            <TextInput
-              placeholder="E-mail"
-              placeholderTextColor="#AAA"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
-            <TextInput
-              placeholder="Senha"
-              placeholderTextColor="#AAA"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              style={styles.input}
-            />
-
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
-              <Text style={styles.buttonText}>Entrar</Text>
-            </TouchableOpacity>
-
-            {/* O botão da Apple foi removido: o provedor exige o Apple Developer Program
-                (US$ 99/ano), e um botão que só devolve erro é pior do que não existir. Para
-                voltar, é só reativar o provedor no Supabase e chamar handleProvedor('apple') —
-                o authService já é genérico. */}
-            <View style={styles.divisorRow}>
-              <View style={styles.divisorLinha} />
-              <Text style={styles.divisorTexto}>ou entre com</Text>
-              <View style={styles.divisorLinha} />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.provedorBtn, styles.provedorGoogle]}
-              onPress={() => handleProvedor('google')}
-              disabled={provedorCarregando !== null}
-            >
-              {provedorCarregando === 'google'
-                ? <ActivityIndicator size="small" color={TEMA.forte} />
-                : <>
-                    <Ionicons name="logo-google" size={18} color={TEMA.forte} />
-                    <Text style={styles.provedorTextoGoogle}>Google</Text>
-                  </>}
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setIsRegistering(true)} style={styles.registerRow}>
-              <Text style={styles.registerText}>
-                Ainda não tem uma conta?{' '}
-                <Text style={styles.registerLink}>Cadastre-se aqui</Text>
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.navyFill} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.kav} behavior="padding">
+          {conteudo}
+        </KeyboardAvoidingView>
+      ) : conteudo}
     </View>
   )
 }
@@ -181,7 +182,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   divisorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  divisorLinha: { display: 'none' },
   divisorTexto: { color: '#999', fontSize: 12 },
   provedorBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 50, borderRadius: 26, marginBottom: 10 },
   provedorGoogle: { backgroundColor: TEMA.fundo },

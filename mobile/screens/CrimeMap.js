@@ -8,7 +8,10 @@ import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import { buscarMapaCalor, buscarPeriodoCrimes } from '../services/crimesService'
 import { useAddressSearch } from '../hooks/useAddressSearch'
-import { camadasDifusas, CORES_LEGENDA, DENSIDADE_VERMELHO } from '../utils/mapaCalor'
+import {
+  camadasDifusas, CORES_LEGENDA, corDaCelula, ESCALAS_RAIO_CALOR,
+  OPACIDADE_CAMADA_CALOR,
+} from '../utils/mapaCalor'
 import { distanceKm } from '../utils/geo'
 import { Brand, TemaDaAba } from '../constants/brandTheme'
 import HeaderComCurvas from '../components/HeaderComCurvas'
@@ -28,6 +31,7 @@ const RAIO_MAXIMO_KM = 12
 // fato de a área ser um círculo inscrito num retângulo: com margem grande, o recorte
 // quadrado da busca aparecia dentro da tela como uma borda reta de cor.
 const MARGEM_BUSCA = 1.2
+const METROS_POR_PIXEL_NO_EQUADOR = 156543.03392
 
 const CENTRO_SP = { latitude: -23.5505, longitude: -46.6333 }
 // Raio que a tela cobre mais ou menos no zoom 15, para onde a busca leva o mapa. Perto do
@@ -169,7 +173,7 @@ export default function CrimeMap({ route }) {
       // Em falha, celulas vem nulo e o mapa mantém o que já estava desenhado.
       if (celulas) {
         setCelulasCalor(celulas)
-        setCelulaGraus(tamanho)
+        if (Number.isFinite(tamanho) && tamanho > 0) setCelulaGraus(tamanho)
         // Tempo estimado de desenho: cresce com o número de células. O Android usa a camada
         // nativa de calor e desenha quase na hora.
         const esperaMs = Platform.OS === 'ios' ? Math.min(300 + celulas.length * 0.8, 1500) : 250
@@ -236,6 +240,7 @@ export default function CrimeMap({ route }) {
   }
 
   const atualizarAreaVisivel = (latitude, longitude, raioKm) => {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(raioKm)) return
     arrastandoRef.current = false
     setMapaArrastando(false)
     const limitado = Math.min(Math.max(raioKm, 0.5), RAIO_MAXIMO_KM)
@@ -264,17 +269,27 @@ export default function CrimeMap({ route }) {
   }
 
   // --- Desenho do calor (mesmas regras de cor da Home) ---
-  const crimesGeoJSON = useMemo(() => ({
-    type: 'FeatureCollection',
-    features: celulasCalor.map((celula) => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [Number(celula.lon), Number(celula.lat)] },
-      properties: { peso: Number(celula.peso) },
-    })).filter((f) => f.geometry.coordinates.every(Number.isFinite)),
-  }), [celulasCalor])
   // Área da célula em km²: o divisor que torna a cor comparável entre zooms e regiões.
   const areaCelulaKm2 = useMemo(() => (celulaGraus * 111) ** 2, [celulaGraus])
-  const pesoVermelho = useMemo(() => Math.max(DENSIDADE_VERMELHO * areaCelulaKm2, 1), [areaCelulaKm2])
+  const crimesGeoJSON = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: celulasCalor.flatMap((celula) => {
+      const longitude = Number(celula.lon)
+      const latitude = Number(celula.lat)
+      const peso = Number(celula.peso)
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude) ||
+          latitude < -85 || latitude > 85 || !Number.isFinite(peso) || peso <= 0) return []
+      return [{
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [longitude, latitude] },
+        properties: {
+          cor: corDaCelula(peso, areaCelulaKm2, OPACIDADE_CAMADA_CALOR),
+          raioBase: celulaGraus * 111000 * 0.85,
+          escalaLatitude: 1 / Math.cos(latitude * Math.PI / 180),
+        },
+      }]
+    }),
+  }), [celulasCalor, areaCelulaKm2, celulaGraus])
   // O Apple Maps não tem camada de calor, então no iPhone a densidade vira círculos por
   // célula. São milhares de elementos; memorizados, não são refeitos a cada digitação na
   // busca ou troca de outro estado da tela.
@@ -345,28 +360,27 @@ export default function CrimeMap({ route }) {
               maxZoom={20}
             />
             <MapLibreGeoJSONSource id="ampara-crimes" data={crimesGeoJSON}>
-              <MapLibreLayer
-                id="ampara-crimes-heat"
-                type="heatmap"
-                paint={{
-                  // O divisor é fixo (densidade que corresponde ao vermelho), não o máximo
-                  // da tela: assim a mesma rua mantém a cor quando a usuária arrasta o mapa.
-                  'heatmap-weight': ['min', 1, ['/', ['get', 'peso'], pesoVermelho]],
-                  'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 11, 20, 15, 45, 18, 90],
-                  'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 0.6, 18, 1],
-                  'heatmap-opacity': 0.85,
-                  'heatmap-color': [
-                    'interpolate', ['linear'], ['heatmap-density'],
-                    0, 'rgba(76, 175, 80, 0)',
-                    0.1, 'rgba(56, 165, 70, 0.45)',
-                    0.3, 'rgba(120, 190, 80, 0.50)',
-                    0.5, 'rgba(255, 235, 59, 0.52)',
-                    0.65, 'rgba(255, 183, 77, 0.56)',
-                    0.8, 'rgba(255, 120, 0, 0.64)',
-                    1, 'rgba(230, 30, 30, 0.72)',
-                  ],
-                }}
-              />
+              {ESCALAS_RAIO_CALOR.map((escalaRaio, indice) => (
+                <MapLibreLayer
+                  key={`ampara-crimes-camada-${indice}`}
+                  id={`ampara-crimes-camada-${indice}`}
+                  type="circle"
+                  paint={{
+                    // Mantém o raio em metros constante, como os círculos do Apple Maps.
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      3, ['*', ['get', 'raioBase'], ['get', 'escalaLatitude'], escalaRaio * (2 ** 3) / METROS_POR_PIXEL_NO_EQUADOR],
+                      11, ['*', ['get', 'raioBase'], ['get', 'escalaLatitude'], escalaRaio * (2 ** 11) / METROS_POR_PIXEL_NO_EQUADOR],
+                      15, ['*', ['get', 'raioBase'], ['get', 'escalaLatitude'], escalaRaio * (2 ** 15) / METROS_POR_PIXEL_NO_EQUADOR],
+                      18, ['*', ['get', 'raioBase'], ['get', 'escalaLatitude'], escalaRaio * (2 ** 18) / METROS_POR_PIXEL_NO_EQUADOR],
+                      20, ['*', ['get', 'raioBase'], ['get', 'escalaLatitude'], escalaRaio * (2 ** 20) / METROS_POR_PIXEL_NO_EQUADOR],
+                    ],
+                    'circle-color': ['get', 'cor'],
+                    'circle-opacity': 1,
+                    'circle-stroke-width': 0,
+                  }}
+                />
+              ))}
             </MapLibreGeoJSONSource>
             <MapLibreGeoJSONSource id="ampara-apoio" data={lugaresGeoJSON(lugaresDeApoio)}>
               <MapLibreLayer
