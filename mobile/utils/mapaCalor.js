@@ -34,10 +34,6 @@ const ESCALA = [
 // pinta o mapa, do menor para o maior número de ocorrências.
 export const CORES_LEGENDA = ESCALA.map((faixa) => `rgb(${faixa.cor})`)
 
-// Usado também pelo mapa do Android, para converter a contagem da célula no peso que a
-// camada nativa espera (0 a 1).
-export const DENSIDADE_VERMELHO = 1500 * FRACAO_DO_ANO
-
 // Círculo tem borda dura, e borda dura denuncia a grade. Por isso cada célula vira quatro
 // anéis concêntricos e largos, todos fracos: onde só o anel de fora alcança, a cor quase
 // não aparece; no centro, os quatro se somam. Como os anéis passam bem da célula, os das
@@ -46,12 +42,13 @@ export const DENSIDADE_VERMELHO = 1500 * FRACAO_DO_ANO
 // A opacidade de cada anel é baixa porque, numa região densa, cada ponto do mapa fica
 // coberto por uns 30 anéis. Somados, dão perto de 65% no vermelho e 50% no verde: cor
 // forte o bastante para ler a intensidade, ainda com as ruas aparecendo por baixo.
-const CAMADAS = [
-  { escalaRaio: 2.6, escalaOpacidade: 0.054 },
-  { escalaRaio: 2.0, escalaOpacidade: 0.054 },
-  { escalaRaio: 1.5, escalaOpacidade: 0.054 },
-  { escalaRaio: 1.0, escalaOpacidade: 0.054 },
-]
+export const ESCALAS_RAIO_CALOR = [2.6, 2.0, 1.5, 1.0]
+export const OPACIDADE_CAMADA_CALOR = 0.054
+
+const CAMADAS = ESCALAS_RAIO_CALOR.map((escalaRaio) => ({
+  escalaRaio,
+  escalaOpacidade: OPACIDADE_CAMADA_CALOR,
+}))
 
 // raioBase vem de quem chama, porque o tamanho da célula muda com o zoom: a grade do
 // banco é dimensionada pela área visível para caber no limite de linhas do Supabase.
