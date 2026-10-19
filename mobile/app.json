@@ -9,7 +9,14 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.amparaapp"
+      "bundleIdentifier": "com.marodrigu3s.ampara",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "O Ampara usa sua localização para mostrar o risco da região, o mapa de ocorrências e enviar sua posição no SOS.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "O Ampara usa sua localização para mostrar o risco da região, o mapa de ocorrências e enviar sua posição no SOS.",
+        "NSLocationAlwaysUsageDescription": "O Ampara usa sua localização para mostrar o risco da região, o mapa de ocorrências e enviar sua posição no SOS.",
+        "NSContactsUsageDescription": "O Ampara acessa seus contatos para você escolher quem recebe os alertas de emergência.",
+        "NSMotionUsageDescription": "O Ampara usa os sensores de movimento para perceber movimentos bruscos que podem indicar uma situação de risco."
+      }
     },
     "android": {
       "adaptiveIcon": {
