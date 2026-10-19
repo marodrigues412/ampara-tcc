@@ -1,4 +1,4 @@
-import { Platform } from 'react-native'
+import { AppState, Platform } from 'react-native'
 import { EventEmitter } from 'expo-modules-core'
 import * as Location from 'expo-location'
 import * as TaskManager from 'expo-task-manager'
@@ -26,6 +26,7 @@ const ouvintesDeLocalizacao = new Set()
 TaskManager.defineTask(TAREFA_LOCALIZACAO, ({ data, error }) => {
   if (error || !data?.locations?.length) return
   const maisRecente = data.locations[data.locations.length - 1]
+  if (AppState.currentState !== 'active') console.log('[segundo plano] posição recebida')
   ouvintesDeLocalizacao.forEach((ouvinte) => ouvinte(maisRecente))
 })
 

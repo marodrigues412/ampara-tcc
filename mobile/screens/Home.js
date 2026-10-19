@@ -17,6 +17,7 @@ import {
   Linking,
   Image,
   AccessibilityInfo,
+  AppState,
 } from 'react-native'
 
 import { useFocusEffect } from '@react-navigation/native'
@@ -504,10 +505,46 @@ export default function Home({ navigation }) {
   useEffect(() => {
     if (countdown !== 0 || !modalVisible || alertaDisparado || !fimDaContagemRef.current) return;
     fimDaContagemRef.current = null;
-    setAlertaDisparado(true);
     setModalVisible(false);
+    if (testeDoAlertaRef.current) {
+      console.log('[teste] envio simulado depois de', Date.now() - testeDoAlertaRef.current, 'ms, app', AppState.currentState);
+      testeDoAlertaRef.current = null;
+      return;
+    }
+    setAlertaDisparado(true);
     executarEnvioDeSocorro();
   }, [countdown, modalVisible, alertaDisparado]);
+
+  // Teste a seco do caminho do alerta: mobile://teste-alerta abre a mesma contagem, mas no
+  // fim só registra no log, sem chamar a AWS. Serve para conferir, com a tela apagada, que
+  // a contagem anda e chega ao envio (adb logcat -s ReactNativeJS).
+  const testeDoAlertaRef = useRef(null)
+  useEffect(() => {
+    const assinatura = Linking.addEventListener('url', ({ url }) => {
+      if (!url?.includes('teste-alerta') || modalVisible) return
+      testeDoAlertaRef.current = Date.now()
+      fimDaContagemRef.current = Date.now() + 10 * 1000
+      setCountdown(10)
+      setModalVisible(true)
+      console.log('[teste] contagem iniciada')
+    })
+    return () => assinatura.remove()
+  }, [modalVisible])
+
+  // Sinal de vida em segundo plano, uma linha por minuto no logcat: mostra que o tique
+  // nativo está chegando ao JS com a tela apagada. Só rótulos, nunca a posição.
+  useEffect(() => {
+    let tiques = 0
+    return assinarTiqueDoMonitor(() => {
+      tiques += 1
+      if (tiques % 60 !== 0 || AppState.currentState === 'active') return
+      const fim = fimDaContagemRef.current
+      console.log('[segundo plano] vivo', JSON.stringify({
+        nivel: estabilizadorRef.current?.exibido ?? null,
+        contagem: fim ? Math.max(0, Math.ceil((fim - Date.now()) / 1000)) : null,
+      }))
+    })
+  }, [])
 
   // Com o monitoramento ligado, o serviço em primeiro plano segura localização, tique e
   // CPU quando o app sai da tela. Liga de novo quando a primeira posição chega, porque
@@ -824,6 +861,7 @@ export default function Home({ navigation }) {
 
   const handleUserIsSafe = () => {
     fimDaContagemRef.current = null
+    testeDoAlertaRef.current = null
     setModalVisible(false)
     setCountdown(30)
     setAlertaDisparado(false)
