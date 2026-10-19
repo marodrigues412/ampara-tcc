@@ -548,7 +548,9 @@ export default function Home({ navigation }) {
 
   // Com o monitoramento ligado, o serviço em primeiro plano segura localização, tique e
   // CPU quando o app sai da tela. Liga de novo quando a primeira posição chega, porque
-  // na primeira abertura a permissão de localização ainda está sendo pedida.
+  // na primeira abertura a permissão de localização ainda está sendo pedida, e toda vez
+  // que o app volta para a frente: o Android recusa ligar o serviço enquanto um diálogo
+  // de permissão está por cima, e essa tentativa se perderia. Ligar duas vezes não faz mal.
   const temLocalizacao = Boolean(location)
   useEffect(() => {
     if (!monitoramentoAtivo) {
@@ -556,6 +558,10 @@ export default function Home({ navigation }) {
       return;
     }
     if (temLocalizacao) void ligarMonitoramentoEmSegundoPlano();
+    const assinatura = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active' && temLocalizacao) void ligarMonitoramentoEmSegundoPlano();
+    });
+    return () => assinatura.remove();
   }, [monitoramentoAtivo, temLocalizacao]);
   useEffect(() => () => { void desligarMonitoramentoEmSegundoPlano() }, []);
 
