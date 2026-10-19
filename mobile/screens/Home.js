@@ -103,7 +103,9 @@ const RESPOSTAS_RAPIDAS = {
 
 const formatReadingAge = (time) => {
   if (!time) return null
-  const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(time)) / 1000))
+  const timestamp = Date.parse(time)
+  if (!Number.isFinite(timestamp)) return null
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
   if (seconds < 5) return 'agora'
   if (seconds < 60) return `há ${seconds} s`
   const minutes = Math.floor(seconds / 60)
@@ -204,6 +206,9 @@ export default function Home({ navigation }) {
     smartwatch.measurement,
     heartRateIsCurrent,
   )
+  const heartRateBpm = Number(watchMeasurement?.bpm)
+  const hasHeartRateMeasurement = Number.isFinite(heartRateBpm) && heartRateBpm >= 25 && heartRateBpm <= 240
+  const canManageWatch = ['connected', 'permission_required', 'error'].includes(smartwatch.status)
 
   useEffect(() => {
     if (isReceivingHeartRate) setWatchAlertDismissed(false)
@@ -1086,6 +1091,75 @@ export default function Home({ navigation }) {
           </View>
         </View>
 
+        {Platform.OS === 'android' && (
+          <View style={styles.heartRateCard}>
+            <View style={styles.heartRateCardHeader}>
+              <View style={styles.heartRateCardTitleGroup}>
+                <View style={styles.heartRateIconWrap}>
+                  <Ionicons name="heart" size={17} color={TEMA.forte} />
+                </View>
+                <View>
+                  <Text style={styles.heartRateCardTitle}>Batimentos</Text>
+                  <Text style={styles.heartRateCardSource} numberOfLines={1}>
+                    {watchMeasurement?.source || (smartwatchConnected ? 'Galaxy Watch' : 'Seu smartwatch')}
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.heartRateStatus, heartRateIsCurrent && styles.heartRateStatusLive]}>
+                <View style={[styles.heartRateStatusDot, heartRateIsCurrent && styles.heartRateStatusDotLive]} />
+                <Text style={[styles.heartRateStatusText, heartRateIsCurrent && styles.heartRateStatusTextLive]}>
+                  {heartRateIsCurrent ? 'AO VIVO' : hasHeartRateMeasurement ? 'ÚLTIMA LEITURA' : 'AGUARDANDO'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.heartRateCardBody}>
+              <View style={styles.heartRateCardValueRow}>
+                <Text style={[styles.heartRateCardValue, !hasHeartRateMeasurement && styles.heartRateCardValueEmpty]}>
+                  {hasHeartRateMeasurement ? Math.round(heartRateBpm) : '--'}
+                </Text>
+                <Text style={styles.heartRateCardUnit}>BPM</Text>
+              </View>
+              <View style={styles.heartRateCardActionColumn}>
+                <Text style={styles.heartRateCardFreshness} numberOfLines={1}>
+                  {heartRateIsCurrent
+                    ? 'Leitura recebida agora'
+                    : hasHeartRateMeasurement
+                      ? `Leitura ${formatReadingAge(watchMeasurement?.time) || 'anterior'}`
+                      : smartwatchConnected
+                        ? 'Relógio conectado, esperando leitura'
+                        : 'Conecte seu relógio para ver o BPM'}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.heartRateCardButton, (!canManageWatch || smartwatch.isBusy) && styles.heartRateCardButtonDisabled]}
+                  onPress={handleSmartwatchPress}
+                  disabled={!canManageWatch || smartwatch.isBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel={smartwatchConnected ? 'Atualizar batimentos do relógio' : 'Conectar relógio'}
+                >
+                  {smartwatch.isBusy ? (
+                    <ActivityIndicator size="small" color={TEMA.forte} />
+                  ) : (
+                    <>
+                      <Text style={styles.heartRateCardButtonText}>{smartwatchConnected ? 'Atualizar' : 'Conectar relógio'}</Text>
+                      <Ionicons name={smartwatchConnected ? 'refresh-outline' : 'arrow-forward'} size={15} color={TEMA.forte} />
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {heartRateBaseline.available && (
+              <Text style={styles.heartRateCardBaseline}>
+                Sua média recente: {Math.round(heartRateBaseline.meanBpm)} BPM
+              </Text>
+            )}
+            {!heartRateBaseline.available && !heartRateIsCurrent && smartwatchConnectionText !== 'Conectado · aguardando batimentos' && (
+              <Text style={styles.heartRateCardHint} numberOfLines={2}>{smartwatchConnectionText}</Text>
+            )}
+          </View>
+        )}
+
         {/* ── SEU DIA ── */}
         <RoutineToday navigation={navigation} />
 
@@ -1129,43 +1203,6 @@ export default function Home({ navigation }) {
             <Text style={styles.regiaoTexto}>Cadastre quem deve receber seu alerta SOS.</Text>
           )}
         </TouchableOpacity>
-
-        {/* Só a conexão do Galaxy Watch (Android), sem números técnicos: o corpo aparece
-            em palavras em "Por que seu risco está assim". */}
-        {Platform.OS === 'android' && (
-          <>
-            <TouchableOpacity
-              style={[
-                styles.smartwatchConnectionButton,
-                smartwatchConnected ? styles.smartwatchConnectionButtonConnected : styles.smartwatchConnectionButtonDisconnected,
-              ]}
-              onPress={handleSmartwatchPress}
-              disabled={smartwatch.isBusy || !['connected', 'permission_required', 'error'].includes(smartwatch.status)}
-              accessibilityRole="button"
-              accessibilityLabel="Conexão com smartwatch"
-            >
-              <View style={styles.smartwatchIconWrap}>
-                <Ionicons name="watch-outline" size={22} color={smartwatchConnected ? Brand.green : TEMA.forte} />
-              </View>
-              <View style={styles.smartwatchConnectionTexts}>
-                <Text style={styles.smartwatchConnectionTitle}>
-                  {smartwatchConnected ? 'Smartwatch conectado' : 'Smartwatch desconectado'}
-                </Text>
-                <Text style={styles.smartwatchConnectionSubtitle}>{smartwatchConnectionText}</Text>
-              </View>
-              {smartwatch.isBusy ? (
-                <ActivityIndicator size="small" color={TEMA.forte} />
-              ) : (
-                <Ionicons
-                  name={smartwatchConnected ? 'checkmark-circle' : 'link-outline'}
-                  size={23}
-                  color={smartwatchConnected ? Brand.green : TEMA.forte}
-                />
-              )}
-            </TouchableOpacity>
-          </>
-        )}
-
 
       </ScrollView>
 
@@ -1489,6 +1526,30 @@ const styles = StyleSheet.create({
   secaoLink: { fontSize: 13, fontWeight: '600' },
   modoLinha: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7 },
   modoIcone: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  heartRateCard: { marginHorizontal: 20, marginTop: 16, padding: 15, borderRadius: 16, backgroundColor: Brand.surfaceRose, borderWidth: 1, borderColor: Brand.line },
+  heartRateCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  heartRateCardTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 9, flexShrink: 1 },
+  heartRateIconWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  heartRateCardTitle: { color: Brand.ink, fontSize: 14, fontWeight: '800' },
+  heartRateCardSource: { maxWidth: 190, marginTop: 1, color: Brand.muted, fontSize: 11 },
+  heartRateStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12, backgroundColor: '#FFFFFF' },
+  heartRateStatusLive: { backgroundColor: Brand.mint },
+  heartRateStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Brand.muted },
+  heartRateStatusDotLive: { backgroundColor: Brand.green },
+  heartRateStatusText: { color: Brand.muted, fontSize: 9, fontWeight: '800' },
+  heartRateStatusTextLive: { color: Brand.green },
+  heartRateCardBody: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10 },
+  heartRateCardValueRow: { flexDirection: 'row', alignItems: 'baseline' },
+  heartRateCardValue: { color: TEMA.forte, fontSize: 46, lineHeight: 54, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  heartRateCardValueEmpty: { color: Brand.muted },
+  heartRateCardUnit: { marginLeft: 5, color: Brand.muted, fontSize: 13, fontWeight: '700' },
+  heartRateCardActionColumn: { flex: 1, alignItems: 'flex-end', minWidth: 0 },
+  heartRateCardFreshness: { maxWidth: '100%', color: Brand.muted, fontSize: 10, textAlign: 'right' },
+  heartRateCardButton: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 5, paddingHorizontal: 10, borderRadius: 17, backgroundColor: '#FFFFFF' },
+  heartRateCardButtonDisabled: { opacity: 0.55 },
+  heartRateCardButtonText: { color: TEMA.forte, fontSize: 11, fontWeight: '700' },
+  heartRateCardBaseline: { marginTop: 8, color: Brand.green, fontSize: 11, fontWeight: '600' },
+  heartRateCardHint: { marginTop: 8, color: Brand.muted, fontSize: 10, lineHeight: 14 },
   modoTituloLinha: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   modoTitulo: { fontSize: 15, color: Brand.ink },
   modoDetalhe: { fontSize: 12, color: '#8A8590', marginTop: 1 },
@@ -1544,22 +1605,6 @@ const styles = StyleSheet.create({
   mapSectionTitle: { marginHorizontal: 22, marginTop: 20, marginBottom: 14, color: Brand.ink, fontSize: 19, fontWeight: '700' },
   sensorAvailabilityNote: { marginHorizontal: 22, paddingVertical: 14, color: Brand.muted, fontSize: 12, lineHeight: 18, borderBottomWidth: 1, borderBottomColor: Brand.line },
 
-  heartRatePanel: { minHeight: 132, marginHorizontal: 22, marginTop: 2, paddingVertical: 12, paddingHorizontal: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: Brand.line },
-  heartRateLabel: { marginTop: 6, color: Brand.muted, fontSize: 11, fontWeight: '700' },
-  heartRateValueRow: { minHeight: 58, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
-  heartRateValue: { color: TEMA.forte, fontSize: 46, lineHeight: 56, fontWeight: '800' },
-  heartRateValueUnavailable: { color: Brand.muted },
-  heartRateUnit: { marginLeft: 6, color: Brand.muted, fontSize: 18, fontWeight: '600' },
-  heartRateDetail: { minHeight: 18, color: Brand.green, fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  heartRateBaselineDetail: { minHeight: 16, marginTop: 4, color: Brand.muted, fontSize: 11, textAlign: 'center' },
-  heartRateDetailStale: { color: Brand.amber },
-  smartwatchConnectionButton: { minHeight: 66, marginHorizontal: 22, marginTop: 0, marginBottom: 14, paddingHorizontal: 0, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Brand.line, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'transparent' },
-  smartwatchConnectionButtonConnected: { borderColor: Brand.line },
-  smartwatchConnectionButtonDisconnected: { borderColor: Brand.line },
-  smartwatchIconWrap: { width: 28, height: 32, alignItems: 'center', justifyContent: 'center' },
-  smartwatchConnectionTexts: { flex: 1 },
-  smartwatchConnectionTitle: { color: Brand.ink, fontSize: 15, fontWeight: '800' },
-  smartwatchConnectionSubtitle: { color: Brand.muted, fontSize: 11, marginTop: 2 },
   smartwatchWarning: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginTop: -8, marginBottom: 16, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: '#F1D9B7', backgroundColor: Brand.amberSoft },
   smartwatchWarningTexts: { flex: 1 },
   smartwatchWarningTitle: { color: '#744210', fontSize: 13, fontWeight: '700' },

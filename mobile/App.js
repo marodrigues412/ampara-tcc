@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react'
+import { ActivityIndicator, View } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './services/supabase'
 import { useFonts } from 'expo-font'
 import { Fraunces_500Medium_Italic } from '@expo-google-fonts/fraunces'
@@ -50,30 +52,56 @@ function Tabs() {
 // 🔹 App principal
 export default function App() {
   const [session, setSession] = useState(null)
-  const [onboardingSeen, setOnboardingSeen] = useState(false)
+  const [sessionCarregada, setSessionCarregada] = useState(false)
+  const [onboardingSeen, setOnboardingSeen] = useState(null)
   // Fonte do nome da Lia. Se não carregar, o texto aparece na fonte do sistema.
   useFonts({ Fraunces_500Medium_Italic })
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-    })
-
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
     })
+    let ativo = true
+    supabase.auth.getSession().then(({ data }) => {
+      if (ativo) setSession(data.session)
+    }).finally(() => {
+      if (ativo) setSessionCarregada(true)
+    })
+    AsyncStorage.getItem('ampara:onboarding-completo').then((valor) => {
+      if (ativo) setOnboardingSeen(valor === 'true')
+    }).catch(() => {
+      if (ativo) setOnboardingSeen(false)
+    })
 
     return () => {
+      ativo = false
       listener.subscription.unsubscribe()
     }
   }, [])
 
+  const concluirOnboarding = async () => {
+    try {
+      await AsyncStorage.setItem('ampara:onboarding-completo', 'true')
+    } catch {}
+    setOnboardingSeen(true)
+  }
+
   // O provedor fica por fora de tudo: login e onboarding também usam o header com
   // as margens da área segura (notch e barra de status).
+  if (!sessionCarregada || onboardingSeen === null) {
+    return (
+      <SafeAreaProvider>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' }}>
+          <ActivityIndicator color="#283D68" />
+        </View>
+      </SafeAreaProvider>
+    )
+  }
+
   if (!onboardingSeen) {
     return (
       <SafeAreaProvider>
-        <OnboardingScreen onDone={() => setOnboardingSeen(true)} />
+        <OnboardingScreen onDone={concluirOnboarding} />
       </SafeAreaProvider>
     )
   }
