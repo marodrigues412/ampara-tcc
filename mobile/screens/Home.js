@@ -17,6 +17,7 @@ import {
   Linking,
   Image,
   AccessibilityInfo,
+  AppState,
 } from 'react-native'
 
 import { useFocusEffect } from '@react-navigation/native'
@@ -52,6 +53,7 @@ import AnelDaLia from '../components/AnelDaLia'
 import CamadasDoRisco from '../components/CamadasDoRisco'
 
 import { dispararAlerta } from '../services/alertService'
+import { assinarTiqueDoMonitor, desligarMonitoramentoEmSegundoPlano, ligarMonitoramentoEmSegundoPlano } from '../services/monitoramentoEmSegundoPlano'
 import { nomeDoTelefone } from '../utils/contatos'
 import { FRACAO_DO_ANO } from '../utils/mapaCalor'
 
@@ -277,7 +279,10 @@ export default function Home({ navigation }) {
   // --- Controle do Cronômetro de Alerta e Feedback SOS ---
   const [countdown, setCountdown] = useState(30)
   const [alertaDisparado, setAlertaDisparado] = useState(false);
-  const timerRef = useRef(null);
+  // Instante em que a contagem do alerta chega a zero. A contagem é calculada a partir
+  // dele, e não descontada a cada segundo: assim o tique nativo (app em segundo plano) e o
+  // timer do JS podem movê-la sem que ela acelere quando os dois disparam.
+  const fimDaContagemRef = useRef(null);
   const sosHoldTimerRef = useRef(null);
   const lastAlertSentRef = useRef(null);
   const cancelCooldownRef = useRef(null);
@@ -409,7 +414,12 @@ export default function Home({ navigation }) {
       setNivelExibido(estabilizadorRef.current.exibido)
     }
     const intervalo = setInterval(avaliar, 500)
-    return () => clearInterval(intervalo)
+    // Em segundo plano o setInterval para; o tique nativo segue avaliando.
+    const pararTique = assinarTiqueDoMonitor(avaliar)
+    return () => {
+      clearInterval(intervalo)
+      pararTique()
+    }
   }, [])
   // Estado do que a tela mostra: sem nível exibido ainda, é "calculando" (ou "sem dados").
   const estadoExibido = !monitoramentoAtivo
@@ -467,36 +477,87 @@ export default function Home({ navigation }) {
     if (emCooldownEnvio || emCooldownCancelamento) return;
 
     if (nivelExibido !== 'alto') return;
+    fimDaContagemRef.current = Date.now() + 10 * 1000;
     setCountdown(10);
     setModalVisible(true);
   }, [monitoramentoAtivo, sustainedHighRisk, modalVisible, alertaDisparado, nivelExibido]);
 
-  // 2️⃣ O MOTOR SEGURO
+  // 2️⃣ O MOTOR SEGURO: atualiza o número na tela a partir do prazo. O timer do JS cuida
+  // do app aberto; o tique nativo, do app em segundo plano ou da tela apagada.
   useEffect(() => {
-    if (!modalVisible) {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      return;
-    }
-
-    if (countdown === 0 && modalVisible && !alertaDisparado) {
-      setAlertaDisparado(true);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      setModalVisible(false);
-      executarEnvioDeSocorro();
-      return;
-    }
-
-    if (countdown > 0 && modalVisible && !alertaDisparado) {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        setCountdown(countdown - 1);
-      }, 1000);
-    }
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+    if (!modalVisible || alertaDisparado) return;
+    const atualizar = () => {
+      const fim = fimDaContagemRef.current;
+      if (!fim) return;
+      setCountdown(Math.max(0, Math.ceil((fim - Date.now()) / 1000)));
     };
+    atualizar();
+    const intervalo = setInterval(atualizar, 250);
+    const pararTique = assinarTiqueDoMonitor(atualizar);
+    return () => {
+      clearInterval(intervalo);
+      pararTique();
+    };
+  }, [modalVisible, alertaDisparado]);
+
+  // Chegou a zero com o modal aberto e ninguém cancelou: envia. O prazo zerado garante
+  // que um 0 que sobrou de uma contagem anterior não dispare nada.
+  useEffect(() => {
+    if (countdown !== 0 || !modalVisible || alertaDisparado || !fimDaContagemRef.current) return;
+    fimDaContagemRef.current = null;
+    setModalVisible(false);
+    if (testeDoAlertaRef.current) {
+      console.log('[teste] envio simulado depois de', Date.now() - testeDoAlertaRef.current, 'ms, app', AppState.currentState);
+      testeDoAlertaRef.current = null;
+      return;
+    }
+    setAlertaDisparado(true);
+    executarEnvioDeSocorro();
   }, [countdown, modalVisible, alertaDisparado]);
+
+  // Teste a seco do caminho do alerta: mobile://teste-alerta abre a mesma contagem, mas no
+  // fim só registra no log, sem chamar a AWS. Serve para conferir, com a tela apagada, que
+  // a contagem anda e chega ao envio (adb logcat -s ReactNativeJS).
+  const testeDoAlertaRef = useRef(null)
+  useEffect(() => {
+    const assinatura = Linking.addEventListener('url', ({ url }) => {
+      if (!url?.includes('teste-alerta') || modalVisible) return
+      testeDoAlertaRef.current = Date.now()
+      fimDaContagemRef.current = Date.now() + 10 * 1000
+      setCountdown(10)
+      setModalVisible(true)
+      console.log('[teste] contagem iniciada')
+    })
+    return () => assinatura.remove()
+  }, [modalVisible])
+
+  // Sinal de vida em segundo plano, uma linha por minuto no logcat: mostra que o tique
+  // nativo está chegando ao JS com a tela apagada. Só rótulos, nunca a posição.
+  useEffect(() => {
+    let tiques = 0
+    return assinarTiqueDoMonitor(() => {
+      tiques += 1
+      if (tiques % 60 !== 0 || AppState.currentState === 'active') return
+      const fim = fimDaContagemRef.current
+      console.log('[segundo plano] vivo', JSON.stringify({
+        nivel: estabilizadorRef.current?.exibido ?? null,
+        contagem: fim ? Math.max(0, Math.ceil((fim - Date.now()) / 1000)) : null,
+      }))
+    })
+  }, [])
+
+  // Com o monitoramento ligado, o serviço em primeiro plano segura localização, tique e
+  // CPU quando o app sai da tela. Liga de novo quando a primeira posição chega, porque
+  // na primeira abertura a permissão de localização ainda está sendo pedida.
+  const temLocalizacao = Boolean(location)
+  useEffect(() => {
+    if (!monitoramentoAtivo) {
+      void desligarMonitoramentoEmSegundoPlano();
+      return;
+    }
+    if (temLocalizacao) void ligarMonitoramentoEmSegundoPlano();
+  }, [monitoramentoAtivo, temLocalizacao]);
+  useEffect(() => () => { void desligarMonitoramentoEmSegundoPlano() }, []);
 
   async function loadUserData() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -569,7 +630,7 @@ export default function Home({ navigation }) {
   function toggleMonitoramento(value) {
     setMonitoramentoAtivo(value)
     if (!value) {
-      if (timerRef.current) clearTimeout(timerRef.current)
+      fimDaContagemRef.current = null
       setModalVisible(false)
       setAlertaDisparado(false)
       setSustainedHighRisk(false)
@@ -799,7 +860,8 @@ export default function Home({ navigation }) {
   }, [])
 
   const handleUserIsSafe = () => {
-    if (timerRef.current) clearTimeout(timerRef.current)
+    fimDaContagemRef.current = null
+    testeDoAlertaRef.current = null
     setModalVisible(false)
     setCountdown(30)
     setAlertaDisparado(false)

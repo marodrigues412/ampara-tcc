@@ -5,6 +5,7 @@ import { appendPhoneMotionSample, summarizePhoneMotionWindow } from '../utils/mo
 import { extractPhoneMotionFeatures, scoreIsolationForest } from '../services/isolationForestMotion';
 import { PICO_FORTE_DO_CELULAR_G, acompanharMovimento, movimentoAtipico } from '../services/threeLayerRisk';
 import isolationForestMotionModel from '../models/isolationForestMotionModel.json';
+import { assinarLocalizacaoEmSegundoPlano } from '../services/monitoramentoEmSegundoPlano';
 
 export const useRiskDetection = () => {
   const [data, setData] = useState({ x: 0, y: 0, z: 0 });
@@ -84,6 +85,9 @@ export const useRiskDetection = () => {
       if (validSpeed !== null) previousGpsSpeedRef.current = validSpeed
       setLocation(loc)
     }
+    // Com o app em segundo plano o watchPositionAsync é pausado pelo expo-location; as
+    // posições passam a chegar pela tarefa do serviço em primeiro plano.
+    const pararSegundoPlano = assinarLocalizacaoEmSegundoPlano(updateLocation);
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
@@ -100,6 +104,7 @@ export const useRiskDetection = () => {
     })();
 
     return () => {
+      pararSegundoPlano();
       if (locationSub) locationSub.remove();
     };
   }, []);
