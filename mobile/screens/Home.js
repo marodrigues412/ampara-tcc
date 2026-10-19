@@ -1334,7 +1334,7 @@ export default function Home({ navigation }) {
 
       {/* MODAL REGISTRO DE INCIDENTE */}
       <Modal visible={reportModalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flexOne}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flexOne}>
           <Pressable style={styles.overlayBottom} onPress={() => { setReportModalVisible(false); resetForm(); }}>
             <Pressable style={styles.cardModalBottom} onPress={() => {}}>
               <View style={[styles.modalStrip, { backgroundColor: '#E8622A' }]} />
