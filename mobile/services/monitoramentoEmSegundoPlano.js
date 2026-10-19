@@ -20,6 +20,7 @@ export const TAREFA_LOCALIZACAO = 'ampara-localizacao-segundo-plano'
 const INTERVALO_DO_TIQUE_MS = 1000
 
 const ouvintesDeLocalizacao = new Set()
+let conferidoNestaExecucao = false
 
 // Precisa rodar quando o módulo é carregado (App.js o importa), antes de o Android
 // entregar a primeira posição.
@@ -60,7 +61,14 @@ export async function ligarMonitoramentoEmSegundoPlano() {
     const { status } = await Location.getForegroundPermissionsAsync()
     if (status !== 'granted') return false
 
-    const jaLigado = await Location.hasStartedLocationUpdatesAsync(TAREFA_LOCALIZACAO)
+    // O TaskManager guarda "tarefa ligada" nas preferências do app, e isso sobrevive a
+    // reinstalação e a processo morto, com o serviço já parado. Na primeira chamada de cada
+    // execução, desliga e religa para não confiar nesse estado; depois, a checagem vale.
+    let jaLigado = await Location.hasStartedLocationUpdatesAsync(TAREFA_LOCALIZACAO)
+    if (jaLigado && !conferidoNestaExecucao) {
+      await Location.stopLocationUpdatesAsync(TAREFA_LOCALIZACAO)
+      jaLigado = false
+    }
     if (!jaLigado) {
       await Location.startLocationUpdatesAsync(TAREFA_LOCALIZACAO, {
         accuracy: Location.Accuracy.Balanced,
@@ -74,6 +82,7 @@ export async function ligarMonitoramentoEmSegundoPlano() {
         },
       })
     }
+    conferidoNestaExecucao = true
     getWatchHeartRateModule()?.startBackgroundKeepAlive(INTERVALO_DO_TIQUE_MS)
     return true
   } catch (erro) {
