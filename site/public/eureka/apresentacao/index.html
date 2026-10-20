@@ -28,7 +28,7 @@ body.ui #fs,body.ui #hint{opacity:1}
 const N=11, TEMPO=8000; // 8 s por slide, em loop
 const stage=document.getElementById('stage'), bar=document.getElementById('bar');
 const imgs=[];
-for(let i=1;i<=N;i++){const im=new Image();im.className='sl';im.alt='Slide '+i;im.src='slides/'+String(i).padStart(2,'0')+'.jpg';stage.appendChild(im);imgs.push(im)}
+for(let i=1;i<=N;i++){const im=new Image();im.className='sl';im.alt='Slide '+i;im.src='/eureka/apresentacao/slides/'+String(i).padStart(2,'0')+'.jpg';stage.appendChild(im);imgs.push(im)}
 let cur=0, inicio=performance.now(), pausado=false, tempoPausado=0;
 function mostrar(i){imgs[cur].classList.remove('on');cur=(i+N)%N;imgs[cur].classList.add('on');inicio=performance.now();tempoPausado=0}
 imgs[0].classList.add('on');
