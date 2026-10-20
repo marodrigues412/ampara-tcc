@@ -161,12 +161,12 @@ const db = {
       doc(id){ return { async set(o){ const row={dia,nome:o.nome,telefone:id.replace(/^t/,''),acertos:o.acertos,total:o.total,consentimento:true};
         try{ await enviar(row) }catch(e){ if(e&&e.offline){ const f=lerFila(); f.push(row); gravarFila(f); return } throw e } } } },
       orderBy(){ return { onSnapshot(cb,err){ let vivo=true;
-        const run=async()=>{ if(!sb||!vivo) return; const {data,error}=await sb.from('eureka_participantes').select('nome,telefone,acertos,total,criado_em').eq('dia',dia).order('criado_em',{ascending:false});
+        const run=async()=>{ if(!sb||!vivo) return; const c=credenciais(); if(!c){ err&&err({message:'Sessão expirada. Entre de novo.'}); return } const {data,error}=await sb.rpc('eureka_listar',{p_usuario:c.u,p_senha:c.p,p_dia:dia});
           if(!vivo) return; if(error){ err&&err(error); return } cb({docs:(data||[]).map(r=>({data:()=>({nome:r.nome,telefone:fmtPhone(r.telefone),acertos:r.acertos,total:r.total,criadoEm:r.criado_em})}))}) };
         run(); const t=setInterval(run,8000); window.addEventListener('ampara-change',run);
         return ()=>{ vivo=false; clearInterval(t); window.removeEventListener('ampara-change',run) } } } }
     } },
-  async clear(n){ if(!sb) return; const {error}=await sb.from('eureka_participantes').delete().eq('dia',n.replace('participantes_','')); if(error) alertaEquipe('Não foi possível apagar: '+error.message); window.dispatchEvent(new Event('ampara-change')) }
+  async clear(n){ if(!sb) return; const c=credenciais(); if(!c) return; const {error}=await sb.rpc('eureka_apagar',{p_usuario:c.u,p_senha:c.p,p_dia:n.replace('participantes_','')}); if(error) alertaEquipe('Não foi possível apagar: '+error.message); window.dispatchEvent(new Event('ampara-change')) }
 };
 function alertaEquipe(m){ const e=document.getElementById('teamErr'); if(e) e.textContent=m }
 
@@ -301,7 +301,7 @@ function closeTeam(){ if(teamUnsub)teamUnsub(); teamUnsub=null; $('#modalRoot').
 function subscribe(){
   if(teamUnsub)teamUnsub(); teamRows=[];
   if(!db){renderTeam();return}
-  teamUnsub=db.collection('participantes_'+teamDay).orderBy('criadoEm','desc').onSnapshot(s=>{teamRows=s.docs.map(d=>d.data());renderTeam()},()=>{});
+  teamUnsub=db.collection('participantes_'+teamDay).orderBy('criadoEm','desc').onSnapshot(s=>{teamRows=s.docs.map(d=>d.data());renderTeam()},e=>alertaEquipe('Não foi possível carregar a lista: '+(e&&e.message||'erro')));
 }
 function renderTeam(){
   const md=$('#md'); if(!md) return;
@@ -331,17 +331,17 @@ function renderTeam(){
   $('#draw').onclick=()=>{ if(!pool.length)return; const a=new Uint32Array(1);crypto.getRandomValues(a); winner=pool[a[0]%pool.length]; renderTeam() };
 }
 
-/* ---------- Login da equipe (Supabase Auth) ---------- */
-let equipeOk=false;
-async function isUnlocked(){ if(!sb) return false; const {data}=await sb.auth.getSession(); if(!data.session) return false;
-  if(!equipeOk){ const r=await sb.rpc('eh_equipe_eureka'); equipeOk=r.data===true } return equipeOk }
-async function lock(){ equipeOk=false; if(sb) await sb.auth.signOut() }
+/* ---------- Login da equipe (usuário e senha padrão, conferidos no Supabase) ---------- */
+const CRED='ampara_equipe_cred';
+function credenciais(){ try{ const c=JSON.parse(sessionStorage.getItem(CRED)||'null'); if(c&&c.ate>Date.now()) return c; sessionStorage.removeItem(CRED) }catch(e){} return null }
+async function isUnlocked(){ return !!credenciais() }
+async function lock(){ try{ sessionStorage.removeItem(CRED) }catch(e){} }
 function openLogin(){
   $('#modalRoot').innerHTML=`<div class="overlay" id="ov"><div class="modal" role="dialog" aria-modal="true" aria-label="Login da equipe" style="max-width:520px">
    <div class="kick">ÁREA DA EQUIPE</div><h2 style="font-size:34px;margin-top:8px">Entrar</h2>
-   <form id="lf" autocomplete="on" style="margin-top:20px">
-    <label class="f">E-mail<input type="text" inputmode="email" id="lu" autocapitalize="none" autocorrect="off" autocomplete="username" required></label>
-    <label class="f">Senha<input type="password" id="lp" autocomplete="current-password" required></label>
+   <form id="lf" autocomplete="off" style="margin-top:20px">
+    <label class="f">Usuário<input type="text" id="lu" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
+    <label class="f">Senha<input type="password" id="lp" required></label>
     <div class="err" id="le">${sb?'':'Sem conexão com o servidor. Verifique a internet.'}</div>
     <div style="display:flex;gap:12px;flex-wrap:wrap"><button class="btn" type="submit" id="lb">Entrar</button><button class="btn ghost" type="button" id="lc">Cancelar</button></div>
    </form></div></div>`;
@@ -350,10 +350,12 @@ function openLogin(){
   setTimeout(()=>$('#lu').focus(),50);
   $('#lf').onsubmit=async ev=>{ev.preventDefault(); if(!sb) return;
     const le=$('#le'), lb=$('#lb'); lb.disabled=true; lb.textContent='Entrando...'; le.textContent='';
-    const {error}=await sb.auth.signInWithPassword({email:$('#lu').value.trim(),password:$('#lp').value});
-    if(error){ lb.disabled=false; lb.textContent='Entrar'; le.textContent='E-mail ou senha incorretos.'; $('#lp').value=''; return }
-    const r=await sb.rpc('eh_equipe_eureka'); equipeOk=r.data===true;
-    if(!equipeOk){ await sb.auth.signOut(); lb.disabled=false; lb.textContent='Entrar'; le.textContent='Esta conta não tem acesso à área da equipe.'; return }
+    const u=$('#lu').value.trim().toLowerCase(), pw=$('#lp').value;
+    const {data,error}=await sb.rpc('eureka_login',{p_usuario:u,p_senha:pw});
+    lb.disabled=false; lb.textContent='Entrar';
+    if(error){ le.textContent='Não foi possível conferir agora ('+(error.message||'erro')+').'; return }
+    if(data!==true){ le.textContent='Usuário ou senha incorretos.'; $('#lp').value=''; return }
+    try{ sessionStorage.setItem(CRED,JSON.stringify({u,p:pw,ate:Date.now()+15*60*1000})) }catch(e){}
     esvaziarFila(); openTeam() };
 }
 $('#teamBtn').onclick=async()=>{ if(await isUnlocked()) openTeam(); else openLogin(); };
