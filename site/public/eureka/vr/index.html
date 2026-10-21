@@ -184,7 +184,6 @@ function drawInvite() {
     let y = txt(g, 'QUIZ AMPARA', W / 2, 150, { size: 44, color: '#B4566E', align: 'center' }) + 30;
     y = txt(g, 'Quer participar de um quiz?', W / 2, y, { size: 104, align: 'center', maxW: 2100 }) + 40;
     y = txt(g, 'São 5 perguntas rápidas. No fim do dia, a gente sorteia um power bank entre quem participou.', W / 2, y, { size: 54, weight: 600, color: '#5B6787', align: 'center', maxW: 1900, lh: 1.35 }) + 30;
-    if (!S.sess) txt(g, 'Para concorrer, peça para a equipe cadastrar você antes de começar.', W / 2, y, { size: 40, weight: 600, color: '#B4566E', align: 'center', maxW: 1900 });
     P.button('quizYes', W / 2 - 720, P.c.height - 300, 820, 170, 'Quero participar', { size: 64 });
     P.button('quizNo', W / 2 + 160, P.c.height - 300, 560, 170, 'Agora não', { size: 56, bg: '#F4EEE4', hbg: '#EDE4D6', color: '#5B6787' });
   }); }
@@ -263,7 +262,7 @@ let last = 0;
 function tick() {
   let st = null;
   if (S.mode === 'story') { const t = clock();
-    if (t >= TL.quizAt) { startInvite(); }
+    if (t >= TL.quizAt) { if (S.sess) startInvite(); else finish(); }
     else { st = X.update(t, { hideFinal: false }); mover.position.set(0, 0, -st.pz);
       motor.setVolume(rampF(t, 13, 18) * (1 - 0.5 * rampF(t, TL.relief, TL.relief + 6)) * (1 - rampF(t, TL.toCream[0], TL.toCream[0] + 2)) * 1.6);
       motor.setPlaybackRate(1 + 0.12 * rampF(t, 26, 34) + 0.6 * rampF(t, TL.carLeave[0] + 2, TL.carLeave[0] + 7)); } }
