@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Ampara · Experiência VR</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js"}}</script>
+<style>
+@font-face{font-family:Q;src:url(/eureka/vr/assets/quicksand-latin-600-normal.woff2);font-weight:600}
+@font-face{font-family:Q;src:url(/eureka/vr/assets/quicksand-latin-700-normal.woff2);font-weight:700}
+html,body{margin:0;height:100%;background:#F4EEE4;color:#1B2A55;font-family:Q,system-ui,sans-serif}
+#ui{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;text-align:center;padding:24px;z-index:2;background:#F4EEE4}
+#ui h1{margin:0;font-size:42px}
+#ui p{margin:0;font-size:20px;color:#5B6787;max-width:640px;line-height:1.45}
+button.big{border:0;border-radius:20px;background:#1B2A55;color:#F4EEE4;font:700 28px Q,system-ui;padding:24px 44px;min-height:72px;cursor:pointer}
+button.big:disabled{opacity:.4}
+button.soft{border:2px solid #E4DACB;background:#fff;color:#1B2A55;border-radius:16px;font:700 18px Q,system-ui;padding:14px 22px;cursor:pointer}
+#st{font-size:16px;color:#B4566E;min-height:22px}
+canvas{display:block}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Ampara · Experiência VR</h1>
+  <p>Coloque o óculos e aperte o botão. A equipe libera cada visitante pelo celular, na página <b>ampara.info/eureka/vr/equipe</b>.</p>
+  <button class="big" id="go" disabled>Carregando…</button>
+  <button class="soft" id="preview" hidden>Ver prévia nesta tela (sem óculos)</button>
+  <div id="st"></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createExperience } from '/eureka/vr/scene.js';
+
+const $ = id => document.getElementById(id);
+const st = m => $('st').textContent = m || '';
+const P = new URLSearchParams(location.search);
+
+// ---------- Supabase ----------
+const SB_URL = 'https://hhlxgtwvoxpvyvejvxwt.supabase.co', SB_KEY = 'sb_publishable_LaG0x6zbfn3HTGFbDE4Lgg_F6bROg8g';
+const sb = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false } }) : null;
+async function rpc(name, args) { if (!sb) return { data: null, error: { message: 'sem conexão' } }; try { return await sb.rpc(name, args || {}); } catch (e) { return { data: null, error: e }; } }
+
+// ---------- quiz ----------
+const QUIZ = [
+  { q: 'No último ano, quantas brasileiras sofreram algum tipo de assédio?', o: ['1 em cada 10', '1 em cada 5', 'Quase metade', 'Todas'], a: 2,
+    e: '49,6% das mulheres com 16 anos ou mais relataram algum tipo de assédio em 12 meses.', s: 'FBSP/Datafolha, Visível e Invisível (2025)' },
+  { q: 'Quando o Ampara percebe algo fora do normal, qual é a primeira coisa que ele faz?', o: ['Liga para a polícia', 'Avisa todos os contatos na hora', 'Pergunta se você está bem', 'Desliga o celular'], a: 2,
+    e: 'Em risco alto, ele abre uma contagem perguntando se está tudo bem. Se você não responder, avisa a sua rede de apoio.' },
+  { q: 'Em quantos casos de violência contra mulheres alguém estava presente?', o: ['1 em cada 10', '3 em cada 10', '5 em cada 10', '9 em cada 10'], a: 3,
+    e: 'Em 9 de cada 10 casos, alguém presenciou. Quem está por perto pode ajudar: acolher e ligar para o 190.', s: 'FBSP/Datafolha, Visível e Invisível (2025)' },
+  { q: 'Qual é o número da Central de Atendimento à Mulher?', o: ['180', '190', '192', '193'], a: 0,
+    e: 'O Ligue 180 é gratuito e funciona 24 horas. Em emergência, ligue 190.' },
+  { q: 'Desde 2018, importunação sexual (como "encoxar" no ônibus) é:', o: ['Só uma infração leve', 'Crime, com pena de prisão', 'Permitida em locais públicos', 'Resolvida só com multa'], a: 1,
+    e: 'A Lei 13.718/2018 tornou a importunação sexual crime, com pena de 1 a 5 anos.', s: 'Lei nº 13.718/2018' },
+];
+
+// ---------- three ----------
+const TL = await fetch('/eureka/vr/timeline.json').then(r => r.json());
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.3;
+renderer.xr.enabled = true; renderer.xr.setReferenceSpaceType('local-floor'); renderer.xr.setFoveation(1);
+document.body.appendChild(renderer.domElement);
+addEventListener('resize', () => { if (renderer.xr.isPresenting) return; camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+let X;
+try { X = await createExperience(THREE, { base: '/eureka/vr/', TL, xr: true }); } catch (e) { st('Erro ao carregar a cena: ' + e.message); throw e; }
+const scene = X.scene;
+// tudo da cena vai para "mover" (anda para trás enquanto a pessoa "caminha"), dentro de "world" (alinhado com a cabeça no início)
+const world = new THREE.Group(), mover = new THREE.Group(); world.add(mover);
+for (const c of [...scene.children]) mover.add(c);
+scene.add(world);
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 900); camera.position.set(0, 1.6, 0); scene.add(camera);
+
+// ---------- áudio ----------
+const listener = new THREE.AudioListener(); camera.add(listener);
+const music = new THREE.Audio(listener), quizLoop = new THREE.Audio(listener), motor = new THREE.PositionalAudio(listener);
+motor.setRefDistance(5); motor.setRolloffFactor(1.4); motor.setDistanceModel('inverse'); motor.setLoop(true); X.car.add(motor); motor.position.set(0, 0.8, -1.5);
+quizLoop.setLoop(true);
+const loader = new THREE.AudioLoader();
+const loadBuf = u => new Promise(res => loader.load(u, res, undefined, () => res(null)));
+const [bMusic, bMotor, bQuiz] = await Promise.all([loadBuf('/eureka/vr/audio/musica.mp3'), loadBuf('/eureka/vr/audio/motor.mp3'), loadBuf('/eureka/vr/audio/quiz_loop.mp3')]);
+if (bMusic) music.setBuffer(bMusic); if (bMotor) motor.setBuffer(bMotor); if (bQuiz) quizLoop.setBuffer(bQuiz);
+
+// ---------- painéis desenhados em canvas (texto nítido + botões) ----------
+function wrap(g, text, maxW) { const words = text.split(' '); const lines = []; let cur = '';
+  for (const w of words) { const t = cur ? cur + ' ' + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); return lines; }
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+class Panel {
+  constructor(wM, hM, ppm = 1000) { this.c = document.createElement('canvas'); this.c.width = Math.round(wM * ppm); this.c.height = Math.round(hM * ppm); this.g = this.c.getContext('2d');
+    this.tex = new THREE.CanvasTexture(this.c); this.tex.colorSpace = THREE.SRGBColorSpace; this.tex.anisotropy = 8; this.tex.minFilter = THREE.LinearMipmapLinearFilter;
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(wM, hM), new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, fog: false, depthTest: false, depthWrite: false, toneMapped: false }));
+    this.mesh.renderOrder = 30; this.buttons = []; this.hover = null; this.drawFn = null; }
+  draw(fn) { if (fn) this.drawFn = fn; const g = this.g; g.clearRect(0, 0, this.c.width, this.c.height); this.buttons = []; this.drawFn && this.drawFn(g, this); this.tex.needsUpdate = true; }
+  button(id, x, y, w, h, label, style = {}) { const g = this.g; const hov = this.hover === id; this.buttons.push({ id, x, y, w, h });
+    g.save(); rr(g, x, y, w, h, style.r ?? 36); g.fillStyle = style.bg || (hov ? '#2c3f78' : '#1B2A55'); if (hov && !style.bg) g.fillStyle = '#2c3f78'; if (style.bg && hov) g.fillStyle = style.hbg || style.bg; g.fill();
+    if (style.border) { g.lineWidth = 8; g.strokeStyle = style.border; g.stroke(); } if (hov) { g.lineWidth = 10; g.strokeStyle = '#E8A9B4'; g.stroke(); }
+    g.fillStyle = style.color || '#F4EEE4'; g.font = `700 ${style.size || 56}px Q, sans-serif`; g.textBaseline = 'middle';
+    const lines = wrap(g, label, w - 80), lh = (style.size || 56) * 1.2; const x0 = style.align === 'left' ? x + 48 : x + w / 2; g.textAlign = style.align === 'left' ? 'left' : 'center';
+    lines.forEach((l, i) => g.fillText(l, x0 + (style.align === 'left' ? (style.indent || 0) : 0), y + h / 2 + (i - (lines.length - 1) / 2) * lh));
+    if (style.letter) { g.textAlign = 'center'; g.font = `700 44px Q, sans-serif`; g.fillStyle = style.letterColor || '#5B6787'; rr(g, x + 34, y + h / 2 - 40, 80, 80, 22); g.fillStyle = style.letterBg || '#F4EEE4'; g.fill(); g.fillStyle = style.letterColor || '#5B6787'; g.fillText(style.letter, x + 74, y + h / 2 + 2); }
+    g.restore(); }
+  hit(uv) { const x = uv.x * this.c.width, y = (1 - uv.y) * this.c.height; return this.buttons.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)?.id || null; }
+}
+const logoImg = X.IM.logo_navy;
+const panel = new Panel(2.4, 1.5); world.add(panel.mesh); panel.mesh.position.set(0, 1.45, -2.05);
+function card(g, P) { rr(g, 0, 0, P.c.width, P.c.height, 70); g.fillStyle = 'rgba(255,251,245,0.97)'; g.fill(); g.lineWidth = 4; g.strokeStyle = '#E4DACB'; g.stroke(); }
+function txt(g, s, x, y, { size = 60, weight = 700, color = '#1B2A55', align = 'left', maxW = 2100, lh = 1.25, font = 'Q', italic = false } = {}) {
+  g.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${font}, sans-serif`; g.fillStyle = color; g.textAlign = align; g.textBaseline = 'top';
+  const lines = wrap(g, s, maxW); lines.forEach((l, i) => g.fillText(l, x, y + i * size * lh)); return y + lines.length * size * lh; }
+
+// ---------- estado ----------
+const S = { mode: 'lobby', sess: null, nome: null, t0: 0, q: 0, hits: 0, picked: null, polling: 0, endAt: 0 };
+const DAY = (() => { const d = new Date(); return (d.getMonth() === 9 && d.getDate() === 24) ? 'sabado' : 'sexta'; })();
+
+function drawLobby() {
+  panel.draw((g, P) => { card(g, P); const W = P.c.width;
+    const lw = 520, lh = lw * logoImg.height / logoImg.width; g.drawImage(logoImg, W / 2 - lw / 2, 70, lw, lh);
+    let y = 70 + lh + 40;
+    y = txt(g, 'Experiência em realidade virtual', W / 2, y, { size: 50, weight: 600, color: '#B4566E', align: 'center' }) + 50;
+    if (S.nome) { y = txt(g, `Olá, ${S.nome}!`, W / 2, y, { size: 92, align: 'center' }) + 20;
+      y = txt(g, 'Aponte o controle para o botão e aperte o gatilho (ou junte o polegar e o indicador).', W / 2, y, { size: 44, weight: 600, color: '#5B6787', align: 'center', maxW: 1900 }) + 40;
+      P.button('start', W / 2 - 360, y, 720, 150, 'Começar', { size: 66 }); }
+    else { y = txt(g, 'Aguardando a equipe liberar a próxima pessoa…', W / 2, y, { size: 58, align: 'center', maxW: 2000 }) + 30;
+      txt(g, 'Já vai começar. Fique à vontade para olhar ao redor.', W / 2, y, { size: 42, weight: 600, color: '#5B6787', align: 'center' }); }
+    P.button('free', W - 560, P.c.height - 150, 500, 100, 'Começar sem cadastro', { size: 36, bg: '#F4EEE4', hbg: '#EDE4D6', color: '#5B6787', r: 30 });
+  }); }
+function drawQuestion() {
+  const it = QUIZ[S.q];
+  panel.draw((g, P) => { card(g, P); const W = P.c.width;
+    // progresso
+    for (let i = 0; i < QUIZ.length; i++) { rr(g, 120 + i * 440, 80, 400, 16, 8); g.fillStyle = i <= S.q ? '#1B2A55' : '#E4DACB'; g.fill(); }
+    let y = txt(g, `PERGUNTA ${S.q + 1} DE ${QUIZ.length}`, 120, 140, { size: 40, color: '#B4566E' }) + 20;
+    y = txt(g, it.q, 120, y, { size: 76, maxW: 2160, lh: 1.18 }) + 50;
+    const bw = 1060, bh = 190, gap = 40;
+    it.o.forEach((o, i) => { const x = 120 + (i % 2) * (bw + gap), yy = y + Math.floor(i / 2) * (bh + gap);
+      let st = { size: 52, align: 'left', indent: 110, bg: '#FFFFFF', hbg: '#F8F1F3', color: '#1B2A55', border: '#E4DACB', letter: 'ABCD'[i] };
+      if (S.picked !== null) { if (i === it.a) st = { ...st, bg: '#E3F1EA', border: '#2F7962', letterBg: '#2F7962', letterColor: '#fff' };
+        else if (i === S.picked) st = { ...st, bg: '#F8E3E8', border: '#B4566E', letterBg: '#B4566E', letterColor: '#fff' }; else st = { ...st, color: '#9AA2B8' }; }
+      if (S.picked === null) P.button('o' + i, x, yy, bw, bh, o, st); else { const keep = P.hover; P.hover = null; P.button('x' + i, x, yy, bw, bh, o, st); P.hover = keep; } });
+    if (S.picked !== null) { const ok = S.picked === it.a; const fy = y + 2 * (bh + gap) + 10;
+      rr(g, 120, fy, 1560, P.c.height - fy - 60, 36); g.fillStyle = ok ? '#E3F1EA' : '#F8E3E8'; g.fill();
+      let yy = txt(g, ok ? 'Isso mesmo!' : 'Quase!', 160, fy + 28, { size: 52, color: ok ? '#2F7962' : '#B4566E' }) + 6;
+      yy = txt(g, it.e, 160, yy, { size: 40, weight: 600, maxW: 1480, lh: 1.3 });
+      if (it.s) txt(g, it.s, 160, yy + 6, { size: 30, weight: 600, color: '#5B6787' });
+      P.button('next', 1720, fy + 20, 560, 150, S.q < QUIZ.length - 1 ? 'Próxima' : 'Ver resultado', { size: 56 }); }
+  }); }
+function drawResult() {
+  panel.draw((g, P) => { card(g, P); const W = P.c.width;
+    let y = txt(g, 'RESULTADO', W / 2, 140, { size: 44, color: '#B4566E', align: 'center' }) + 30;
+    y = txt(g, `${S.hits} de ${QUIZ.length}`, W / 2, y, { size: 230, align: 'center' }) + 30;
+    const msg = S.sess ? (S.consent === false ? 'Obrigada por participar!' : 'Você está participando do sorteio do power bank. Boa sorte!') : 'Obrigada por participar!';
+    y = txt(g, msg, W / 2, y, { size: 64, align: 'center', maxW: 2000 }) + 30;
+    txt(g, 'Tecnologia que percebe. Proteção que acompanha.', W / 2, y + 20, { size: 50, weight: 600, color: '#B4566E', align: 'center' });
+    P.button('end', W / 2 - 300, P.c.height - 220, 600, 140, 'Finalizar', { size: 56 });
+  }); }
+
+// ---------- fluxo ----------
+function setLobby() { S.mode = 'lobby'; S.sess = null; S.nome = null; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.material.opacity = 1;
+  music.isPlaying && music.stop(); motor.isPlaying && motor.stop(); if (bQuiz && !quizLoop.isPlaying) { quizLoop.setVolume(0.35); quizLoop.play(); }
+  drawLobby(); }
+async function poll() { if (S.mode !== 'lobby') return; const { data, error } = await rpc('eureka_vr_proxima');
+  const row = Array.isArray(data) ? data[0] : null; const nome = row ? row.primeiro_nome : null; const id = row ? row.id : null; S.pendingConsent = row ? !!row.consentimento : false;
+  if (id !== S.pending || nome !== S.nome) { S.pending = id; S.nome = nome; drawLobby(); } }
+setInterval(poll, 2500);
+function headPose() { const p = new THREE.Vector3(), q = new THREE.Quaternion(); const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera; cam.getWorldPosition(p); cam.getWorldQuaternion(q);
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(q); return { p, yaw: Math.atan2(-f.x, -f.z) }; }
+async function startStory(withSession) {
+  if (withSession && S.pending) { const { data } = await rpc('eureka_vr_comecar', { p_id: S.pending }); S.sess = data ? S.pending : null; S.consent = S.pendingConsent; } else S.sess = null;
+  // alinha o mundo com a pessoa
+  const h = headPose(); world.position.set(h.p.x, 0, h.p.z); world.rotation.y = h.yaw;
+  S.mode = 'story'; panel.mesh.visible = false; quizLoop.isPlaying && quizLoop.stop();
+  const ctx = listener.context; if (ctx.state !== 'running') await ctx.resume();
+  if (bMusic) { music.setVolume(0.9); music.play(); S.t0 = ctx.currentTime; } else S.t0 = performance.now() / 1000;
+  if (bMotor) { motor.setVolume(0); motor.play(); }
+}
+function clock() { return bMusic ? listener.context.currentTime - S.t0 : performance.now() / 1000 - S.t0; }
+function startQuiz() { S.mode = 'quiz'; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.position.set(0, 1.45, -2.05); drawQuestion(); motor.isPlaying && motor.stop(); }
+async function pick(i) { if (S.picked !== null) return; S.picked = i; if (i === QUIZ[S.q].a) S.hits++; drawQuestion();
+  if (S.sess) rpc('eureka_vr_progresso', { p_id: S.sess, p_pergunta: S.q + 1, p_acertos: S.hits }); }
+async function next() { if (S.q < QUIZ.length - 1) { S.q++; S.picked = null; drawQuestion(); return; }
+  S.mode = 'result'; drawResult(); S.endAt = clock() + 40;
+  if (S.sess) { const r = await rpc('eureka_vr_concluir', { p_id: S.sess, p_acertos: S.hits, p_total: QUIZ.length }); if (r.error) console.warn(r.error); } }
+function finish() { S.mode = 'credits'; panel.mesh.visible = false; S.credT = clock(); }
+function onSelect(id) { if (!id) return;
+  if (S.mode === 'lobby') { if (id === 'start') startStory(true); if (id === 'free') startStory(false); }
+  else if (S.mode === 'quiz') { if (id[0] === 'o') pick(+id.slice(1)); if (id === 'next') next(); }
+  else if (S.mode === 'result' && id === 'end') finish(); }
+
+// ---------- controles (raio) ----------
+const ray = new THREE.Raycaster(); const tmpM = new THREE.Matrix4();
+const ctrls = [0, 1].map(i => { const c = renderer.xr.getController(i);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0xE8A9B4, transparent: true, opacity: 0.85, depthTest: false }));
+  line.scale.z = 3; line.renderOrder = 40; c.add(line);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 8), new THREE.MeshBasicMaterial({ color: 0xE8A9B4, depthTest: false })); dot.renderOrder = 41; dot.visible = false; scene.add(dot);
+  c.userData = { line, dot }; c.addEventListener('select', () => onSelect(c.userData.hoverId)); scene.add(c); return c; });
+function pointAt(origin, dir) { ray.set(origin, dir); if (!panel.mesh.visible) return null; const h = ray.intersectObject(panel.mesh, false)[0]; return h || null; }
+function updatePointers() { let hov = null;
+  for (const c of ctrls) { c.userData.hoverId = null; if (!renderer.xr.isPresenting) { c.userData.dot.visible = false; continue; }
+    tmpM.identity().extractRotation(c.matrixWorld); const o = new THREE.Vector3().setFromMatrixPosition(c.matrixWorld); const d = new THREE.Vector3(0, 0, -1).applyMatrix4(tmpM);
+    const h = pointAt(o, d); if (h) { c.userData.line.scale.z = h.distance; c.userData.dot.visible = true; c.userData.dot.position.copy(h.point); c.userData.hoverId = panel.hit(h.uv); hov = hov || c.userData.hoverId; }
+    else { c.userData.line.scale.z = 3; c.userData.dot.visible = false; }
+    c.userData.line.visible = panel.mesh.visible; }
+  if (!renderer.xr.isPresenting && mouse.active) { ray.setFromCamera(mouse.v, camera); const h = panel.mesh.visible ? ray.intersectObject(panel.mesh, false)[0] : null; mouse.hover = h ? panel.hit(h.uv) : null; hov = mouse.hover; }
+  if (hov !== panel.hover) { panel.hover = hov; panel.draw(); } }
+// prévia no computador: arrastar para olhar, clicar para escolher
+const mouse = { v: new THREE.Vector2(), active: false, yaw: 0, pitch: 0, down: null, hover: null };
+renderer.domElement.addEventListener('pointermove', e => { mouse.active = true; mouse.v.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  if (mouse.down) { mouse.yaw += (e.clientX - mouse.down.x) * 0.004; mouse.pitch = Math.max(-1.2, Math.min(1.2, mouse.pitch + (e.clientY - mouse.down.y) * 0.004)); mouse.down = { x: e.clientX, y: e.clientY, moved: true }; } });
+renderer.domElement.addEventListener('pointerdown', e => mouse.down = { x: e.clientX, y: e.clientY, moved: false });
+renderer.domElement.addEventListener('pointerup', e => { const m = mouse.down; mouse.down = null; if (m && !m.moved) onSelect(mouse.hover); });
+
+// ---------- seta presa ao olhar ----------
+const arrow = new THREE.Group(); scene.add(arrow);
+{ const s = new THREE.Shape(); s.moveTo(0, 0.05); s.lineTo(0.05, 0); s.lineTo(0, -0.05); s.lineTo(0.016, 0); s.closePath(); const geo = new THREE.ShapeGeometry(s);
+  for (let j = 0; j < 3; j++) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xE8A9B4, transparent: true, opacity: 0, depthTest: false, fog: false })); m.position.x = j * 0.045; m.renderOrder = 45; arrow.add(m); } }
+const arrowLbl = X.textPlane(['vire a cabeça'], { h: 0.022, font: '500', color: '#E8A9B4', shadow: false }); arrowLbl.material.opacity = 0.9; arrowLbl.position.set(0.045, -0.06, 0); arrow.add(arrowLbl);
+function updateArrow(st, t) { const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera; let k = 0, dir = 1;
+  if (st && st.guideAng !== null && st.guideK > 0) { const h = headPose(); const cur = -THREE.MathUtils.radToDeg(h.yaw - world.rotation.y);
+    const diff = ((st.guideAng - cur + 540) % 360) - 180; dir = Math.sign(diff) || 1; k = Math.abs(diff) > 30 ? st.guideK : 0; }
+  arrow.visible = k > 0.01; if (!arrow.visible) return;
+  cam.getWorldPosition(arrow.position); cam.getWorldQuaternion(arrow.quaternion); arrow.translateZ(-0.6); arrow.translateY(-0.08); arrow.translateX(dir * 0.1);
+  arrow.children.forEach((m, j) => { if (m !== arrowLbl) m.material.opacity = k * (0.35 + 0.65 * ((Math.sin(t * 7 - j * 1.2) + 1) / 2)); m.scale.x = dir; m.position.x = j * 0.045 * dir; });
+  arrowLbl.scale.x = 1; arrowLbl.position.x = 0.045 * dir; arrowLbl.material.opacity = k * 0.9; }
+
+// ---------- loop ----------
+const rampF = (t, a, b) => X.ramp(t, a, b);
+let last = 0;
+function tick() {
+  let st = null;
+  if (S.mode === 'story') { const t = clock();
+    if (t >= TL.quizAt) { startQuiz(); }
+    else { st = X.update(t, { hideFinal: true }); mover.position.set(0, 0, -st.pz);
+      const l1 = TL.carLeave[1]; motor.setVolume(rampF(t, 13, 18) * (1 - rampF(t, l1 - 2, l1 + 1)) * 1.6);
+      motor.setPlaybackRate(1 + 0.12 * rampF(t, 26, 34) + 0.6 * rampF(t, TL.carLeave[0] + 2, TL.carLeave[0] + 7)); } }
+  if (S.mode === 'lobby' || S.mode === 'quiz' || S.mode === 'result') { st = X.update(TL.quizAt, { hideFinal: true }); mover.position.set(0, 0, -st.pz); }
+  if (S.mode === 'credits') { const t = clock() - S.credT; st = X.update(TL.quizAt + t, { hideFinal: false }); mover.position.set(0, 0, -st.pz); if (t > 25) setLobby(); }
+  if (S.mode === 'result' && clock() > S.endAt) finish();
+  if (!renderer.xr.isPresenting) { camera.rotation.set(-mouse.pitch, -mouse.yaw, 0, 'YXZ'); }
+  updateArrow(S.mode === 'story' ? st : null, performance.now() / 1000);
+  updatePointers();
+  renderer.render(scene, camera);
+}
+if (P.get('test')) window.__frame = tick; else renderer.setAnimationLoop(tick);
+
+// ---------- botões da página ----------
+setLobby(); poll();
+const go = $('go'), prev = $('preview');
+const xrOK = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr').catch(() => false);
+if (xrOK) { go.disabled = false; go.textContent = 'Entrar no VR'; }
+else { go.textContent = 'Abra no navegador do óculos'; st('Este navegador não abre realidade virtual. Use a prévia abaixo para testar.'); }
+prev.hidden = false;
+if (!sb) st('Sem conexão com o banco: a experiência funciona, mas a pontuação não será salva.');
+go.onclick = async () => {
+  try { const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'hand-tracking'] });
+    await listener.context.resume(); await renderer.xr.setSession(session); $('ui').style.display = 'none';
+    session.addEventListener('end', () => { $('ui').style.display = ''; setLobby(); });
+  } catch (e) { st('Não foi possível entrar no VR: ' + e.message); } };
+prev.onclick = async () => { await listener.context.resume(); $('ui').style.display = 'none'; };
+window.__X = { S, X, startStory, onSelect, panel };
+</script>
+</body>
+</html>

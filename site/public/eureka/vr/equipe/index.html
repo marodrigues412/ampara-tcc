@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Ampara · Óculos (equipe)</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+@font-face{font-family:Q;src:url(/eureka/vr/assets/quicksand-latin-600-normal.woff2);font-weight:600}
+@font-face{font-family:Q;src:url(/eureka/vr/assets/quicksand-latin-700-normal.woff2);font-weight:700}
+:root{--navy:#1B2A55;--cream:#F6F0E6;--paper:#FFFBF5;--rose:#D98A9C;--roseDeep:#B4566E;--roseSoft:#F3D6DD;--muted:#5B6787;--line:#E4DACB;--ok:#2F7962;--okSoft:#E3F1EA}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--cream);color:var(--navy);font-family:Q,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:18px}
+header b{font-size:26px}
+header span{font-size:12px;font-weight:700;letter-spacing:4px;color:var(--rose)}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:22px;margin-bottom:16px}
+h2{margin:0 0 4px;font-size:24px}
+p.sub{margin:0 0 16px;color:var(--muted);font-size:15px;line-height:1.45}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:700;color:var(--muted);margin-bottom:12px}
+input[type=text],input[type=tel],input[type=password]{font:600 20px Q,system-ui;color:var(--navy);padding:14px 16px;border:2px solid var(--line);border-radius:14px;background:#fff;min-height:56px;width:100%}
+input:focus{outline:none;border-color:var(--navy)}
+.check{display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.45;color:var(--muted);margin:6px 0 16px}
+.check input{width:26px;height:26px;flex:none;margin:0;accent-color:var(--navy)}
+.btn{border:0;border-radius:16px;font:700 20px Q,system-ui;padding:16px 24px;min-height:56px;background:var(--navy);color:var(--cream);width:100%;cursor:pointer}
+.btn:disabled{opacity:.4}
+.btn.ghost{background:transparent;color:var(--muted);border:2px solid var(--line);width:auto;font-size:15px;min-height:44px;padding:10px 16px}
+.err{color:var(--roseDeep);font-weight:700;font-size:15px;min-height:20px;margin-top:10px}
+.days{display:flex;gap:8px;margin-bottom:12px}
+.days button{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:10px;font:700 15px Q,system-ui;color:var(--navy);min-height:44px}
+.days button[aria-pressed=true]{background:var(--navy);color:var(--cream);border-color:var(--navy)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .n{font-weight:700;font-size:17px}
+.row .t{font-size:13px;color:var(--muted);margin-top:2px}
+.chip{font-size:13px;font-weight:700;border-radius:999px;padding:6px 12px;white-space:nowrap}
+.c-aguardando{background:var(--roseSoft);color:var(--roseDeep)}
+.c-jogando{background:#E3E8F6;color:var(--navy)}
+.c-concluido{background:var(--okSoft);color:var(--ok)}
+.c-cancelado{background:#EEE;color:#888}
+.big{font-size:40px;font-weight:700}
+.empty{color:var(--muted);font-size:15px;padding:8px 0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+</style>
+</head>
+<body>
+<main>
+<header><b>Ampara · Óculos</b><span>EQUIPE · STAND 72</span></header>
+<div id="app"></div>
+</main>
+<script>
+const SB_URL='https://hhlxgtwvoxpvyvejvxwt.supabase.co', SB_KEY='sb_publishable_LaG0x6zbfn3HTGFbDE4Lgg_F6bROg8g';
+const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false}}):null;
+const CRED='ampara-vr-equipe';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function cred(){try{const c=JSON.parse(localStorage.getItem(CRED)||'null');if(c&&c.ate>Date.now())return c;localStorage.removeItem(CRED)}catch(e){}return null}
+let dia=(()=>{const d=new Date();return(d.getMonth()===9&&d.getDate()===24)?'sabado':'sexta'})();
+let lista=[], timer=null;
+function fone(v){const d=v.replace(/\D/g,'').slice(0,11);if(d.length<=2)return d;if(d.length<=6)return`(${d.slice(0,2)}) ${d.slice(2)}`;if(d.length<=10)return`(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;return`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`}
+
+function telaLogin(msg=''){
+  clearInterval(timer);
+  $('#app').innerHTML=`<div class="card"><h2>Entrar</h2><p class="sub">Use o mesmo usuário e senha da área da equipe do quiz.</p>
+  <form id="fl"><label class="f">Usuário<input type="text" id="u" autocomplete="username" autocapitalize="none" value="equipe"></label>
+  <label class="f">Senha<input type="password" id="p" autocomplete="current-password"></label>
+  <button class="btn" id="be">Entrar</button><div class="err" id="er">${esc(msg)}</div></form></div>`;
+  $('#fl').onsubmit=async e=>{e.preventDefault();const u=$('#u').value.trim().toLowerCase(),p=$('#p').value;$('#be').disabled=true;$('#er').textContent='';
+    if(!sb){$('#er').textContent='Sem conexão com a internet.';$('#be').disabled=false;return}
+    const {data,error}=await sb.rpc('eureka_login',{p_usuario:u,p_senha:p});
+    if(error||!data){$('#er').textContent=error?'Erro: '+error.message:'Usuário ou senha incorretos.';$('#be').disabled=false;return}
+    try{localStorage.setItem(CRED,JSON.stringify({u,p,ate:Date.now()+14*3600*1000}))}catch(e){}
+    telaPrincipal()};
+}
+function telaPrincipal(){
+  const c=cred(); if(!c) return telaLogin();
+  $('#app').innerHTML=`
+  <div class="card"><h2>Próxima pessoa no óculos</h2><p class="sub">Cadastre antes de entregar o óculos. No óculos vai aparecer "Olá, (primeiro nome)!" e o botão Começar.</p>
+  <div class="days"><button data-d="sexta">Sexta (23/10)</button><button data-d="sabado">Sábado (24/10)</button></div>
+  <form id="fv"><label class="f">Nome<input type="text" id="nome" autocomplete="off" autocapitalize="words" maxlength="80"></label>
+  <label class="f">Telefone (com DDD)<input type="tel" id="tel" inputmode="numeric" autocomplete="off"></label>
+  <label class="check"><input type="checkbox" id="ok"> (Pergunte à pessoa) Autorizo o uso do meu nome e telefone apenas para o sorteio do Ampara na Eureka 2026. Os dados não serão compartilhados e serão apagados depois do sorteio.</label>
+  <button class="btn" id="bl">Liberar óculos</button><div class="err" id="er"></div></form></div>
+  <div class="card"><div class="top"><h2>Agora</h2><button class="btn ghost" id="sair">Sair</button></div><div id="lista"><div class="empty">Carregando…</div></div></div>`;
+  const marcaDia=()=>document.querySelectorAll('[data-d]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.d===dia));
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{dia=b.dataset.d;marcaDia()}); marcaDia();
+  $('#tel').oninput=e=>e.target.value=fone(e.target.value);
+  $('#sair').onclick=()=>{try{localStorage.removeItem(CRED)}catch(e){};telaLogin()};
+  $('#fv').onsubmit=async e=>{e.preventDefault();const nome=$('#nome').value.trim(),tel=$('#tel').value.replace(/\D/g,''),ok=$('#ok').checked;
+    if(nome.length<2){$('#er').textContent='Escreva o nome.';return} if(tel.length<10){$('#er').textContent='Telefone com DDD (10 ou 11 números).';return}
+    $('#bl').disabled=true;$('#er').textContent='';
+    const {error}=await sb.rpc('eureka_vr_liberar',{p_usuario:c.u,p_senha:c.p,p_dia:dia,p_nome:nome,p_telefone:tel,p_consentimento:ok});
+    $('#bl').disabled=false;
+    if(error){ if(/acesso negado/.test(error.message)) return telaLogin('Entre de novo.'); $('#er').textContent='Erro: '+error.message; return }
+    $('#nome').value='';$('#tel').value='';$("#ok").checked=false; atualiza()};
+  atualiza(); clearInterval(timer); timer=setInterval(atualiza,3000);
+}
+const ROT={aguardando:'Aguardando no óculos',jogando:'No óculos',concluido:'Concluído',cancelado:'Cancelado'};
+async function atualiza(){
+  const c=cred(); if(!c) return telaLogin(); if(!sb) return;
+  const {data,error}=await sb.rpc('eureka_vr_status',{p_usuario:c.u,p_senha:c.p});
+  const el=$('#lista'); if(!el) return;
+  if(error){ if(/acesso negado/.test(error.message)) return telaLogin('Entre de novo.'); el.innerHTML=`<div class="empty">Sem conexão (${esc(error.message)}). Tentando de novo…</div>`; return }
+  lista=data||[];
+  if(!lista.length){el.innerHTML='<div class="empty">Ninguém ainda. Cadastre a primeira pessoa acima.</div>';return}
+  el.innerHTML=lista.map(r=>{
+    let det=''; if(r.status==='jogando') det=r.pergunta>0?`pergunta ${r.pergunta} de 5 · ${r.acertos??0} acerto(s)`:'assistindo a experiência';
+    if(r.status==='concluido') det=`<span class="big">${r.acertos}</span> de ${r.total}`;
+    const hora=new Date(r.criado_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    const pode=r.status==='aguardando'||r.status==='jogando';
+    return `<div class="row"><div><div class="n">${esc(r.nome)}</div><div class="t">${fone(r.telefone)} · ${hora} · ${r.dia==='sabado'?'sábado':'sexta'}</div>${det?`<div class="t">${det}</div>`:''}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="chip c-${r.status}">${ROT[r.status]}</span>${pode?`<button class="btn ghost" data-c="${r.id}">Cancelar</button>`:''}</div></div>`}).join('');
+  el.querySelectorAll('[data-c]').forEach(b=>b.onclick=async()=>{b.disabled=true;await sb.rpc('eureka_vr_cancelar',{p_usuario:c.u,p_senha:c.p,p_id:b.dataset.c});atualiza()});
+}
+cred()?telaPrincipal():telaLogin();
+</script>
+</body>
+</html>
