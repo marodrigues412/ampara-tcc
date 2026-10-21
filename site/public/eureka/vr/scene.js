@@ -218,18 +218,18 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
   const EYE = 1.6;
   const T = (lines, ang, dist, y, o = {}) => { const m = textPlane(lines, o); placeAround(m, ang, dist, y); rig.add(m); return m; };
   const texts = [
-    { m: T(['22:47.', '*Voltando da faculdade.'], 0, 4.5, 1.95, { h: 0.36 }), a: 5, b: 13 },
-    { m: T(['Faltam seis quarteirões.', '*A rua está vazia.'], 0, 4.5, 1.95, { h: 0.32 }), a: 15, b: 23 },
-    { m: T(['Um motor', '*atrás de você.'], 0, 4.5, 1.95, { h: 0.34 }), a: 24.5, b: 31 },
-    { m: T(['Os faróis atrás de você', '*não passam.'], 0, 4.5, 1.95, { h: 0.34 }), a: 35, b: 44 },
-    { m: T(['Você acelera.', '*Ele também.'], 0, 4.5, 1.95, { h: 0.36 }), a: 49, b: 58 },
-    { m: T(['Agora alguém sabe', '*onde você está.'], 0, 4.2, 1.9, { h: 0.32 }), a: 81.5, b: 87.5 },
-    { m: T(['O Ampara percebe', '*o lugar, a hora e o seu corpo.'], 0, 4.2, 1.9, { h: 0.3 }), a: 88, b: 94.5 },
-    { m: T(['E pergunta antes', '*de avisar quem você escolheu.'], 0, 4.2, 1.9, { h: 0.3 }), a: 95, b: 101 },
-    { m: T(['*Você não está sozinha.'], 0, 4.2, 1.9, { h: 0.4 }), a: 101.5, b: 109 },
+    { m: T(['22:47.', '*Voltando da faculdade.'], 0, 7.0, 2.15, { h: 0.42 }), a: 5, b: 13 },
+    { m: T(['Faltam seis quarteirões.', '*A rua está vazia.'], 0, 7.0, 2.15, { h: 0.38 }), a: 15, b: 23 },
+    { m: T(['Um motor', '*atrás de você.'], 0, 7.0, 2.15, { h: 0.4 }), a: 24.5, b: 31 },
+    { m: T(['Os faróis atrás de você', '*não passam.'], 0, 7.0, 2.15, { h: 0.4 }), a: 35, b: 44 },
+    { m: T(['Você acelera.', '*Ele também.'], 0, 7.0, 2.15, { h: 0.42 }), a: 49, b: 58 },
+    { m: T(['Agora alguém sabe', '*onde você está.'], 0, 7.0, 2.15, { h: 0.38 }), a: 81.5, b: 87.5 },
+    { m: T(['O Ampara percebe', '*o lugar, a hora e o seu corpo.'], 0, 7.0, 2.15, { h: 0.35 }), a: 88, b: 94.5 },
+    { m: T(['E pergunta antes', '*de avisar quem você escolheu.'], 0, 7.0, 2.15, { h: 0.35 }), a: 95, b: 101 },
+    { m: T(['*Você não está sozinha.'], 0, 7.0, 2.15, { h: 0.47 }), a: 101.5, b: 109 },
   ];
   const look = [
-    { m: T(['olhe para trás'], 0, 4.2, 1.25, { h: 0.2, font: '500', color: '#E8A9B4' }), a: 25.5, b: 34 },
+    { m: T(['olhe para trás'], 0, 7.0, 1.4, { h: 0.24, font: '500', color: '#E8A9B4' }), a: 25.5, b: 34 },
   ];
 
   // ---------- HUD do Ampara (referências ao app, sem a tela do celular) ----------
@@ -258,7 +258,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     if (bpm > 100) { g.font = 'italic 400 44px LO'; g.fillStyle = '#E8A9B4'; g.fillText('acima do seu normal', 430, 305); }
     else { g.font = F(500, 40); g.fillStyle = 'rgba(244,238,228,.7)'; g.fillText('acompanhando você', 430, 308); }
     status.tex.needsUpdate = true; }
-  placeAround(status.m, -40, 2.4, 1.2); rig.add(status.m);
+  placeAround(status.m, -40, 3.4, 1.2); rig.add(status.m);
   // 2) mapa: rua com ocorrências registradas
   const map = hudCard(0.82, 0.82);
   function drawMap(pulse) { const key = (pulse * 10 | 0) + ''; if (key === map.key) return; map.key = key;
@@ -274,7 +274,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.font = 'italic 400 42px LO'; g.fillStyle = '#E8A9B4'; g.fillText('tem ocorrências registradas.', 60, H - 132);
     g.font = F(500, 30); g.fillStyle = 'rgba(244,238,228,.6)'; g.fillText('dados públicos · SSP-SP', 60, H - 72);
     map.tex.needsUpdate = true; }
-  placeAround(map.m, 40, 2.4, 1.2); rig.add(map.m);
+  placeAround(map.m, 40, 3.4, 1.2); rig.add(map.m);
   // 3) alerta: "Está tudo bem?" com contagem, depois "mensagem enviada"
   const alertC = hudCard(1.1, 1.25);
   function drawAlert(mode, n, k) { const key = mode + n + '|' + (k * 20 | 0); if (key === alertC.key) return; alertC.key = key;
@@ -303,7 +303,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
         g.textAlign = 'right'; g.fillStyle = '#2F7962'; g.font = F(700, 40); g.fillText('✓ enviado', W - 150, y + 62); g.textAlign = 'center'; g.textBaseline = 'top'; g.globalAlpha = 1; });
     }
     alertC.tex.needsUpdate = true; }
-  placeAround(alertC.m, 0, 2.5, 1.55); rig.add(alertC.m);
+  placeAround(alertC.m, 0, 3.6, 1.55); rig.add(alertC.m);
   const hud = { status, map, alertC };
 
   // setas: no vídeo, um anel de setas aponta o caminho mais curto até o alvo;
@@ -336,11 +336,11 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
   const logoMesh = (() => { const t = new THREE.Texture(IM.logo_navy); t.needsUpdate = true; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; const w = 2.4;
     return new THREE.Mesh(new THREE.PlaneGeometry(w, w * IM.logo_navy.height / IM.logo_navy.width), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0, fog: false, depthWrite: false, depthTest: false })); })();
   logoMesh.renderOrder = 20;
-  placeAround(logoMesh, 0, 3.6, 2.15); final.add(logoMesh);
-  const fTag = textPlane(['*Tecnologia que percebe. Proteção que acompanha.'], { h: 0.2, italicColor: '#B4566E', shadow: false }); placeAround(fTag, 0, 3.6, 0.85); final.add(fTag);
-  const fBack = textPlane(['Eureka 2026 · Stand 72', 'Instituto Mauá de Tecnologia', '*Maria Eduarda Rodrigues e Amanda Herculano'], { h: 0.21, color: '#1B2A55', italicColor: '#B4566E', shadow: false }); placeAround(fBack, 180, 3.6, 1.6); final.add(fBack);
-  const fSideL = textPlane(['ampara.info'], { h: 0.26, color: '#1B2A55', shadow: false }); placeAround(fSideL, -90, 3.6, 1.6); final.add(fSideL);
-  const fSideR = textPlane(['ampara.info'], { h: 0.26, color: '#1B2A55', shadow: false }); placeAround(fSideR, 90, 3.6, 1.6); final.add(fSideR);
+  placeAround(logoMesh, 0, 5.0, 2.2); final.add(logoMesh);
+  const fTag = textPlane(['*Tecnologia que percebe. Proteção que acompanha.'], { h: 0.2, italicColor: '#B4566E', shadow: false }); placeAround(fTag, 0, 5.0, 0.9); final.add(fTag);
+  const fBack = textPlane(['Eureka 2026 · Stand 72', 'Instituto Mauá de Tecnologia', '*Maria Eduarda Rodrigues e Amanda Herculano'], { h: 0.21, color: '#1B2A55', italicColor: '#B4566E', shadow: false }); placeAround(fBack, 180, 5.0, 1.6); final.add(fBack);
+  const fSideL = textPlane(['ampara.info'], { h: 0.26, color: '#1B2A55', shadow: false }); placeAround(fSideL, -90, 5.0, 1.6); final.add(fSideL);
+  const fSideR = textPlane(['ampara.info'], { h: 0.26, color: '#1B2A55', shadow: false }); placeAround(fSideR, 90, 5.0, 1.6); final.add(fSideR);
   const fTexts = [logoMesh, fTag, fBack, fSideL, fSideR];
   const floorCream = new THREE.Mesh(new THREE.CircleGeometry(30, 64), new THREE.MeshBasicMaterial({ color: 0xEDE4D6, transparent: true, opacity: 0, fog: false, toneMapped: false }));
   floorCream.renderOrder = -5; floorCream.rotation.x = -Math.PI / 2; floorCream.position.y = 0.01; rig.add(floorCream);
@@ -412,7 +412,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
         const a = THREE.MathUtils.degToRad(g.userData.ang); const ay = 0.82 - 0.3 * toCream; g.position.set(Math.sin(a) * 2.2, ay, -Math.cos(a) * 2.2); g.lookAt(0, ay, 0); g.rotateY(Math.PI); g.scale.x = -dir; // aponta no sentido do alvo
         g.children.forEach((m, j) => { m.material.opacity = k * (0.35 + 0.65 * ((Math.sin(t * 7 - j * 1.2) + 1) / 2)); m.position.x = j * 0.13 + ((t * 0.6) % 0.13); }); }
       else g.children.forEach(m => m.material.opacity = 0); }
-    if (gd) { const a = THREE.MathUtils.degToRad(gd.ang); const dist = gd.ang === 180 || gd.ang === 0 ? 3.0 : 2.4; targetRing.position.set(Math.sin(a) * dist * 0.98, gd.ang === 180 ? 1.0 : 1.2, -Math.cos(a) * dist * 0.98);
+    if (gd) { const a = THREE.MathUtils.degToRad(gd.ang); const dist = gd.ang === 180 || gd.ang === 0 ? 3.0 : 3.4; targetRing.position.set(Math.sin(a) * dist * 0.98, gd.ang === 180 ? 1.0 : 1.2, -Math.cos(a) * dist * 0.98);
       targetRing.lookAt(0, targetRing.position.y, 0); const s = gd.ang === 180 ? 1.3 : 0.7; targetRing.scale.setScalar(s * (1 + 0.12 * Math.sin(t * 4))); targetRing.material.opacity = (gd.ang === 0 || gd.ang === 180) ? 0 : gk * 0.7; }
     else targetRing.material.opacity = 0;
     // seta presa ao olhar (xr)

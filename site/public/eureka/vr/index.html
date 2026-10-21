@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <link rel="icon" type="image/png" href="/favicon-ampara.png">
-<link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/favicon-ampara.png">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
@@ -108,7 +107,7 @@ class Panel {
   hit(uv) { const x = uv.x * this.c.width, y = (1 - uv.y) * this.c.height; return this.buttons.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)?.id || null; }
 }
 const logoImg = X.IM.logo_navy;
-const panel = new Panel(2.4, 1.5); world.add(panel.mesh); panel.mesh.position.set(0, 1.5, -2.5);
+const panel = new Panel(2.4, 1.5); world.add(panel.mesh); panel.mesh.position.set(0, 1.5, -3.4);
 function card(g, P) { rr(g, 0, 0, P.c.width, P.c.height, 70); g.fillStyle = 'rgba(255,251,245,0.97)'; g.fill(); g.lineWidth = 4; g.strokeStyle = '#E4DACB'; g.stroke(); }
 function txt(g, s, x, y, { size = 60, weight = 700, color = '#1B2A55', align = 'left', maxW = 2100, lh = 1.25, font = 'Q', italic = false } = {}) {
   g.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${font}, sans-serif`; g.fillStyle = color; g.textAlign = align; g.textBaseline = 'top';
@@ -189,8 +188,8 @@ function drawInvite() {
     P.button('quizYes', W / 2 - 720, P.c.height - 300, 820, 170, 'Quero participar', { size: 64 });
     P.button('quizNo', W / 2 + 160, P.c.height - 300, 560, 170, 'Agora não', { size: 56, bg: '#F4EEE4', hbg: '#EDE4D6', color: '#5B6787' });
   }); }
-function startInvite() { S.mode = 'invite'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -2.5); drawInvite(); motor.isPlaying && motor.stop(); }
-function startQuiz() { S.mode = 'quiz'; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -2.5); drawQuestion(); motor.isPlaying && motor.stop(); }
+function startInvite() { S.mode = 'invite'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -3.4); drawInvite(); motor.isPlaying && motor.stop(); }
+function startQuiz() { S.mode = 'quiz'; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -3.4); drawQuestion(); motor.isPlaying && motor.stop(); }
 async function pick(i) { if (S.picked !== null) return; S.picked = i; if (i === QUIZ[S.q].a) S.hits++; drawQuestion();
   if (S.sess) rpc('eureka_vr_progresso', { p_id: S.sess, p_pergunta: S.q + 1, p_acertos: S.hits }); }
 async function next() { if (S.q < QUIZ.length - 1) { S.q++; S.picked = null; drawQuestion(); return; }
@@ -204,7 +203,7 @@ function drawEnd() {
     y = txt(g, 'Pode tirar o óculos com cuidado e devolver para a equipe.', W / 2, y, { size: 60, weight: 600, color: '#5B6787', align: 'center', maxW: 2000 }) + 40;
     txt(g, 'Obrigada por viver o Ampara com a gente.', W / 2, y, { size: 56, weight: 600, color: '#B4566E', align: 'center', font: 'Q' });
   }); }
-function finish() { S.mode = 'credits'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -2.5); drawEnd(); S.credT = clock(); }
+function finish() { S.mode = 'credits'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -3.4); drawEnd(); S.credT = clock(); }
 function onSelect(id) { if (!id) return;
   if (S.mode === 'lobby') { if (id === 'start') startStory(true); if (id === 'free') startStory(false); }
   else if (S.mode === 'invite') { if (id === 'quizYes') startQuiz(); if (id === 'quizNo') finish(); }
@@ -252,7 +251,7 @@ function updateArrow(st, t) { const cam = renderer.xr.isPresenting ? renderer.xr
   arrow.visible = k > 0.01; if (!arrow.visible) return;
   const back = Math.abs(diff) > 140;
   pill.userData.set(back ? (st.guideAng === 0 ? 'volte para a frente' : 'olhe para trás') : (dir > 0 ? 'vire para a direita' : 'vire para a esquerda'));
-  cam.getWorldPosition(arrow.position); cam.getWorldQuaternion(arrow.quaternion); arrow.translateZ(-0.9); arrow.translateY(-0.12);
+  cam.getWorldPosition(arrow.position); cam.getWorldQuaternion(arrow.quaternion); arrow.translateZ(-1.2); arrow.translateY(-0.16);
   const wob = Math.sin(t * 5) * 0.012;
   chevrons.position.set(dir * (0.22 + wob) - (dir < 0 ? 0 : 0), 0, 0); chevrons.scale.x = dir;
   chevrons.children.forEach((m, j) => { m.material.opacity = k * (0.4 + 0.6 * ((Math.sin(t * 7 - j * 1.2) + 1) / 2)); m.position.x = j * 0.06; });
