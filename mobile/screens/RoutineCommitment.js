@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../services/supabase'
 import { salvarCompromisso, excluirCompromisso, listarLocaisSeguros, criarLocalSeguro } from '../services/routineService'
 import { useAddressSearch } from '../hooks/useAddressSearch'
+import * as Location from 'expo-location'
 import { TIPOS_COMPROMISSO, TRANSPORTES, COMPROMISSO_VAZIO, dataLocal, abrirNoMapa } from '../utils/rotina'
 import { DIAS_SEMANA } from '../utils/activitySchedule'
 import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
@@ -60,7 +61,22 @@ export default function RoutineCommitment({ navigation, route }) {
   // Qual seletor está aberto: 'hora_chegada', 'hora_saida', 'data' ou null.
   const [escolhendo, setEscolhendo] = useState(null)
 
-  const { busca, sugestoes, procurar, limpar: limparBusca } = useAddressSearch()
+  // A posição dela prioriza as sugestões perto de onde ela está, como no cadastro de locais
+  // seguros. Lida só se a permissão já foi dada; sem ela, a busca usa o centro de SP.
+  const [perto, setPerto] = useState(null)
+  useEffect(() => {
+    let ativo = true
+    ;(async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync()
+        if (status !== 'granted') return
+        const posicao = await Location.getLastKnownPositionAsync({ maxAge: 10 * 60 * 1000 })
+        if (ativo && posicao) setPerto({ latitude: posicao.coords.latitude, longitude: posicao.coords.longitude })
+      } catch {}
+    })()
+    return () => { ativo = false }
+  }, [])
+  const { busca, sugestoes, procurar, limpar: limparBusca } = useAddressSearch(perto)
 
   const temLocal = Number.isFinite(form.latitude) && Number.isFinite(form.longitude)
   const atualizar = (campos) => setForm((atual) => ({ ...atual, ...campos }))

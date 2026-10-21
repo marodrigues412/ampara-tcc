@@ -27,8 +27,43 @@ const paraSugestao = (feature) => {
   return { id: `${p.osm_type}${p.osm_id}`, nome, endereco, latitude, longitude }
 }
 
+// Reserva: o Nominatim (o mesmo do cadastro de locais seguros). Mais lento e pior com a
+// palavra pela metade, mas acha endereços completos quando o Photon não responde.
+async function buscarNoNominatim(texto, perto) {
+  const parametros = new URLSearchParams({
+    q: `${texto}, São Paulo, Brasil`,
+    format: 'json',
+    limit: '6',
+    countrycodes: 'br',
+    addressdetails: '1',
+    viewbox: `${perto.longitude - 0.25},${perto.latitude + 0.25},${perto.longitude + 0.25},${perto.latitude - 0.25}`,
+  })
+  try {
+    const resposta = await fetch(`https://nominatim.openstreetmap.org/search?${parametros}`, {
+      headers: { 'User-Agent': 'ampara-tcc-app' },
+    })
+    const dados = await resposta.json()
+    return (dados || []).map((item) => {
+      const a = item.address || {}
+      const rua = [a.road, a.house_number].filter(Boolean).join(', ')
+      const nome = item.name || rua || item.display_name.split(',')[0]
+      const endereco = [rua !== nome ? rua : null, a.suburb || a.neighbourhood, a.city || a.town].filter(Boolean).join(' · ')
+      return { id: `n${item.osm_type}${item.osm_id}`, nome, endereco, latitude: Number(item.lat), longitude: Number(item.lon) }
+    }).filter((s) => Number.isFinite(s.latitude))
+  } catch {
+    return []
+  }
+}
+
 // perto: ponto opcional para priorizar resultados próximos (a posição da usuária).
 export async function buscarEnderecos(texto, perto = CENTRO_SP) {
+  const doPhoton = await buscarNoPhoton(texto, perto)
+  // Sem resposta (ou sem nada) do Photon, tenta o Nominatim, para o campo nunca ficar
+  // sem sugestão quando o endereço existe.
+  return doPhoton.length ? doPhoton : buscarNoNominatim(texto, perto)
+}
+
+async function buscarNoPhoton(texto, perto) {
   const parametros = new URLSearchParams({
     q: texto,
     limit: '6',

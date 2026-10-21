@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Modal, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -6,12 +6,12 @@ import Animated, { FadeIn } from 'react-native-reanimated'
 import Svg, { Path } from 'react-native-svg'
 import { TemaDaAba } from '../constants/brandTheme'
 import { dicaJaVista, marcarDicaVista } from '../services/tutorial'
+import { alvosDoTour } from '../utils/alvosDoTour'
 
 const TEMA = TemaDaAba['Proteção']
 const ID = 'tour-protecao'
 const FOLGA = 8
-// Altura da barra de abas (AmparaTabBar: 10 de respiro em cima + 48 da aba + o respiro
-// de baixo). A barra fica fora da Proteção, então não dá para medir por ref daqui.
+// Reserva, se a barra de abas não puder ser medida: 10 de respiro + 48 da aba.
 const ALTURA_BARRA = 58
 
 const PASSOS = [
@@ -32,10 +32,11 @@ const caminhoComFuro = (w, h, { x, y, largura, altura, raio }) => {
   ].join(' ')
 }
 
-const medir = (ref) => new Promise((resolver) => {
-  if (!ref?.current?.measureInWindow) { resolver(null); return }
-  ref.current.measureInWindow((x, y, largura, altura) => resolver(largura ? { x, y, largura, altura } : null))
+const medirView = (view) => new Promise((resolver) => {
+  if (!view?.measureInWindow) { resolver(null); return }
+  view.measureInWindow((x, y, largura, altura) => resolver(largura ? { x, y, largura, altura } : null))
 })
+const medir = (ref) => medirView(ref?.current)
 
 // Tour de 3 passos na primeira visita à Proteção: a tela escurece e destaca o anel de
 // risco, o botão SOS e a barra de abas, um por vez. Aparece uma vez (volta com "Rever as
@@ -47,6 +48,25 @@ export default function TourDaProtecao({ refAnel, refSos, pronto, onTreinarSos }
   const [aberto, setAberto] = useState(false)
   const [passo, setPasso] = useState(0)
   const [alvos, setAlvos] = useState({})
+  // Onde o Modal começa na janela e o tamanho dele. Em alguns celulares (barra de status,
+  // telas maiores) o Modal não começa no mesmo ponto da janela, e sem descontar isso o
+  // destaque saía torto.
+  const [origem, setOrigem] = useState(null)
+  const raizRef = useRef(null)
+
+  const medirAlvos = useCallback(async () => {
+    const [anel, sos, barra] = await Promise.all([medir(refAnel), medir(refSos), medirView(alvosDoTour.barra)])
+    if (!anel || !sos) return null
+    return {
+      // O anel é um círculo: o furo é um círculo no centro do que foi medido, mesmo que o
+      // botão em volta dele não seja quadrado.
+      anel: { ...anel, circulo: true },
+      sos: { ...sos, raio: sos.altura / 2 },
+      barra: barra
+        ? { ...barra, raio: 0 }
+        : { x: 0, y: height - ALTURA_BARRA - Math.max(insets.bottom, 10), largura: width, altura: ALTURA_BARRA + Math.max(insets.bottom, 10), raio: 0 },
+    }
+  }, [refAnel, refSos, width, height, insets.bottom])
 
   useFocusEffect(useCallback(() => {
     if (!pronto) return undefined
@@ -54,18 +74,27 @@ export default function TourDaProtecao({ refAnel, refSos, pronto, onTreinarSos }
     // Um respiro para a tela terminar de montar e o anel começar a encher.
     const espera = setTimeout(async () => {
       if (await dicaJaVista(ID)) return
-      const [anel, sos] = await Promise.all([medir(refAnel), medir(refSos)])
-      if (!ativo || !anel || !sos) return
-      setAlvos({
-        anel: { ...anel, raio: anel.largura / 2 },
-        sos: { ...sos, raio: sos.altura / 2 },
-        barra: { x: 0, y: height - ALTURA_BARRA - Math.max(insets.bottom, 10), largura: width, altura: ALTURA_BARRA + Math.max(insets.bottom, 10), raio: 0 },
-      })
+      const medidos = await medirAlvos()
+      if (!ativo || !medidos) return
+      setAlvos(medidos)
+      setOrigem(null)
       setPasso(0)
       setAberto(true)
     }, 1200)
     return () => { ativo = false; clearTimeout(espera) }
-  }, [pronto, width, height, insets.bottom]))
+  }, [pronto, medirAlvos]))
+
+  // A cada passo, mede de novo: a tela pode ter mudado (texto do nível, rolagem).
+  useEffect(() => {
+    if (!aberto) return
+    let ativo = true
+    medirAlvos().then((medidos) => { if (ativo && medidos) setAlvos(medidos) })
+    return () => { ativo = false }
+  }, [aberto, passo, medirAlvos])
+
+  const aoMontarRaiz = () => {
+    medirView(raizRef.current).then((m) => { if (m) setOrigem(m) })
+  }
 
   useEffect(() => {
     if (aberto) AccessibilityInfo.announceForAccessibility(`${PASSOS[passo].titulo}. ${PASSOS[passo].texto}`)
@@ -74,14 +103,25 @@ export default function TourDaProtecao({ refAnel, refSos, pronto, onTreinarSos }
   if (!aberto) return null
 
   const atual = PASSOS[passo]
-  const alvo = alvos[atual.alvo]
-  const furo = { x: alvo.x - FOLGA, y: alvo.y - FOLGA, largura: alvo.largura + FOLGA * 2, altura: alvo.altura + FOLGA * 2, raio: alvo.raio + FOLGA }
+  const bruto = alvos[atual.alvo]
+  // Tamanho e início do Modal (enquanto não foram medidos, usa a janela inteira).
+  const larguraTela = origem?.largura ?? width
+  const alturaTela = origem?.altura ?? height
+  const alvo = { ...bruto, x: bruto.x - (origem?.x ?? 0), y: bruto.y - (origem?.y ?? 0) }
+  let furo
+  if (alvo.circulo) {
+    const r = Math.min(alvo.largura, alvo.altura) / 2 + FOLGA
+    const cx = alvo.x + alvo.largura / 2, cy = alvo.y + alvo.altura / 2
+    furo = { x: cx - r, y: cy - r, largura: r * 2, altura: r * 2, raio: r }
+  } else {
+    furo = { x: alvo.x - FOLGA, y: alvo.y - FOLGA, largura: alvo.largura + FOLGA * 2, altura: alvo.altura + FOLGA * 2, raio: alvo.raio + FOLGA }
+  }
   const ultimo = passo === PASSOS.length - 1
   // O balão vai do lado com mais espaço: abaixo do alvo se ele estiver na metade de cima.
-  const embaixo = furo.y + furo.altura / 2 < height / 2
+  const embaixo = furo.y + furo.altura / 2 < alturaTela / 2
   const posicaoBalao = embaixo
     ? { top: furo.y + furo.altura + 14 }
-    : { bottom: height - furo.y + 14 }
+    : { bottom: alturaTela - furo.y + 14 }
 
   const encerrar = () => {
     setAberto(false)
@@ -90,9 +130,9 @@ export default function TourDaProtecao({ refAnel, refSos, pronto, onTreinarSos }
 
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={encerrar}>
-      <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
-        <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Path d={caminhoComFuro(width, height, furo)} fill="rgba(38,25,31,0.72)" fillRule="evenodd" />
+      <View ref={raizRef} onLayout={aoMontarRaiz} collapsable={false} style={StyleSheet.absoluteFill} accessibilityViewIsModal>
+        <Svg width={larguraTela} height={alturaTela} style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Path d={caminhoComFuro(larguraTela, alturaTela, furo)} fill="rgba(38,25,31,0.72)" fillRule="evenodd" />
         </Svg>
         <View pointerEvents="none" style={[styles.contorno, { left: furo.x, top: furo.y, width: furo.largura, height: furo.altura, borderRadius: furo.raio }]} />
 

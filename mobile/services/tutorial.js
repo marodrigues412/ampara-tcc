@@ -27,3 +27,8 @@ export async function reverTutorial() {
     await AsyncStorage.multiRemove([...DICAS.map(CHAVE_DICA), CHAVE_PASSOS_FECHADOS])
   } catch {}
 }
+
+// "Rever o tour" no Perfil: o tour da Proteção volta a aparecer na próxima visita.
+export async function reverTourDaProtecao() {
+  try { await AsyncStorage.removeItem(CHAVE_DICA('tour-protecao')) } catch {}
+}

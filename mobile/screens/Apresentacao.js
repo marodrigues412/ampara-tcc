@@ -89,7 +89,8 @@ function Ilustracao({ id, tema }) {
   )
 }
 
-export default function Apresentacao({ onFim }) {
+// textoFinal: "Criar minha conta" na entrada; "Concluir" quando revista pelo Perfil.
+export default function Apresentacao({ onFim, textoFinal = 'Criar minha conta' }) {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const listaRef = useRef(null)
@@ -148,7 +149,7 @@ export default function Apresentacao({ onFim }) {
           ))}
         </View>
         <TouchableOpacity style={[styles.botao, { backgroundColor: tema.forte }]} onPress={avancar} accessibilityRole="button">
-          <Text style={styles.botaoTexto}>{ultimo ? 'Criar minha conta' : 'Avançar'}</Text>
+          <Text style={styles.botaoTexto}>{ultimo ? textoFinal : 'Avançar'}</Text>
         </TouchableOpacity>
       </View>
     </View>

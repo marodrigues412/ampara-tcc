@@ -227,6 +227,16 @@ export default function CrimeMap({ route }) {
     setMapaMovido(false)
   }
 
+  // Ao sair da aba, a busca é zerada: voltando ao mapa, ela encontra a própria posição,
+  // e não o último endereço pesquisado. O ref guarda a versão atual de voltarParaMim
+  // (com a posição mais recente) para a limpeza usar.
+  const voltarParaMimRef = useRef(voltarParaMim)
+  useEffect(() => { voltarParaMimRef.current = voltarParaMim })
+  useFocusEffect(useCallback(() => () => {
+    Keyboard.dismiss()
+    voltarParaMimRef.current()
+  }, []))
+
   // Só vale a pena rebuscar quando a área nova é de fato outra: sem esse corte, cada
   // quadro da animação de arrastar dispararia uma consulta.
   // Chamado a cada quadro do arraste: o ref evita redesenhar a tela em todos eles.

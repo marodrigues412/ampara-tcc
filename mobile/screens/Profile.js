@@ -11,7 +11,9 @@ import SecaoRecolhida from '../components/SecaoRecolhida'
 import { Brand, TemaDaAba, CremeDoSite } from '../constants/brandTheme'
 import LiaAvatar from '../components/LiaAvatar'
 import DicaDaLia from '../components/DicaDaLia'
-import { reverTutorial, treinoDoSosFeito } from '../services/tutorial'
+import { reverTourDaProtecao, reverTutorial, treinoDoSosFeito } from '../services/tutorial'
+import { CHAVE_TAMANHO_DO_TEXTO, TAMANHOS_DO_TEXTO, tamanhoDoTextoEmUso } from '../utils/fontesGlobais'
+import { consumirSecaoParaReabrir, reiniciarTelas } from '../utils/reiniciarTelas'
 
 const TEMA = TemaDaAba.Perfil
 const CORES_DA_REDE = [['#BD5574', '#F7E7EC'], ['#6E5A9E', '#EFEAF5'], ['#3F6A86', '#E9EFF2']]
@@ -34,6 +36,9 @@ export default function Profile({ navigation }) {
   const [locais, setLocais] = useState([])
   const [compromissos, setCompromissos] = useState([])
   const [treinou, setTreinou] = useState(false)
+  const tamanhoEscolhido = tamanhoDoTextoEmUso()
+  // Depois de trocar o tamanho, as telas são remontadas: a seção volta aberta.
+  const [secaoReaberta] = useState(consumirSecaoParaReabrir)
   const [loading, setLoading] = useState(true)
 
   // Recarrega ao voltar das telas de edição, para os resumos refletirem a mudança.
@@ -62,6 +67,20 @@ export default function Profile({ navigation }) {
     })()
     return () => { ativo = false }
   }, []))
+
+  // Guarda a escolha e pede para a Raiz aplicar na hora: ela mostra "Ajustando o tamanho
+  // do texto", redesenha as telas e volta para cá.
+  const escolherTamanho = async (id) => {
+    if (id === tamanhoEscolhido) return
+    await AsyncStorage.setItem(CHAVE_TAMANHO_DO_TEXTO, id).catch(() => {})
+    reiniciarTelas({ tamanho: id, reabrirSecao: 'tamanho' })
+  }
+
+  // O tour aparece na próxima visita à Proteção: apaga a marca e vai para lá.
+  const reverTour = async () => {
+    await reverTourDaProtecao()
+    navigation.navigate('Proteção')
+  }
 
   const reverDicas = async () => {
     await reverTutorial()
@@ -212,6 +231,29 @@ export default function Profile({ navigation }) {
         {link('Abrir minha rotina', 'Routine', 'arrow-forward')}
       </SecaoRecolhida>
 
+      <SecaoRecolhida abertaNoInicio={secaoReaberta === 'tamanho'} icone="text-outline" titulo="Tamanho do texto" resumo={TAMANHOS_DO_TEXTO.find((t) => t.id === tamanhoEscolhido)?.rotulo} cor={COR_DA_SECAO.dados[0]} fundo={COR_DA_SECAO.dados[1]}>
+        <Text style={styles.nota}>Deixe as letras do app maiores. O tamanho do texto do celular também é respeitado.</Text>
+        <View style={styles.tamanhos}>
+          {TAMANHOS_DO_TEXTO.map((t) => {
+            const ativo = tamanhoEscolhido === t.id
+            return (
+              <TouchableOpacity
+                key={t.id}
+                style={[styles.tamanho, ativo && { backgroundColor: COR_DA_SECAO.dados[0] }]}
+                onPress={() => escolherTamanho(t.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: ativo }}
+                accessibilityLabel={`Texto ${t.rotulo}`}
+              >
+                {/* Tamanhos fixos (fora do StyleSheet), para a prévia mostrar a diferença. */}
+                <Text style={{ fontFamily: 'Nunito_800ExtraBold', fontSize: Math.round(20 * t.escala), color: ativo ? '#FFF' : COR_DA_SECAO.dados[0] }}>Aa</Text>
+                <Text style={{ fontFamily: 'Nunito_700Bold', fontSize: 13, color: ativo ? '#FFF' : '#5E5459', marginTop: 2 }}>{t.rotulo}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </SecaoRecolhida>
+
       <SecaoRecolhida icone="color-palette-outline" titulo="Sua Lia" resumo="Personalize a aparência da assistente" cor={COR_DA_SECAO.lia[0]} fundo={COR_DA_SECAO.lia[1]}>
         <Text style={styles.nota}>Escolha o tom de pele, o cabelo e os olhos da Lia.</Text>
         {link('Personalizar a Lia', 'LiaAppearance', 'sparkles-outline')}
@@ -220,6 +262,11 @@ export default function Profile({ navigation }) {
       <SecaoRecolhida icone="school-outline" titulo="Como usar o Ampara" resumo={treinou ? 'Treino do SOS feito' : 'Treine o SOS e reveja as dicas'} pendente={!treinou} cor={COR_DA_SECAO.rede[0]} fundo={COR_DA_SECAO.rede[1]}>
         <Text style={styles.nota}>Treine o SOS quando quiser: é o mesmo gesto do alerta, e nada é enviado.</Text>
         {link(treinou ? 'Treinar o SOS de novo' : 'Treinar o SOS', 'TreinoSos', 'alert-circle-outline')}
+        {link('Rever a apresentação do Ampara', 'RevisarApresentacao', 'albums-outline')}
+        <TouchableOpacity style={styles.linha} onPress={reverTour} accessibilityRole="button">
+          <Ionicons name="scan-outline" size={18} color={TEMA.forte} />
+          <Text style={[styles.linkTexto, { color: TEMA.forte }]}>Rever o tour da tela Proteção</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.linha} onPress={reverDicas} accessibilityRole="button">
           <Ionicons name="bulb-outline" size={18} color={TEMA.forte} />
           <Text style={[styles.linkTexto, { color: TEMA.forte }]}>Rever as dicas da Lia</Text>
@@ -253,6 +300,8 @@ const styles = StyleSheet.create({
   inicial: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   inicialTexto: { fontSize: 13, fontWeight: '700' },
   nota: { fontSize: 13, color: '#8A8590', paddingVertical: 4 },
+  tamanhos: { flexDirection: 'row', gap: 10, paddingVertical: 8 },
+  tamanho: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 78, borderRadius: 20, backgroundColor: '#FFFFFF' },
   dado: { paddingVertical: 6 },
   dadoRotulo: { fontSize: 11, color: '#8A8590', fontWeight: '700', textTransform: 'uppercase' },
   pilulas: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },

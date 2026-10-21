@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { CorAbaInativa, CremeDoSite, TemaDaAba } from '../constants/brandTheme'
+import { alvosDoTour } from '../utils/alvosDoTour'
 
 // O ícone é o mesmo com a aba aberta ou não: só a cor muda.
 const ICONES = {
@@ -19,7 +20,7 @@ export default function AmparaTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets()
 
   return (
-    <View style={[styles.barra, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View ref={(v) => { alvosDoTour.barra = v }} collapsable={false} style={[styles.barra, { paddingBottom: Math.max(insets.bottom, 10) }]}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key]
         const selecionada = state.index === index

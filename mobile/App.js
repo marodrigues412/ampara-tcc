@@ -1,4 +1,5 @@
-// Primeiro import de propósito: troca a fonte dos estilos antes de as telas criá-los.
+// O ajuste de fontes e a tarefa de segundo plano já foram carregados em index.js; os
+// imports abaixo repetem por segurança e não fazem nada de novo.
 import './utils/fontesGlobais'
 import React, { useState, useEffect } from 'react'
 import { AppRegistry, View } from 'react-native'
@@ -52,6 +53,11 @@ import TreinoSos from './screens/TreinoSos'
 // aparece só na primeira vez e depois de sair da conta.
 const BOAS_VINDAS_SEMPRE = true
 
+// A apresentação de 3 telas, revista pelo Perfil (na entrada ela vem antes do cadastro).
+function RevisarApresentacao({ navigation }) {
+  return <Apresentacao onFim={() => navigation.goBack()} textoFinal="Concluir" />
+}
+
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
 
@@ -73,12 +79,16 @@ function Tabs() {
 }
 
 // 🔹 App principal
-export default function App() {
+// reaberto: o App foi remontado pela Raiz depois de ela trocar o tamanho do texto no
+// Perfil. Aí ele pula a abertura e a boas-vindas e volta direto para o Perfil.
+const ESTADO_NO_PERFIL = { routes: [{ name: 'Tabs', state: { routes: [{ name: 'Perfil' }] } }] }
+
+export default function App({ reaberto = false }) {
   const [session, setSession] = useState(null)
   // null enquanto lê o AsyncStorage e a sessão salva; a abertura cobre essa espera.
-  const [boasVindasVista, setBoasVindasVista] = useState(null)
+  const [boasVindasVista, setBoasVindasVista] = useState(reaberto ? true : null)
   const [sessaoLida, setSessaoLida] = useState(false)
-  const [aberturaFeita, setAberturaFeita] = useState(false)
+  const [aberturaFeita, setAberturaFeita] = useState(reaberto)
   const [comecarNoCadastro, setComecarNoCadastro] = useState(false)
   // "Criar minha conta" passa pelos 3 slides de apresentação antes do cadastro.
   const [naApresentacao, setNaApresentacao] = useState(false)
@@ -99,7 +109,7 @@ export default function App() {
       .then(({ data }) => setSession(data.session))
       .finally(() => setSessaoLida(true))
     AsyncStorage.getItem(CHAVE_BOAS_VINDAS)
-      .then((valor) => setBoasVindasVista(!BOAS_VINDAS_SEMPRE && valor === 'sim'))
+      .then((valor) => { if (!reaberto) setBoasVindasVista(!BOAS_VINDAS_SEMPRE && valor === 'sim') })
       .catch(() => setBoasVindasVista(false))
 
     const { data: listener } = supabase.auth.onAuthStateChange((evento, session) => {
@@ -196,7 +206,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-    <NavigationContainer>
+    <NavigationContainer initialState={reaberto ? ESTADO_NO_PERFIL : undefined}>
       {!session ? (
         <LoginScreen onLogin={setSession} comecarNoCadastro={comecarNoCadastro} />
       ) : (
@@ -218,6 +228,7 @@ export default function App() {
           <Stack.Screen name="ChatBot" component={ChatBot} />
           <Stack.Screen name="LiaAppearance" component={LiaAppearance} />
           <Stack.Screen name="TreinoSos" component={TreinoSos} />
+          <Stack.Screen name="RevisarApresentacao" component={RevisarApresentacao} />
 
         </Stack.Navigator>
       )}
