@@ -238,19 +238,19 @@ const arrow = new THREE.Group(); scene.add(arrow);
 const chevrons = new THREE.Group(); arrow.add(chevrons);
 { const s = new THREE.Shape(); s.moveTo(0, 0.07); s.lineTo(0.07, 0); s.lineTo(0, -0.07); s.lineTo(0.024, 0); s.closePath(); const geo = new THREE.ShapeGeometry(s);
   for (let j = 0; j < 3; j++) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xF2B8C3, transparent: true, opacity: 0, depthTest: false, fog: false, toneMapped: false })); m.position.x = j * 0.06; m.renderOrder = 45; chevrons.add(m); } }
-const pill = (() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 200; const g = c.getContext('2d');
+const pill = (() => { const c = document.createElement('canvas'); c.width = 1400; c.height = 200; const g = c.getContext('2d');
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.07), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false, fog: false, toneMapped: false })); m.renderOrder = 46;
-  m.userData.set = (label) => { if (m.userData.label === label) return; m.userData.label = label; g.clearRect(0, 0, 1024, 200);
-    g.beginPath(); g.roundRect(8, 8, 1008, 184, 92); g.fillStyle = 'rgba(16,24,52,0.88)'; g.fill(); g.lineWidth = 8; g.strokeStyle = '#F2B8C3'; g.stroke();
-    g.font = '700 84px LS, sans-serif'; g.fillStyle = '#F4EEE4'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, 512, 104); tex.needsUpdate = true; };
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.07), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false, fog: false, toneMapped: false })); m.renderOrder = 46;
+  m.userData.set = (label) => { if (m.userData.label === label) return; m.userData.label = label; g.clearRect(0, 0, 1400, 200);
+    g.beginPath(); g.roundRect(8, 8, 1384, 184, 92); g.fillStyle = 'rgba(16,24,52,0.88)'; g.fill(); g.lineWidth = 8; g.strokeStyle = '#F2B8C3'; g.stroke();
+    g.font = '700 74px LS, sans-serif'; g.fillStyle = '#F4EEE4'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, 700, 104); tex.needsUpdate = true; };
   arrow.add(m); return m; })();
 function updateArrow(st, t) { const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera; let k = 0, dir = 1, diff = 0;
   if (st && st.guideAng !== null && st.guideK > 0) { const h = headPose(); const cur = -THREE.MathUtils.radToDeg(h.yaw - world.rotation.y);
     diff = ((st.guideAng - cur + 540) % 360) - 180; dir = Math.sign(diff) || 1; k = Math.abs(diff) > 28 ? st.guideK : 0; }
   arrow.visible = k > 0.01; if (!arrow.visible) return;
   const back = Math.abs(diff) > 140;
-  pill.userData.set(back ? (st.guideAng === 0 ? 'volte para a frente' : 'olhe para trás') : (dir > 0 ? 'vire para a direita' : 'vire para a esquerda'));
+  pill.userData.set(st.label ? (back ? st.label + ': olhe para trás' : st.label + (dir > 0 ? ': vire à direita' : ': vire à esquerda')) : back ? (st.guideAng === 0 ? 'volte para a frente' : 'olhe para trás') : (dir > 0 ? 'vire para a direita' : 'vire para a esquerda'));
   cam.getWorldPosition(arrow.position); cam.getWorldQuaternion(arrow.quaternion); arrow.translateZ(-1.2); arrow.translateY(-0.16);
   const wob = Math.sin(t * 5) * 0.012;
   chevrons.position.set(dir * (0.22 + wob) - (dir < 0 ? 0 : 0), 0, 0); chevrons.scale.x = dir;
@@ -271,7 +271,10 @@ function tick() {
   if (S.mode === 'credits') { const t = clock() - S.credT; st = X.update(TL.toCream[1] + 0.5, { hideFinal: true }); mover.position.set(0, 0, -st.pz); if (t > 20) setLobby(); }
   if (S.mode === 'result' && clock() > S.endAt) finish();
   if (!renderer.xr.isPresenting) { camera.rotation.set(-mouse.pitch, -mouse.yaw, 0, 'YXZ'); }
-  updateArrow(S.mode === 'story' ? st : null, performance.now() / 1000);
+  const quizMode = S.mode === 'invite' || S.mode === 'quiz' || S.mode === 'result';
+  updateArrow(S.mode === 'story' ? st : quizMode ? { guideAng: 0, guideK: 1, label: S.mode === 'invite' ? 'o quiz começou' : 'o quiz está aqui' } : null, performance.now() / 1000);
+  // música sempre tocando: quando a trilha da história acaba, entra o fundo do quiz em loop
+  if (S.mode !== 'story' && S.mode !== 'lobby' && bQuiz && !music.isPlaying && !quizLoop.isPlaying) { quizLoop.setVolume(0.45); quizLoop.play(); }
   updatePointers();
   renderer.render(scene, camera);
 }
