@@ -76,13 +76,98 @@ th{font-size:13px;letter-spacing:2px;color:var(--muted)}
 .winner{background:var(--roseSoft);border-radius:20px;padding:22px;margin-top:18px;font-size:20px}
 .winner b{font-size:30px;display:block;margin-top:6px}
 @media (max-width:820px){.opts,.layers{grid-template-columns:1fr}.panel{padding:28px}h1{font-size:40px}.big{font-size:110px}main,header{padding-left:16px;padding-right:16px}}
+/* arquitetura (diagrama) */
+.diag-wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;margin-top:22px;align-items:start}
+.diag{background:#fff;border:1px solid var(--line);border-radius:26px;padding:10px;position:relative}
+.diag svg{display:block;width:100%;height:auto}
+.diag .zona{fill:#F4EEF7;stroke:#D9CCE6;stroke-width:2;stroke-dasharray:8 8}
+.diag .zona-t{font:700 18px Quicksand,sans-serif;letter-spacing:4px;fill:#7A6A93}
+.diag .lig{fill:none;stroke:#D9CFC2;stroke-width:3;transition:stroke .3s,opacity .3s,stroke-width .3s}
+.diag .lig-t{font:700 16px Quicksand,sans-serif;fill:#6E6873;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round;transition:opacity .3s}
+.diag .no-g{cursor:pointer;transition:opacity .3s}
+.diag .no-g:focus{outline:none}
+.diag .no-g:focus-visible .bola{stroke:var(--navy);stroke-width:5}
+.diag .bola{fill:#FFFBF5;stroke:#E4DACB;stroke-width:3;transition:fill .3s,stroke .3s}
+.diag .ico{fill:none;stroke:var(--navy);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.diag .no-t{font:700 21px Quicksand,sans-serif;fill:var(--navy);text-anchor:middle}
+.diag .no-s{font:700 15px Quicksand,sans-serif;fill:#6E6873;text-anchor:middle}
+.diag.foco .no-g{opacity:.28}.diag.foco .lig,.diag.foco .lig-t{opacity:.15}
+.diag.foco .no-g.on{opacity:1}.diag.foco .lig.on{opacity:1;stroke:var(--roseDeep);stroke-width:5}.diag.foco .lig-t.on{opacity:1;fill:var(--roseDeep)}
+.diag .no-g.on .bola{fill:var(--roseSoft);stroke:var(--roseDeep)}
+.diag .no-g.atual .bola{fill:var(--navy);stroke:var(--navy)}.diag .no-g.atual .ico{stroke:#F6F0E6}
+.diag .pacote{fill:var(--roseDeep);filter:drop-shadow(0 0 6px rgba(180,86,110,.6))}
+.diag .selo-n{font:700 15px Quicksand,sans-serif;fill:#fff;text-anchor:middle}
+.lado{background:var(--cream);border-radius:24px;padding:24px;min-height:100%}
+.lado .kick{font-size:12px}
+.lado h3{margin:8px 0 6px;font-size:26px;line-height:1.15}
+.lado p{margin:0;font-size:17px;line-height:1.5;color:var(--muted)}
+.lado ol{margin:14px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.lado li{display:flex;gap:12px;align-items:flex-start;font-size:16px;line-height:1.4;color:var(--muted);padding:8px 10px;border-radius:14px;cursor:pointer}
+.lado li b{flex:none;width:28px;height:28px;border-radius:14px;background:#fff;color:var(--navy);display:flex;align-items:center;justify-content:center;font-size:14px}
+.lado li.on{background:#fff;color:var(--navy);font-weight:600}.lado li.on b{background:var(--roseDeep);color:#fff}
+.lado .req{display:inline-block;margin-top:4px;font:600 13px ui-monospace,Menlo,Consolas,monospace;color:var(--roseDeep)}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px;align-items:center}
+.chips .rot{font-size:15px;font-weight:700;letter-spacing:3px;color:var(--muted);margin-right:4px}
+.chips button{border:2px solid var(--line);background:#fff;color:var(--navy);border-radius:999px;padding:10px 18px;font-size:17px;font-weight:700;min-height:48px;display:inline-flex;align-items:center;gap:8px}
+.chips button[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:var(--cream)}
+.chips button .pt{width:10px;height:10px;border-radius:5px;background:var(--roseDeep)}
+.dica-arq{font-size:15px;color:var(--muted);margin-top:12px}
+@media (max-width:1000px){.diag-wrap{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.diag .lig,.diag .no-g,.diag .bola{transition:none}}
+.seta-diag{position:absolute;bottom:14px;width:60px;height:60px;border-radius:30px;border:0;background:rgba(40,56,98,.88);color:#F6F0E6;font-size:40px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(30,43,77,.25);z-index:2}
+.seta-diag.ant{right:84px}.seta-diag.prox{right:14px}
+.diag .legenda-cores{padding-right:170px;min-height:74px}
+.seta-diag[hidden]{display:none}
+.seta-diag:hover{background:var(--navy)}
+.diag.avanca svg{cursor:pointer}
+.diag .lig-toque{fill:none;stroke:transparent;stroke-width:22;cursor:pointer;pointer-events:stroke}
+.diag .etq-t{font:700 16px Quicksand,sans-serif;fill:#fff;text-anchor:middle}
+.diag .viagem{pointer-events:none}
+.legenda-cores{display:flex;gap:18px;flex-wrap:wrap;padding:6px 14px 10px;font-size:14px;color:var(--muted);align-items:center}
+.legenda-cores i{display:inline-block;width:14px;height:14px;border-radius:7px;margin-right:6px;vertical-align:-2px}
+.legenda-cores i.ida{background:#B4566E}.legenda-cores i.volta{background:#283862}
+.lado li b.resposta{background:#E6EAF3}.lado li.on b.resposta{background:#283862;color:#fff}
+.lado .req.resposta{color:#283862}
+.tp-tag{display:inline-block;margin-left:6px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;vertical-align:2px;background:#F8E3E8;color:#B4566E}
+.tp-tag.resposta{background:#E6EAF3;color:#283862}
+.ctrl-arq{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.ctrl-arq button{border:0;border-radius:14px;padding:12px 18px;font-size:16px;font-weight:700;min-height:48px;background:var(--navy);color:var(--cream)}
+.ctrl-arq button.claro{background:#fff;color:var(--navy);border:2px solid var(--line)}
+.ctrl-arq button:disabled{opacity:.35;cursor:default}
+.ctrl-arq #proximo{flex:1;font-size:18px}
+.ctrl-auto{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.ctrl-auto button{border:2px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700;min-height:40px}
+.ctrl-auto button.vel.on{background:var(--navy);border-color:var(--navy);color:var(--cream)}
+.ctrl-auto .atalho{font-size:13px;color:var(--muted);flex-basis:100%}
+.pop-arq .rota{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;font-size:19px;font-weight:700}
+.pop-arq .rota b{padding:6px 14px;border-radius:999px;color:#fff;font-size:15px}
+.pop-arq .rota b.pedido{background:#B4566E}.pop-arq .rota b.resposta{background:#283862}
+.bloco-dados{margin-top:18px;border-radius:18px;padding:16px 20px;background:#FBF1F4}
+.bloco-dados.resposta{background:#EEF1F7}
+.rot-dados{font-size:13px;font-weight:700;letter-spacing:3px;color:#B4566E}
+.bloco-dados.resposta .rot-dados{color:#283862}
+.bloco-dados pre{margin:8px 0 0;white-space:pre-wrap;font:600 16px/1.55 ui-monospace,Menlo,Consolas,monospace;color:var(--navy)}
+.dois-blocos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:700px){.dois-blocos{grid-template-columns:1fr}}
+
+.prompt-lia p{font-size:16px}
+.pilha{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.pilha .parte{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:0;border-left:6px solid #B4566E;background:#fff;border-radius:14px;padding:12px 14px;color:var(--navy);cursor:pointer}
+.pilha .parte.user{border-left-color:#283862}
+.pilha .parte b{font-size:17px}
+.pilha .parte .papel{font:700 11px ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;color:#B4566E;text-transform:uppercase}
+.pilha .parte.user .papel{color:#283862}
+.pilha .parte .quando{font-size:13px;color:var(--muted)}
+.prompt-lia .params{margin-top:10px;font:600 13px ui-monospace,Menlo,Consolas,monospace;color:var(--muted)}
 </style></head><body>
 <div class="app">
 <header>
 <div class="brand"><b>Ampara</b><span>EUREKA 2026 · STAND 72</span></div>
-<nav class="tabs" role="tablist" hidden style="display:none">
-<button role="tab" id="tab-quiz" aria-selected="true">Quiz</button>
+<!-- No tablet o quiz fica escondido (decisão da Maria); as duas explicações ficam. -->
+<nav class="tabs" role="tablist">
+<button role="tab" id="tab-quiz" aria-selected="false" hidden style="display:none">Quiz</button>
 <button role="tab" id="tab-score" aria-selected="false">Como o score funciona</button>
+<button role="tab" id="tab-arq" aria-selected="false">Como o app funciona</button>
 </nav>
 </header>
 <main><section class="panel" id="view"></section></main>
@@ -179,8 +264,11 @@ function fmtPhone(v){const d=v.replace(/\D/g,'').slice(0,11);if(d.length<=2)retu
 function render(){
   $('#tab-quiz').setAttribute('aria-selected', state.tab==='quiz');
   $('#tab-score').setAttribute('aria-selected', state.tab==='score');
+  $('#tab-arq').setAttribute('aria-selected', state.tab==='arq');
   const v = $('#view');
+  if(state.tab!=='arq') parar();
   if(state.tab==='score'){ v.innerHTML = scoreHTML(); renderMatrix(); return }
+  if(state.tab==='arq'){ v.innerHTML = ARQ_HTML; montarArquitetura(); return }
   const qs = QUIZZES[state.day];
   if(state.step==='start'){
     v.innerHTML = `<div class="center">
@@ -291,6 +379,391 @@ function renderMatrix(){
 }
 
 
+/* ---------- Como o app funciona (diagrama) ---------- */
+// Diagrama clicável da arquitetura. Os nomes de tabelas, funções e serviços são os do
+// código (mobile/services, supabase/functions/ampara-chat, aws/ampara-alert-trigger).
+const ICO = {
+  celular:'<rect x="-11" y="-17" width="22" height="34" rx="4"/><path d="M-3 12h6"/>',
+  relogio:'<rect x="-9" y="-9" width="18" height="18" rx="5"/><path d="M-5 -9l1-7h8l1 7M-5 9l1 7h8l1-7M0 -4v4l3 2"/>',
+  chip:'<rect x="-10" y="-10" width="20" height="20" rx="4"/><path d="M-4 -4h8v8h-8zM-14 -4h4M-14 4h4M10 -4h4M10 4h4M-4 -14v4M4 -14v4M-4 10v4M4 10v4"/>',
+  chave:'<circle cx="-5" cy="0" r="6"/><path d="M1 0h13M10 0v5M14 0v4"/>',
+  banco:'<ellipse cx="0" cy="-10" rx="12" ry="5"/><path d="M-12 -10v20c0 3 5 5 12 5s12-2 12-5v-20M-12 0c0 3 5 5 12 5s12-2 12-5"/>',
+  funcao:'<path d="M5 -14c-6 0-7 4-7 9v19M-8 -3h10M-8 14h3"/><path d="M6 2l8 10M14 2l-8 10"/>',
+  nuvemf:'<path d="M-12 8a8 8 0 0 1 1-16a10 10 0 0 1 19 3a7 7 0 0 1 0 13z"/><path d="M-2 -2l-3 5h5l-3 5"/>',
+  ia:'<path d="M0 -14l3 9 9 3-9 3-3 9-3-9-9-3 9-3z"/>',
+  pin:'<path d="M0 14s-10-9-10-16a10 10 0 0 1 20 0c0 7-10 16-10 16z"/><circle cx="0" cy="-2" r="3.5"/>',
+  lambda:'<path d="M-9 13L1 -4M-6 -13h4l12 26"/>',
+  zap:'<path d="M-12 12l3-8a11 11 0 1 1 5 5z"/><path d="M-4 -3c1 4 3 6 7 7l2-2 3 2c-1 3-4 4-7 2-4-2-7-5-8-9-1-3 1-5 3-6l2 3z"/>',
+  engrenagem:'<circle r="5"/><path d="M0 -14v4M0 10v4M-14 0h4M10 0h4M-10 -10l3 3M7 7l3 3M10 -10l-3 3M-7 7l-3 3"/>',
+  predio:'<path d="M-13 13h26M-11 13V-3M-4 13V-3M4 13V-3M11 13V-3M-14 -3h28L0 -13z"/>',
+};
+
+// [id, x, y, ícone, nome, subtítulo, descrição]
+const NOS = [
+  ['app',120,330,'celular','App Ampara','React Native + Expo','Onde tudo começa: as telas, o SOS, o mapa e a Lia. Roda no Android e no iPhone.'],
+  ['relogio',120,560,'relogio','Galaxy Watch','Wear OS','Opcional. Manda batimentos e o movimento do pulso para o app.'],
+  ['modelo',120,120,'chip','Isolation Forest','no próprio celular','Modelo de detecção de anomalia: diz se o movimento do celular está fora do normal. Roda offline.'],
+  ['auth',700,170,'chave','Auth','login e sessão','Login por e-mail ou Google. Também valida quem está chamando a Lia e o SOS.'],
+  ['banco',520,170,'banco','PostgreSQL','com RLS','O banco do app. Com RLS, cada usuária só lê e grava as próprias linhas.'],
+  ['rpc',700,380,'funcao','Funções SQL','RPC','Contas feitas no banco, como o mapa de calor dos últimos 6 meses.'],
+  ['edge',520,380,'nuvemf','ampara-chat','Edge Function','O backend da Lia. Guarda as chaves da IA e do Google, que nunca vão para o celular.'],
+  ['ia',1010,110,'ia','IA da Mauá','Barô · Gemma 3 27B','Escreve as respostas da Lia a partir da pergunta e dos dados que a função manda.'],
+  ['places',1100,265,'pin','Google Places','lugares por perto','Delegacias, farmácias e hospitais de verdade, com telefone e rota.'],
+  ['lambda',990,400,'lambda','AWS Lambda','ampara-alert-trigger','Recebe o pedido de SOS, confere quem é e manda o alerta para a rede de apoio.'],
+  ['whatsapp',1105,640,'zap','WhatsApp','Cloud API da Meta','Entrega a mensagem com o nome e o link da localização para cada contato.'],
+  ['actions',360,620,'engrenagem','GitHub Actions','Python, todo dia às 7h','Rotina automática que baixa os dados novos da SSP-SP e importa no banco.'],
+  ['ssp',600,660,'predio','SSP-SP','dados abertos','Ocorrências da Secretaria da Segurança Pública da Grande São Paulo.'],
+];
+
+// [id, de, para, legenda, curvatura]
+const LIGS = [
+  ['l-auth','app','auth','login',60],
+  ['l-banco','app','banco','lê e grava',0],
+  ['l-rpc','app','rpc','mapa de calor',-105],
+  ['l-edge','app','edge','pergunta à Lia',0],
+  ['l-sos','app','lambda','SOS',260],
+  ['l-relogio','relogio','app','batimentos',0],
+  ['l-modelo','app','modelo','movimento',0],
+  ['l-eauth','edge','auth','confere a sessão',30,.45],
+  ['l-ia','edge','ia','gera a resposta',0,.78],
+  ['l-places','edge','places','busca lugares',-50,.8],
+  ['l-lauth','lambda','auth','confere quem é',0,.35],
+  ['l-wpp','lambda','whatsapp','envia',-30,.55],
+  ['l-dados','actions','ssp','baixa',0],
+  ['l-imp','actions','banco','importa',0],
+  ['l-rpcb','rpc','banco','lê',0],
+];
+
+// O que cada ligação envia e recebe, mostrado ao tocar numa linha do diagrama.
+const LIG_INFO = {
+  'l-auth':{envia:'e-mail e senha, ou o retorno do login com Google', recebe:'sessão (token de acesso), guardada no celular'},
+  'l-banco':{envia:'leituras e gravações com o token da sessão', recebe:'só as linhas da própria usuária (RLS)'},
+  'l-rpc':{envia:'rpc crimes_mapa_calor_recente { latitude, longitude, raio }', recebe:'grade de células [{ latitude, longitude, peso }]'},
+  'l-edge':{envia:'{ pergunta, contexto? } + token da sessão', recebe:'{ resposta, lugares }'},
+  'l-sos':{envia:'POST { nome, endereço, latitude, longitude, nível } + token', recebe:'{ enviados: [...], falhas: [...] }'},
+  'l-relogio':{envia:'batimentos e movimento do pulso, a cada leitura', recebe:'nada: o relógio só envia'},
+  'l-modelo':{envia:'janela de 2,56 s do acelerômetro (128 leituras)', recebe:'{ anomalia: 0 a 1 }'},
+  'l-eauth':{envia:'token da sessão', recebe:'a usuária logada, ou recusa'},
+  'l-ia':{envia:'instruções da Lia + pergunta + contexto (sem a coordenada) + lugares', recebe:'texto da resposta'},
+  'l-places':{envia:'textQuery ("Delegacia de Defesa da Mulher") + posição', recebe:'até 5 lugares: nome, endereço, telefone, aberto agora'},
+  'l-lauth':{envia:'token da sessão da usuária', recebe:'a usuária e os telefones da rede de apoio'},
+  'l-wpp':{envia:'mensagem com nome, nível de risco e link do mapa', recebe:'id da mensagem enviada'},
+  'l-dados':{envia:'pedido dos arquivos do mês', recebe:'planilhas de ocorrências da SSP-SP'},
+  'l-imp':{envia:'INSERT das ocorrências novas, agrupadas por família', recebe:'quantas linhas entraram'},
+  'l-rpcb':{envia:'consulta agregada (contagem por célula)', recebe:'contagens de roubo, furto e violência'},
+};
+
+// Cada evento é um movimento numa ligação: pedido (vai de quem chama para quem
+// responde) ou resposta (volta). [ligação, 'pedido'|'resposta', título, dados, etiqueta,
+// frase simples que explica o passo]
+const FLUXOS2 = {
+  sos:{nome:'Alerta SOS', resumo:'Do toque no botão até a mensagem chegar na rede de apoio.', ev:[
+    ['l-banco','pedido','Registra o alerta antes de sair',"INSERT alert_logs {\n  status: 'pendente',\n  latitude, longitude,\n  nivel_risco: 'Alto'\n}",'INSERT alert_logs','O app manda para o banco os dados do alerta: a posição e o nível de risco. Assim o pedido de ajuda fica registrado, mesmo se o envio cair no meio.'],
+    ['l-banco','resposta','O banco devolve o id do registro',"{ id: 'a3f…' }",'id do alerta','O banco responde com o número desse registro, que o app usa no final para marcar se deu certo.'],
+    ['l-sos','pedido','O app chama a AWS',"POST Function URL\nAuthorization: Bearer <token>\n{\n  nome, endereco,\n  latitude, longitude,\n  nivelRisco\n}",'POST + token','O app envia para a AWS o nome, o endereço e a posição da usuária, junto com a prova de que ela está logada (o token).'],
+    ['l-lauth','pedido','A Lambda confere quem é',"GET /auth/v1/user\nGET emergency_contacts?user_id=eq.<id>",'token','A AWS mostra esse token ao Supabase para confirmar quem está pedindo ajuda, e pede a lista de contatos dela.'],
+    ['l-lauth','resposta','O Supabase devolve a usuária e os contatos',"{ usuaria: { id },\n  contatos: [ { telefone }, … ] }",'contatos','O Supabase confirma quem é a usuária e devolve os telefones da rede de apoio.'],
+    ['l-wpp','pedido','Uma mensagem para cada contato',"POST graph.facebook.com/…/messages\n{ to: <telefone>,\n  texto: nome + nível + link do mapa }",'mensagem','A AWS envia ao WhatsApp uma mensagem para cada contato, com o nome dela, o nível de risco e o link do mapa.'],
+    ['l-wpp','resposta','O WhatsApp confirma',"{ messages: [ { id: 'wamid…' } ] }",'id da mensagem','O WhatsApp confirma que cada mensagem saiu.'],
+    ['l-sos','resposta','A AWS devolve o resultado',"{ enviados: ['+55…'],\n  falhas: [] }",'enviados','A AWS responde ao app quem recebeu e quem não recebeu o alerta.'],
+    ['l-banco','pedido','O registro vira "enviado"',"UPDATE alert_logs\nSET status = 'enviado'",'UPDATE status','O app atualiza o registro para \"enviado\" e mostra o resultado na tela. Se algo falhar, aparece o botão Ligar 190.'],
+  ]},
+  score:{nome:'Score em 3 camadas', resumo:'Contexto do lugar + sinais do corpo, juntos numa matriz 3×3.', ev:[
+    ['l-banco','pedido','Camada 1: pede a faixa do lugar',"SELECT context_risk_map\nWHERE municipio = 'S.ANDRE'\n  AND bairro = 'CENTRO'\n  AND periodo = 'noite'",'SELECT contexto','O app pergunta ao banco como é o bairro onde ela está, naquele período do dia, pelos registros da SSP-SP.'],
+    ['l-banco','resposta','Volta a faixa do contexto',"{ nivel_contexto: 'medio' }",'contexto: médio','O banco responde com a faixa do lugar: baixo, médio ou alto. Essa é a camada 1, o contexto.'],
+    ['l-modelo','pedido','Camada 2: janela do acelerômetro',"128 leituras (2,56 s)\n→ features de movimento",'2,56 s de movimento','O app entrega ao modelo os últimos 2,56 segundos de movimento do celular.'],
+    ['l-modelo','resposta','O modelo devolve a anomalia',"{ anomalia: 0.71 }\n(0 = comum, 1 = muito atípico)",'anomalia 0,71','O modelo responde o quanto esse movimento foge do comum, de 0 a 1.'],
+    ['l-relogio','pedido','Camada 2: batimentos do relógio',"{ bpm: 112 }\nz-score contra a última hora",'112 bpm','O relógio envia os batimentos, e o app compara com o normal dela na última hora. Junto com o movimento, essa é a camada 2, o corpo.'],
+    ['l-banco','pedido','Camada 3: grava só a faixa final',"UPSERT risk_assessments {\n  nivel: 'alto',\n  origem_contexto: 'bairro',\n  modo_sensores: 'celular+relogio'\n}",'UPSERT nível','O app junta as duas camadas na matriz 3×3 e grava no banco só o nível final, sem os dados dos sensores.'],
+    ['l-banco','resposta','Confirmado',"ok",'ok','O banco confirma que guardou.'],
+  ]},
+  lia:{nome:'Lia', resumo:'A pergunta passa pelo servidor, que busca lugares reais antes da IA responder.', ev:[
+    ['l-edge','pedido','O app manda a pergunta',"invoke('ampara-chat')\n{ pergunta: 'Delegacia da mulher perto?',\n  contexto: { bairro, latitude, longitude } }",'pergunta','O app envia a pergunta para a função da Lia, no servidor. Se ela permitir, vão junto o bairro e a posição.'],
+    ['l-eauth','pedido','A função confere a sessão',"GET /auth/v1/user\nAuthorization: Bearer <token>",'token','A função mostra o token ao Supabase para confirmar que quem pergunta é uma usuária logada.'],
+    ['l-eauth','resposta','Sessão válida',"{ id: <usuária> }",'ok','O Supabase confirma, e a função segue.'],
+    ['l-places','pedido','Busca lugares de verdade',"POST places:searchText\n{ textQuery: 'Delegacia de Defesa da Mulher',\n  locationBias: <posição> }",'searchText','Como a pergunta pede um lugar, a função pede ao Google as delegacias da mulher perto da posição dela.'],
+    ['l-places','resposta','O Google devolve os lugares',"[ { nome: '1ª DDM Centro',\n    distanciaKm: 2.4,\n    telefone, endereco } ]",'lugares','O Google devolve os lugares com nome, endereço e telefone. A distância é calculada no servidor.'],
+    ['l-ia','pedido','A IA recebe pergunta e lugares',"POST ia.maua.br · gemma-3-27b\n{ instruções da Lia,\n  contexto (sem coordenada),\n  lugares encontrados,\n  pergunta }",'prompt','A função manda para a IA da Mauá a pergunta e os lugares encontrados. A posição exata não vai para a IA.'],
+    ['l-ia','resposta','A IA devolve o texto',"'A mais próxima é a 1ª DDM\nCentro, a 2,4 km…'",'texto','A IA devolve o texto da resposta, falando só dos lugares que recebeu.'],
+    ['l-edge','resposta','O app recebe a resposta e os cartões',"{ resposta: '…',\n  lugares: [ … ] }",'resposta + cartões','A função devolve ao app o texto e os lugares, que aparecem como cartões com \"Abrir no mapa\" e \"Ligar\".'],
+  ]},
+  mapa:{nome:'Mapa de calor', resumo:'Roubos, furtos e violência dos últimos 6 meses, contados no banco.', ev:[
+    ['l-rpc','pedido','O app pede a grade da área visível',"rpc crimes_mapa_calor_recente\n{ latitude, longitude, raio_km: 1.5 }",'rpc mapa','O app pede ao banco o mapa de calor da área que está aparecendo na tela.'],
+    ['l-rpcb','pedido','A função conta as ocorrências',"contagem por célula\nroubo + furto + violência\núltimos 6 meses",'contagem','A função do banco conta os roubos, furtos e casos de violência dos últimos 6 meses em cada pedacinho do mapa.'],
+    ['l-rpcb','resposta','Contagens por célula',"[ { celula, total } … ]",'totais','O banco devolve o total de cada pedacinho.'],
+    ['l-rpc','resposta','O app recebe e pinta o calor',"[ { latitude, longitude, peso } … ]",'grade','O app recebe a grade e pinta cada pedacinho com a cor do calor.'],
+    ['l-edge','pedido','Apoio por perto: pede uma categoria',"{ acao: 'lugares',\n  categoria: 'ddm',\n  latitude, longitude }",'lugares','No Apoio por perto, o app pede à função os lugares de uma categoria, como Delegacia da Mulher.'],
+    ['l-places','pedido','Busca no Google',"POST places:searchText",'searchText','A função pergunta ao Google pelos lugares dessa categoria perto dela.'],
+    ['l-places','resposta','Até 5 lugares',"[ { nome, latitude, longitude,\n    telefone, mapsUrl } ]",'lugares','O Google devolve até 5 lugares, com posição, telefone e rota.'],
+    ['l-edge','resposta','Os pinos aparecem no mapa',"{ lugares: [ … ] }",'pinos','A função devolve os lugares, e o app coloca os pinos no mapa.'],
+  ]},
+  dados:{nome:'Dados da SSP-SP', resumo:'Uma rotina automática mantém o mapa e o score atualizados.', ev:[
+    ['l-dados','pedido','Todo dia às 7h, pede os meses novos',"GitHub Actions (cron 07:00)\nimportar_ssp_supabase.py --anos 2026",'pedido diário','Todo dia às 7h, um robô do GitHub roda o script que pede à SSP-SP os meses novos.'],
+    ['l-dados','resposta','A SSP-SP devolve as planilhas',"planilhas de ocorrências\npor mês e município",'planilhas','A SSP-SP entrega as planilhas de ocorrências.'],
+    ['l-imp','pedido','Importa no PostgreSQL',"INSERT ocorrências\n(agrupadas por família de crime)",'INSERT','O script envia as ocorrências novas para o banco do Supabase.'],
+    ['l-imp','resposta','Importação concluída',"{ linhas_novas: 18 240 }",'ok','O banco confirma quantas linhas entraram. A partir daí, o mapa e o score já usam os dados novos.'],
+  ]},
+};
+
+let arqFluxo=null, arqPasso=0, arqNo=null, arqTimer=null, arqAnim=null;
+// Ritmo da apresentação: por padrão quem avança é a apresentadora (botões, setas do
+// teclado ou passador de slides). Parada num passo, a bolinha repete devagar o caminho.
+// O modo automático é opcional, com o tempo por passo escolhido no painel.
+let arqRepeticao=null, arqVelocidade=10000;
+const VELOCIDADES=[[6000,'6 s'],[10000,'10 s'],[15000,'15 s']];
+const noPorId = Object.fromEntries(NOS.map(n=>[n[0],n]));
+const ligPorId = Object.fromEntries(LIGS.map(l=>[l[0],l]));
+
+// t: em que ponto da linha (0 a 1) fica a legenda, para legendas vizinhas não se cobrirem.
+// A linha termina na borda do círculo de destino, para a ponta da seta ficar visível.
+function caminhoLig([, de, para, , curva, t=.5]){
+  const a=noPorId[de], b=noPorId[para];
+  const mx=(a[1]+b[1])/2, my=(a[2]+b[2])/2;
+  const dx=b[1]-a[1], dy=b[2]-a[2], len=Math.hypot(dx,dy)||1;
+  const cx=mx-dy/len*curva, cy=my+dx/len*curva;
+  const raio=(id)=>id==='app'?58:46;
+  const recuo=(px,py,qx,qy,r)=>{const L=Math.hypot(qx-px,qy-py)||1;return [px+(qx-px)/L*r, py+(qy-py)/L*r]};
+  const [ax,ay]=recuo(a[1],a[2],cx,cy,raio(de)), [bx,by]=recuo(b[1],b[2],cx,cy,raio(para));
+  const u=1-t;
+  return {d:`M${ax} ${ay} Q${cx} ${cy} ${bx} ${by}`, tx:u*u*a[1]+2*u*t*cx+t*t*b[1], ty:u*u*a[2]+2*u*t*cy+t*t*b[2]};
+}
+
+const ARQ_HTML = `<div class="kick">PARA QUEM QUER ENTENDER POR DENTRO</div>
+<h1>Como o app <span class="it">funciona</span></h1>
+<div class="chips" id="chips"></div>
+<div class="diag-wrap">
+<div class="diag" id="diag"><svg viewBox="0 0 1200 790" role="img" aria-label="Diagrama da arquitetura do Ampara">
+<defs>
+<marker id="seta" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#CFC4B6"/></marker>
+<marker id="seta-on" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#B4566E"/></marker>
+<marker id="seta-volta" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#283862"/></marker>
+</defs>
+<rect class="zona" x="430" y="80" width="360" height="400" rx="34"/><text class="zona-t" x="460" y="118">SUPABASE</text>
+<g id="ligs">${LIGS.map(l=>{const c=caminhoLig(l);return `<path class="lig" id="${l[0]}" d="${c.d}" marker-end="url(#seta)"/><path class="lig-toque" data-lig="${l[0]}" d="${c.d}"/><text class="lig-t" id="${l[0]}-t" x="${c.tx}" y="${c.ty-8}" text-anchor="middle">${l[3]}</text>`}).join('')}</g>
+<g id="nos">${NOS.map(([id,x,y,ico,n,s])=>`<g class="no-g" id="g-${id}" data-no="${id}" transform="translate(${x} ${y})" tabindex="0" role="button" aria-label="${n}: ${s}"><circle class="bola" r="${id==='app'?54:42}"/><g class="ico" transform="scale(${id==='app'?1.5:1.25})">${ICO[ico]}</g><text class="no-t" y="${id==='app'?84:70}">${n}</text><text class="no-s" y="${id==='app'?106:91}">${s}</text></g>`).join('')}</g>
+<g id="pacotes"></g>
+</svg>
+<button class="seta-diag ant" id="setaAnt" aria-label="Passo anterior">‹</button>
+<button class="seta-diag prox" id="setaProx" aria-label="Próximo passo">›</button>
+<div class="legenda-cores"><span><i class="ida"></i>pedido</span><span><i class="volta"></i>resposta</span><span>Toque numa área vazia para avançar. Toque numa linha para ver o que ela leva e traz.</span></div>
+</div>
+<div class="lado" id="lado" aria-live="polite"></div>
+</div>`;
+
+function montarArquitetura(){
+  const chips=$('#chips'); if(!chips) return;
+  chips.innerHTML='<span class="rot">VER O CAMINHO DE</span>'+Object.entries(FLUXOS2).map(([id,f])=>`<button data-f="${id}" aria-pressed="${arqFluxo===id}"><span class="pt"></span>${f.nome}</button>`).join('');
+  chips.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ arqFluxo = arqFluxo===b.dataset.f ? null : b.dataset.f; arqNo=null; arqPasso=0; montarArquitetura() });
+  document.querySelectorAll('#diag .no-g').forEach(g=>{
+    const escolher=()=>{ parar(); arqFluxo=null; arqNo = arqNo===g.dataset.no ? null : g.dataset.no; montarArquitetura() };
+    g.onclick=escolher; g.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();escolher()} };
+  });
+  document.querySelectorAll('#diag .lig-toque').forEach(p=>p.onclick=(e)=>{e.stopPropagation();popupDaLigacao(p.dataset.lig)});
+  document.querySelectorAll('#diag .no-g').forEach(g=>g.addEventListener('click',e=>e.stopPropagation()));
+  // Com um caminho escolhido, tocar numa área vazia do diagrama vai para o próximo passo.
+  $('#diag svg').onclick=()=>{ if(arqFluxo) irParaPasso(arqPasso+1) };
+  $('#setaAnt').onclick=(e)=>{e.stopPropagation();irParaPasso(arqPasso-1)};
+  $('#setaProx').onclick=(e)=>{e.stopPropagation();irParaPasso(arqPasso+1)};
+  atualizarSetas();
+  parar();
+  if(arqFluxo){ mostrarFluxo(); animarPacote(); repetirPacote() } else mostrarNo();
+}
+
+function limparFoco(){
+  const d=$('#diag'); if(!d) return;
+  d.classList.remove('foco');
+  d.querySelectorAll('.on,.atual').forEach(e=>e.classList.remove('on','atual'));
+  d.querySelectorAll('.lig').forEach(p=>p.setAttribute('marker-end','url(#seta)'));
+  $('#pacotes').innerHTML='';
+}
+
+function mostrarNo(){
+  limparFoco(); atualizarSetas();
+  const lado=$('#lado');
+  if(!arqNo){
+    lado.innerHTML=`<div class="kick">O AMPARA EM PEÇAS</div><h3>${NOS.length} peças, três lugares</h3><p>No celular ficam o app e o modelo de movimento. No meio, o Supabase guarda os dados e roda o backend. Em volta, os serviços que o app usa.</p><ol>${Object.entries(FLUXOS2).map(([id,f])=>`<li data-f="${id}"><b>›</b><span><span style="color:var(--navy);font-weight:700">${f.nome}</span><br>${f.resumo}</span></li>`).join('')}</ol>`;
+    lado.querySelectorAll('[data-f]').forEach(li=>li.onclick=()=>{arqFluxo=li.dataset.f;montarArquitetura()});
+    return;
+  }
+  const n=noPorId[arqNo]; const d=$('#diag'); d.classList.add('foco');
+  $('#g-'+arqNo).classList.add('on','atual');
+  const ligadas=LIGS.filter(l=>l[1]===arqNo||l[2]===arqNo);
+  ligadas.forEach(l=>{ $('#'+l[0]).classList.add('on'); $('#'+l[0]).setAttribute('marker-end','url(#seta-on)'); $('#'+l[0]+'-t').classList.add('on'); const outro=l[1]===arqNo?l[2]:l[1]; $('#g-'+outro).classList.add('on') });
+  lado.innerHTML=`<div class="kick">${esc(n[5].toUpperCase())}</div><h3>${esc(n[4])}</h3><p>${esc(n[6])}</p>
+  <ol>${ligadas.map(l=>{const outro=l[1]===arqNo?l[2]:l[1];const sai=l[1]===arqNo;return `<li data-lig="${l[0]}"><b>${sai?'→':'←'}</b><span><span style="color:var(--navy);font-weight:700">${sai?'chama ':'é chamada por '}${esc(noPorId[outro][4])}</span><br>${esc(l[3])} · <span class="req">ver o que vai e volta</span></span></li>`}).join('')}</ol>`;
+  lado.querySelectorAll('[data-lig]').forEach(li=>li.onclick=()=>popupDaLigacao(li.dataset.lig));
+}
+
+function mostrarFluxo(){
+  limparFoco();
+  const f=FLUXOS2[arqFluxo]; const d=$('#diag'); d.classList.add('foco');
+  f.ev.forEach(([lig])=>{ const l=ligPorId[lig]; $('#'+lig).classList.add('on'); $('#'+lig).setAttribute('marker-end','url(#seta-on)'); $('#'+lig+'-t').classList.add('on'); $('#g-'+l[1]).classList.add('on'); $('#g-'+l[2]).classList.add('on') });
+  const [lig,tipo]=f.ev[arqPasso]; const l=ligPorId[lig];
+  $('#g-'+(tipo==='pedido'?l[2]:l[1])).classList.add('atual');
+  // Na resposta, a ponta da seta passa para o começo da linha, no azul da volta.
+  if(tipo==='resposta'){ $('#'+lig).setAttribute('marker-end',''); $('#'+lig).setAttribute('marker-start','url(#seta-volta)') }
+  d.querySelectorAll('.lig').forEach(p=>{ if(!(tipo==='resposta'&&p.id===lig)) p.removeAttribute('marker-start') });
+  atualizarSetas();
+  $('#lado').innerHTML=`<div class="kick">CAMINHO · ${arqPasso+1} DE ${f.ev.length}</div><h3>${esc(f.nome)}</h3><p>${esc(f.resumo)}</p>
+  <ol>${f.ev.map(([lg,tp,t,,,frase],i)=>`<li class="${i===arqPasso?'on':''}" data-p="${i}"><b class="${tp}">${i+1}</b><span><span style="color:var(--navy);font-weight:700">${esc(t)}</span> <span class="tp-tag ${tp}">${tp==='pedido'?'pedido':'resposta'}</span>${i===arqPasso?`<br>${esc(frase)}`:''}</span></li>`).join('')}</ol>
+  ${arqFluxo==='lia'?promptLiaHTML():''}
+  <div class="ctrl-arq">
+    <button class="claro" id="anterior" ${arqPasso===0?'disabled':''} aria-label="Passo anterior">‹ Anterior</button>
+    <button id="proximo" ${arqPasso===f.ev.length-1?'disabled':''} aria-label="Próximo passo">Próximo ›</button>
+    <button class="claro" id="detalhe">Ver os dados</button>
+  </div>
+  <div class="ctrl-auto">
+    <button class="claro" id="pausa">${arqTimer?'❚❚ Parar o automático':'▶ Automático'}</button>
+    ${VELOCIDADES.map(([ms,r])=>`<button class="vel ${arqVelocidade===ms?'on':''}" data-vel="${ms}" aria-pressed="${arqVelocidade===ms}">${r}</button>`).join('')}
+    <span class="atalho">Teclado: ← → ou o passador de slides</span>
+  </div>`;
+  $('#lado').querySelectorAll('[data-p]').forEach(li=>li.onclick=()=>{irParaPasso(+li.dataset.p);popupDoPasso()});
+  $('#pausa').onclick=()=>{ if(arqTimer){parar();mostrarFluxo();repetirPacote()} else {tocarFluxo();mostrarFluxo()} };
+  $('#anterior').onclick=()=>irParaPasso(arqPasso-1);
+  $('#proximo').onclick=()=>irParaPasso(arqPasso+1);
+  $('#lado').querySelectorAll('[data-vel]').forEach(b=>b.onclick=()=>{ arqVelocidade=+b.dataset.vel; const auto=!!arqTimer; if(auto){tocarFluxo()} mostrarFluxo() });
+  $('#detalhe').onclick=()=>{parar();mostrarFluxo();popupDoPasso()};
+  $('#lado').querySelectorAll('[data-parte]').forEach(b=>b.onclick=()=>popupDoPrompt(+b.dataset.parte));
+}
+
+// A bolinha percorre a ligação do passo: rosa na ida, azul na volta, com uma etiqueta
+// do que está viajando.
+function animarPacote(){
+  cancelAnimationFrame(arqAnim);
+  const f=FLUXOS2[arqFluxo]; if(!f) return;
+  const [lig,tipo,,,etiqueta]=f.ev[arqPasso];
+  const p=$('#'+lig); const total=p.getTotalLength();
+  const cor=tipo==='pedido'?'#B4566E':'#283862';
+  const larg=Math.max(80, etiqueta.length*9.8+30);
+  const g=$('#pacotes');
+  // A etiqueta fica ao lado da bolinha (não em cima), para não cobrir o nome das peças.
+  g.innerHTML=`<g class="viagem"><g class="etq-g"><rect class="etq" x="${-larg/2}" y="-16" width="${larg}" height="32" rx="16" fill="${cor}"/><text class="etq-t" y="6">${esc(etiqueta)}</text></g><circle class="pacote" r="12" fill="${cor}"/><text class="selo-n" dy="5">${arqPasso+1}</text></g>`;
+  const viagem=g.firstChild; const etqG=viagem.firstChild; const t0=performance.now(); const dur=2200;
+  const quadro=(t)=>{ const k=Math.min(1,(t-t0)/dur); const e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+    const pt=p.getPointAtLength(total*(tipo==='pedido'?e:1-e));
+    viagem.setAttribute('transform',`translate(${pt.x} ${pt.y})`);
+    const lado = pt.x > 1200 - larg - 40 ? -1 : 1;
+    etqG.setAttribute('transform',`translate(${lado*(larg/2+20)} 0)`);
+    if(k<1) arqAnim=requestAnimationFrame(quadro) };
+  arqAnim=requestAnimationFrame(quadro);
+}
+
+function tocarFluxo(){
+  parar(); animarPacote(); repetirPacote();
+  arqTimer=setInterval(()=>{ const f=FLUXOS2[arqFluxo]; if(!f){parar();return}
+    arqPasso=(arqPasso+1)%f.ev.length; mostrarFluxo(); animarPacote() },arqVelocidade);
+}
+// Parada num passo, a bolinha refaz o caminho a cada 3,5 s enquanto ela explica.
+function repetirPacote(){
+  clearInterval(arqRepeticao);
+  arqRepeticao=setInterval(()=>{ if(state.tab==='arq'&&arqFluxo&&!$('#ovArq')) animarPacote() },3500);
+}
+function atualizarSetas(){
+  const ant=$('#setaAnt'), prox=$('#setaProx'); if(!ant) return;
+  const f=arqFluxo&&FLUXOS2[arqFluxo];
+  ant.hidden=!f||arqPasso===0; prox.hidden=!f||arqPasso===f.ev.length-1;
+  $('#diag').classList.toggle('avanca',!!f&&arqPasso<f.ev.length-1);
+}
+function irParaPasso(i){
+  const f=FLUXOS2[arqFluxo]; if(!f) return;
+  const auto=!!arqTimer;
+  arqPasso=Math.max(0,Math.min(f.ev.length-1,i));
+  if(auto){ tocarFluxo(); mostrarFluxo() } else { parar(); mostrarFluxo(); animarPacote(); repetirPacote() }
+}
+function parar(){ if(arqTimer){clearInterval(arqTimer);arqTimer=null} clearInterval(arqRepeticao); arqRepeticao=null; cancelAnimationFrame(arqAnim) }
+
+// Teclado e passador de slides (que mandam Page Down/Page Up ou as setas).
+document.addEventListener('keydown',e=>{
+  if(state.tab!=='arq'||!arqFluxo) return;
+  if($('#ovArq')){ if(e.key==='Escape') $('#fecharArq').click(); return }
+  if(['ArrowRight','PageDown',' '].includes(e.key)){ e.preventDefault(); irParaPasso(arqPasso+1) }
+  else if(['ArrowLeft','PageUp'].includes(e.key)){ e.preventDefault(); irParaPasso(arqPasso-1) }
+  else if(e.key==='Enter'){ e.preventDefault(); popupDoPasso() }
+});
+
+function abrirPopupArq(html){
+  $('#modalRoot').innerHTML=`<div class="overlay" id="ovArq"><div class="modal pop-arq" role="dialog" aria-modal="true">${html}<div style="text-align:right;margin-top:22px"><button class="btn" id="fecharArq" style="font-size:18px;padding:14px 26px;min-height:52px">Fechar</button></div></div></div>`;
+  // Ao fechar, a bolinha do passo volta a repetir (se houver um caminho escolhido).
+  const fechar=()=>{ $('#modalRoot').innerHTML=''; if(arqFluxo&&!arqTimer) repetirPacote() };
+  $('#ovArq').onclick=e=>{ if(e.target.id==='ovArq') fechar() };
+  if(arqTimer){ parar(); mostrarFluxo() }
+  $('#fecharArq').onclick=fechar;
+  $('#fecharArq').focus();
+}
+
+function popupDoPasso(){
+  const f=FLUXOS2[arqFluxo]; const [lig,tipo,titulo,dados,,frase]=f.ev[arqPasso]; const l=ligPorId[lig];
+  const de=noPorId[tipo==='pedido'?l[1]:l[2]][4], para=noPorId[tipo==='pedido'?l[2]:l[1]][4];
+  abrirPopupArq(`<div class="kick">${esc(f.nome.toUpperCase())} · PASSO ${arqPasso+1}</div><h2 style="font-size:32px">${esc(titulo)}</h2>
+  <p class="lead" style="font-size:20px;margin-top:10px;max-width:none">${esc(frase)}</p>
+  <div class="rota"><span>${esc(de)}</span><b class="${tipo}">${tipo==='pedido'?'pedido →':'← resposta'}</b><span>${esc(para)}</span></div>
+  <div class="bloco-dados ${tipo}"><div class="rot-dados">${tipo==='pedido'?'O QUE É ENVIADO':'O QUE É RECEBIDO'}</div><pre>${esc(dados)}</pre></div>`);
+}
+
+function popupDaLigacao(id){
+  const l=ligPorId[id]; const info=LIG_INFO[id]; if(!info) return;
+  // Com um caminho tocando, pausa: senão ele segue andando atrás do popup.
+  if(arqTimer){ parar(); mostrarFluxo() }
+  abrirPopupArq(`<div class="kick">LIGAÇÃO</div><h2 style="font-size:32px">${esc(noPorId[l[1]][4])} → ${esc(noPorId[l[2]][4])}</h2><p class="lead" style="font-size:19px;margin-top:8px">${esc(l[3])}</p>
+  <div class="dois-blocos"><div class="bloco-dados pedido"><div class="rot-dados">ENVIA →</div><pre>${esc(info.envia)}</pre></div><div class="bloco-dados resposta"><div class="rot-dados">← RECEBE</div><pre>${esc(info.recebe)}</pre></div></div>`);
+}
+
+// O prompt que a função ampara-chat monta para a IA (supabase/functions/ampara-chat):
+// as três primeiras partes vão juntas como mensagem "system" e a pergunta vai como "user".
+// As instruções são o texto real da função; dados e lugares são um exemplo do formato.
+const PROMPT_LIA = [
+ {
+  "id": "instrucoes",
+  "papel": "system",
+  "titulo": "Instruções fixas",
+  "quando": "sempre",
+  "resumo": "Quem é a Lia e as regras dela: português, de 2 a 4 frases, sem prometer proteção, 190 e 180, nunca inventar lugares.",
+  "texto": "Você é Lia, a assistente de IA do aplicativo Ampara. Suas respostas são geradas pelo modelo Google Gemma disponibilizado pela IA da Mauá (Barô). Se perguntarem se você é o Barô, explique brevemente que você é a Lia do Ampara e usa a IA da Mauá para responder. Fale em português brasileiro, com empatia e naturalidade. Responda diretamente ao que foi perguntado, em no máximo 2 a 4 frases; não se reapresente a cada mensagem e não acrescente contexto que não foi pedido. Use listas só quando ajudarem. Ajude com dúvidas sobre o Ampara e orientações gerais de segurança. Não prometa proteção nem atendimento de emergência. Não diagnostique nem dê aconselhamento jurídico definitivo. Em perigo imediato, oriente ligar para 190; para orientação e denúncias de violência contra a mulher, informe o 180. Não peça nem incentive o envio de dados pessoais, endereço preciso, contatos, senhas ou dados de saúde. Se não souber, diga com clareza. Escreva em texto simples, sem Markdown (nada de asteriscos, negrito ou títulos) e sem emojis. Não cumprimente nem se apresente a cada resposta: o app já mostra que é a Lia; vá direto ao ponto. Nunca invente nomes, endereços ou telefones de lugares; lugares só podem vir dos dados que o app enviar."
+ },
+ {
+  "id": "dados",
+  "papel": "system",
+  "titulo": "Dados da usuária",
+  "quando": "só com \"Personalizar com meus dados\" ligado",
+  "resumo": "Bairro, nível de risco, sensores, próximo compromisso e histórico. A coordenada exata nunca entra aqui.",
+  "texto": "Dados da usuária vindos do app Ampara, compartilhados com o consentimento dela.\nUse-os só quando ajudarem a responder a pergunta; não os repita sem necessidade.\nSão registros e estimativas do app: nunca diga que um lugar é seguro ou garantido.\n- Agora: sexta-feira, 23/10/2026 às 21:14\n- Onde ela está: Centro, Santo André\n- Ocorrências registradas na região (raio de 1 km, últimos 6 meses): registros moderados\n- Nível de risco atual no app (...): moderado\n- Base da parte da região: dados do bairro\n- Sensores usados agora: celular e relógio\n- Próximo compromisso da rotina: Faculdade, amanhã às 08:00\n- Histórico recente: nível mais comum nos últimos 7 dias: baixo"
+ },
+ {
+  "id": "lugares",
+  "papel": "system",
+  "titulo": "Lugares encontrados",
+  "quando": "só quando a pergunta pede um lugar",
+  "resumo": "O resultado do Google Places, já com a distância, e a regra de falar só desses lugares.",
+  "texto": "Resultado da busca por delegacias da mulher perto dela (dados do Google, distâncias calculadas pelo app; podem não corresponder exatamente ao pedido):\n- 1ª DDM Santo André — 2,4 km, aberto agora\n- DDM São Bernardo — 5,1 km\nResponda em 1 ou 2 frases curtas, citando no máximo o mais próximo. Fale só destes lugares, sem inventar outros nem mudar as distâncias. Os detalhes (endereço, telefone e mapa) aparecem em cartões abaixo da sua resposta: não repita endereços nem telefones e não faça lista."
+ },
+ {
+  "id": "pergunta",
+  "papel": "user",
+  "titulo": "A pergunta",
+  "quando": "sempre",
+  "resumo": "O que ela digitou, sem mudança. Vai separado das instruções, como mensagem da usuária.",
+  "texto": "Onde fica a delegacia da mulher mais perto?"
+ }
+];
+const PROMPT_PARAMS = 'Modelo google/gemma-3-27b · temperatura 0,5 · até 500 tokens de resposta';
+
+function promptLiaHTML(){
+  return `<div class="prompt-lia"><div class="kick" style="margin-top:22px">O QUE A IA RECEBE</div>
+  <p style="margin-top:6px">A função monta o prompt em partes, nesta ordem. Toque numa parte para ler.</p>
+  <div class="pilha">${PROMPT_LIA.map((p,i)=>`<button class="parte ${p.papel}" data-parte="${i}"><span class="papel">${p.papel==='system'?'system · instruções':'user · usuária'}</span><b>${esc(p.titulo)}</b><span class="quando">${esc(p.quando)}</span></button>`).join('')}</div>
+  <p class="params">${PROMPT_PARAMS}</p></div>`;
+}
+
+function popupDoPrompt(i){
+  if(arqTimer){ parar(); mostrarFluxo() }
+  const p=PROMPT_LIA[i];
+  abrirPopupArq(`<div class="kick">PROMPT DA LIA · PARTE ${i+1} DE ${PROMPT_LIA.length}</div><h2 style="font-size:32px">${esc(p.titulo)}</h2>
+  <p class="lead" style="font-size:20px;margin-top:10px;max-width:none">${esc(p.resumo)}</p>
+  <div class="rota"><b class="${p.papel==='system'?'pedido':'resposta'}">${p.papel}</b><span style="font-size:16px;color:var(--muted)">${esc(p.quando)}</span></div>
+  <div class="bloco-dados ${p.papel==='system'?'pedido':'resposta'}"><div class="rot-dados">${i===0?'TEXTO REAL DA FUNÇÃO':'EXEMPLO DO FORMATO'}</div><pre>${esc(p.texto)}</pre></div>`);
+}
+
+
 /* ---------- Equipe ---------- */
 let clearArm=false; let teamUnsub=null; let teamDay=state.day; let teamRows=[]; let onlyFull=false; let winner=null;
 function openTeam(){
@@ -363,6 +836,7 @@ function openLogin(){
 $('#teamBtn').onclick=async()=>{ if(await isUnlocked()) openTeam(); else openLogin(); };
 
 $('#tab-score').onclick=()=>{state.tab='score';render()};
+$('#tab-arq').onclick=()=>{state.tab='arq';render()};
 render();
 </script>
 
