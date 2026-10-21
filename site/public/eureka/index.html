@@ -78,7 +78,7 @@ th{font-size:13px;letter-spacing:2px;color:var(--muted)}
 <div class="app">
 <header>
 <div class="brand"><b>Ampara</b><span>EUREKA 2026 · STAND 72</span></div>
-<nav class="tabs" role="tablist">
+<nav class="tabs" role="tablist" hidden style="display:none">
 <button role="tab" id="tab-quiz" aria-selected="true">Quiz</button>
 <button role="tab" id="tab-score" aria-selected="false">Como o score funciona</button>
 </nav>
@@ -141,7 +141,7 @@ function defaultDay(){
   try{ const s=localStorage.getItem('ampara-quiz-dia'); if(s&&QUIZZES[s]) return s }catch(e){}
   const d=new Date(); return (d.getMonth()===9 && d.getDate()===24) ? 'sabado' : 'sexta';
 }
-const state = { tab:'quiz', day: defaultDay(), step:'start', i:0, picked:null, hits:0, saving:false, err:'' };
+const state = { tab:'score', day: defaultDay(), step:'start', i:0, picked:null, hits:0, saving:false, err:'' };
 let resetTimer = null;
 const SB_URL='https://hhlxgtwvoxpvyvejvxwt.supabase.co', SB_KEY='sb_publishable_LaG0x6zbfn3HTGFbDE4Lgg_F6bROg8g';
 const sb = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,storageKey:'ampara-eureka-auth'}}) : null;
@@ -359,7 +359,7 @@ function openLogin(){
     esvaziarFila(); openTeam() };
 }
 $('#teamBtn').onclick=async()=>{ if(await isUnlocked()) openTeam(); else openLogin(); };
-$('#tab-quiz').onclick=()=>{state.tab='quiz';render()};
+
 $('#tab-score').onclick=()=>{state.tab='score';render()};
 render();
 </script>
