@@ -58,7 +58,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function cred(){try{const c=JSON.parse(localStorage.getItem(CRED)||'null');if(c&&c.ate>Date.now())return c;localStorage.removeItem(CRED)}catch(e){}return null}
 let dia=(()=>{const d=new Date();return(d.getMonth()===9&&d.getDate()===24)?'sabado':'sexta'})();
-let lista=[], timer=null;
+let lista=[], timer=null, armado=null, armT=null;
 function fone(v){const d=v.replace(/\D/g,'').slice(0,11);if(d.length<=2)return d;if(d.length<=6)return`(${d.slice(0,2)}) ${d.slice(2)}`;if(d.length<=10)return`(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;return`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`}
 
 function telaLogin(msg=''){
@@ -128,8 +128,10 @@ async function atualiza(){
     const hora=new Date(r.criado_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     const pode=r.status==='aguardando'||r.status==='jogando';
     return `<div class="row"><div><div class="n">${esc(r.nome)}</div><div class="t">${fone(r.telefone)} · ${hora} · ${r.dia==='sabado'?'sábado':'sexta'}</div>${det?`<div class="t">${det}</div>`:''}</div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="chip c-${r.status}">${ROT[r.status]}</span>${pode?`<button class="btn ghost" data-c="${r.id}">Cancelar</button>`:''}</div></div>`}).join('');
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="chip c-${r.status}">${ROT[r.status]}</span>${pode?`<button class="btn ghost" data-c="${r.id}">Cancelar</button>`:''}<button class="btn ghost" data-x="${r.id}" style="color:var(--roseDeep)">${armado===r.id?'Toque de novo para excluir':'Excluir'}</button></div></div>`}).join('');
   el.querySelectorAll('[data-c]').forEach(b=>b.onclick=async()=>{b.disabled=true;await sb.rpc('eureka_vr_cancelar',{p_usuario:c.u,p_senha:c.p,p_id:b.dataset.c});atualiza()});
+  el.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{ const id=b.dataset.x; if(armado!==id){ armado=id; clearTimeout(armT); armT=setTimeout(()=>{armado=null;atualiza()},4000); atualiza(); return }
+    armado=null; b.disabled=true; const {error}=await sb.rpc('eureka_vr_excluir',{p_usuario:c.u,p_senha:c.p,p_id:id}); if(error) alert('Não foi possível excluir: '+error.message); atualiza() });
 }
 cred()?telaPrincipal():telaLogin();
 </script>

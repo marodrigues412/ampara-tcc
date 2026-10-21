@@ -112,3 +112,15 @@ grant execute on function public.eureka_vr_proxima() to anon, authenticated;
 grant execute on function public.eureka_vr_comecar(uuid) to anon, authenticated;
 grant execute on function public.eureka_vr_progresso(uuid, int, int) to anon, authenticated;
 grant execute on function public.eureka_vr_concluir(uuid, int, int) to anon, authenticated;
+create or replace function public.eureka_vr_excluir(p_usuario text, p_senha text, p_id uuid)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+declare s public.eureka_vr_sessao;
+begin
+  if not public.eureka_login(p_usuario, p_senha) then raise exception 'acesso negado' using errcode = '42501'; end if;
+  delete from public.eureka_vr_sessao where id = p_id returning * into s;
+  if s.id is not null and s.status = 'concluido' then
+    delete from public.eureka_participantes where dia = s.dia and telefone = s.telefone;
+  end if;
+end; $$;
+revoke all on function public.eureka_vr_excluir(text, text, uuid) from public;
+grant execute on function public.eureka_vr_excluir(text, text, uuid) to anon, authenticated;

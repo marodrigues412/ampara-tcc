@@ -105,7 +105,7 @@ class Panel {
   hit(uv) { const x = uv.x * this.c.width, y = (1 - uv.y) * this.c.height; return this.buttons.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)?.id || null; }
 }
 const logoImg = X.IM.logo_navy;
-const panel = new Panel(2.4, 1.5); world.add(panel.mesh); panel.mesh.position.set(0, 1.45, -2.05);
+const panel = new Panel(2.4, 1.5); world.add(panel.mesh); panel.mesh.position.set(0, 1.5, -2.5);
 function card(g, P) { rr(g, 0, 0, P.c.width, P.c.height, 70); g.fillStyle = 'rgba(255,251,245,0.97)'; g.fill(); g.lineWidth = 4; g.strokeStyle = '#E4DACB'; g.stroke(); }
 function txt(g, s, x, y, { size = 60, weight = 700, color = '#1B2A55', align = 'left', maxW = 2100, lh = 1.25, font = 'Q', italic = false } = {}) {
   g.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${font}, sans-serif`; g.fillStyle = color; g.textAlign = align; g.textBaseline = 'top';
@@ -186,8 +186,8 @@ function drawInvite() {
     P.button('quizYes', W / 2 - 720, P.c.height - 300, 820, 170, 'Quero participar', { size: 64 });
     P.button('quizNo', W / 2 + 160, P.c.height - 300, 560, 170, 'Agora não', { size: 56, bg: '#F4EEE4', hbg: '#EDE4D6', color: '#5B6787' });
   }); }
-function startInvite() { S.mode = 'invite'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.45, -2.05); drawInvite(); motor.isPlaying && motor.stop(); }
-function startQuiz() { S.mode = 'quiz'; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.position.set(0, 1.45, -2.05); drawQuestion(); motor.isPlaying && motor.stop(); }
+function startInvite() { S.mode = 'invite'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -2.5); drawInvite(); motor.isPlaying && motor.stop(); }
+function startQuiz() { S.mode = 'quiz'; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -2.5); drawQuestion(); motor.isPlaying && motor.stop(); }
 async function pick(i) { if (S.picked !== null) return; S.picked = i; if (i === QUIZ[S.q].a) S.hits++; drawQuestion();
   if (S.sess) rpc('eureka_vr_progresso', { p_id: S.sess, p_pergunta: S.q + 1, p_acertos: S.hits }); }
 async function next() { if (S.q < QUIZ.length - 1) { S.q++; S.picked = null; drawQuestion(); return; }
@@ -201,7 +201,7 @@ function drawEnd() {
     y = txt(g, 'Pode tirar o óculos com cuidado e devolver para a equipe.', W / 2, y, { size: 60, weight: 600, color: '#5B6787', align: 'center', maxW: 2000 }) + 40;
     txt(g, 'Obrigada por viver o Ampara com a gente.', W / 2, y, { size: 56, weight: 600, color: '#B4566E', align: 'center', font: 'Q' });
   }); }
-function finish() { S.mode = 'credits'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.45, -2.05); drawEnd(); S.credT = clock(); }
+function finish() { S.mode = 'credits'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -2.5); drawEnd(); S.credT = clock(); }
 function onSelect(id) { if (!id) return;
   if (S.mode === 'lobby') { if (id === 'start') startStory(true); if (id === 'free') startStory(false); }
   else if (S.mode === 'invite') { if (id === 'quizYes') startQuiz(); if (id === 'quizNo') finish(); }
@@ -231,18 +231,29 @@ renderer.domElement.addEventListener('pointermove', e => { mouse.active = true; 
 renderer.domElement.addEventListener('pointerdown', e => mouse.down = { x: e.clientX, y: e.clientY, moved: false });
 renderer.domElement.addEventListener('pointerup', e => { const m = mouse.down; mouse.down = null; if (m && !m.moved) onSelect(mouse.hover); });
 
-// ---------- seta presa ao olhar ----------
+// ---------- seta presa ao olhar (grande, com o lado escrito) ----------
 const arrow = new THREE.Group(); scene.add(arrow);
-{ const s = new THREE.Shape(); s.moveTo(0, 0.05); s.lineTo(0.05, 0); s.lineTo(0, -0.05); s.lineTo(0.016, 0); s.closePath(); const geo = new THREE.ShapeGeometry(s);
-  for (let j = 0; j < 3; j++) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xE8A9B4, transparent: true, opacity: 0, depthTest: false, fog: false })); m.position.x = j * 0.045; m.renderOrder = 45; arrow.add(m); } }
-const arrowLbl = X.textPlane(['vire a cabeça'], { h: 0.022, font: '500', color: '#E8A9B4', shadow: false }); arrowLbl.material.opacity = 0.9; arrowLbl.position.set(0.045, -0.06, 0); arrow.add(arrowLbl);
-function updateArrow(st, t) { const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera; let k = 0, dir = 1;
+const chevrons = new THREE.Group(); arrow.add(chevrons);
+{ const s = new THREE.Shape(); s.moveTo(0, 0.07); s.lineTo(0.07, 0); s.lineTo(0, -0.07); s.lineTo(0.024, 0); s.closePath(); const geo = new THREE.ShapeGeometry(s);
+  for (let j = 0; j < 3; j++) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xF2B8C3, transparent: true, opacity: 0, depthTest: false, fog: false, toneMapped: false })); m.position.x = j * 0.06; m.renderOrder = 45; chevrons.add(m); } }
+const pill = (() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 200; const g = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.07), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false, fog: false, toneMapped: false })); m.renderOrder = 46;
+  m.userData.set = (label) => { if (m.userData.label === label) return; m.userData.label = label; g.clearRect(0, 0, 1024, 200);
+    g.beginPath(); g.roundRect(8, 8, 1008, 184, 92); g.fillStyle = 'rgba(16,24,52,0.88)'; g.fill(); g.lineWidth = 8; g.strokeStyle = '#F2B8C3'; g.stroke();
+    g.font = '700 84px LS, sans-serif'; g.fillStyle = '#F4EEE4'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, 512, 104); tex.needsUpdate = true; };
+  arrow.add(m); return m; })();
+function updateArrow(st, t) { const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera; let k = 0, dir = 1, diff = 0;
   if (st && st.guideAng !== null && st.guideK > 0) { const h = headPose(); const cur = -THREE.MathUtils.radToDeg(h.yaw - world.rotation.y);
-    const diff = ((st.guideAng - cur + 540) % 360) - 180; dir = Math.sign(diff) || 1; k = Math.abs(diff) > 30 ? st.guideK : 0; }
+    diff = ((st.guideAng - cur + 540) % 360) - 180; dir = Math.sign(diff) || 1; k = Math.abs(diff) > 28 ? st.guideK : 0; }
   arrow.visible = k > 0.01; if (!arrow.visible) return;
-  cam.getWorldPosition(arrow.position); cam.getWorldQuaternion(arrow.quaternion); arrow.translateZ(-0.6); arrow.translateY(-0.08); arrow.translateX(dir * 0.1);
-  arrow.children.forEach((m, j) => { if (m !== arrowLbl) m.material.opacity = k * (0.35 + 0.65 * ((Math.sin(t * 7 - j * 1.2) + 1) / 2)); m.scale.x = dir; m.position.x = j * 0.045 * dir; });
-  arrowLbl.scale.x = 1; arrowLbl.position.x = 0.045 * dir; arrowLbl.material.opacity = k * 0.9; }
+  const back = Math.abs(diff) > 140;
+  pill.userData.set(back ? (st.guideAng === 0 ? 'volte para a frente' : 'olhe para trás') : (dir > 0 ? 'vire para a direita' : 'vire para a esquerda'));
+  cam.getWorldPosition(arrow.position); cam.getWorldQuaternion(arrow.quaternion); arrow.translateZ(-0.9); arrow.translateY(-0.12);
+  const wob = Math.sin(t * 5) * 0.012;
+  chevrons.position.set(dir * (0.22 + wob) - (dir < 0 ? 0 : 0), 0, 0); chevrons.scale.x = dir;
+  chevrons.children.forEach((m, j) => { m.material.opacity = k * (0.4 + 0.6 * ((Math.sin(t * 7 - j * 1.2) + 1) / 2)); m.position.x = j * 0.06; });
+  pill.position.set(dir * 0.04, -0.1, 0); pill.material.opacity = k * 0.95; }
 
 // ---------- loop ----------
 const rampF = (t, a, b) => X.ramp(t, a, b);
@@ -278,7 +289,7 @@ go.onclick = async () => {
     session.addEventListener('end', () => { $('ui').style.display = ''; setLobby(); });
   } catch (e) { st('Não foi possível entrar no VR: ' + e.message); } };
 prev.onclick = async () => { await listener.context.resume(); $('ui').style.display = 'none'; };
-window.__X = { S, X, startStory, onSelect, panel, drawQuestion };
+window.__X = { S, X, startStory, onSelect, panel, drawQuestion, mouse };
 </script>
 </body>
 </html>
