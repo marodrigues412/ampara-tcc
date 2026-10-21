@@ -44,16 +44,16 @@ async function rpc(name, args) { if (!sb) return { data: null, error: { message:
 
 // ---------- quiz ----------
 const QUIZ = [
-  { q: 'No último ano, quantas brasileiras sofreram algum tipo de assédio?', o: ['1 em cada 10', '1 em cada 5', 'Quase metade', 'Todas'], a: 2,
-    e: '49,6% das mulheres com 16 anos ou mais relataram algum tipo de assédio em 12 meses.', s: 'FBSP/Datafolha, Visível e Invisível (2025)' },
-  { q: 'Quando o Ampara percebe algo fora do normal, qual é a primeira coisa que ele faz?', o: ['Liga para a polícia', 'Avisa todos os contatos na hora', 'Pergunta se você está bem', 'Desliga o celular'], a: 2,
-    e: 'Em risco alto, ele abre uma contagem perguntando se está tudo bem. Se você não responder, avisa a sua rede de apoio.' },
-  { q: 'Em quantos casos de violência contra mulheres alguém estava presente?', o: ['1 em cada 10', '3 em cada 10', '5 em cada 10', '9 em cada 10'], a: 3,
-    e: 'Em 9 de cada 10 casos, alguém presenciou. Quem está por perto pode ajudar: acolher e ligar para o 190.', s: 'FBSP/Datafolha, Visível e Invisível (2025)' },
-  { q: 'Qual é o número da Central de Atendimento à Mulher?', o: ['180', '190', '192', '193'], a: 0,
-    e: 'O Ligue 180 é gratuito e funciona 24 horas. Em emergência, ligue 190.' },
-  { q: 'Desde 2018, importunação sexual (como "encoxar" no ônibus) é:', o: ['Só uma infração leve', 'Crime, com pena de prisão', 'Permitida em locais públicos', 'Resolvida só com multa'], a: 1,
-    e: 'A Lei 13.718/2018 tornou a importunação sexual crime, com pena de 1 a 5 anos.', s: 'Lei nº 13.718/2018' },
+  { q: 'No último ano, quantas brasileiras ouviram cantadas ou comentários desrespeitosos na rua?', o: ['Cerca de 5 milhões', 'Cerca de 12 milhões', 'Cerca de 23,5 milhões', 'Cerca de 40 milhões'], a: 2,
+    e: '40,8% das mulheres, cerca de 23,5 milhões, passaram por isso em 12 meses. É o tipo de assédio mais relatado.', s: 'FBSP/Datafolha, Visível e Invisível (2025)' },
+  { q: 'Você vê uma mulher sendo assediada na rua e o agressor continua por perto. Qual atitude é mais indicada?', o: ['Confrontar o agressor na hora, para ele parar', 'Esperar ela pedir ajuda, para não constranger', 'Ficar ao lado dela, oferecer ajuda e acionar o 190 se houver risco', 'Gravar a cena antes de qualquer coisa, como prova'], a: 2,
+    e: 'Ficar ao lado da vítima já interrompe a situação, sem você se colocar em risco. Gravar pode ajudar depois, mas apoiar vem primeiro, e divulgar só com o consentimento dela.' },
+  { q: 'Desde 2018, "encoxar" ou passar a mão em alguém na rua ou no ônibus é:', o: ['Contravenção penal, punida só com multa', 'Crime de importunação sexual, com pena de 1 a 5 anos de prisão', 'Crime só se houver testemunha', 'Infração resolvida com advertência'], a: 1,
+    e: 'A Lei 13.718/2018 criou o crime de importunação sexual. Antes, muitos casos eram tratados só como contravenção.', s: 'Lei nº 13.718/2018' },
+  { q: 'Quantas mulheres sofreram assédio físico em ônibus ou metrô no último ano?', o: ['Cerca de 800 mil', 'Cerca de 2 milhões', 'Cerca de 8 milhões', 'Cerca de 30 milhões'], a: 2,
+    e: '15,3% das brasileiras, cerca de 8 milhões de mulheres, sofreram assédio físico no transporte público.', s: 'FBSP/Datafolha, Visível e Invisível (2025)' },
+  { q: 'Por que o Ampara pergunta "Está tudo bem?" antes de avisar a sua rede?', o: ['Para gastar menos bateria', 'Para você confirmar: evita alarme falso sem tirar o controle de você', 'Porque a polícia exige', 'Para gravar a sua voz'], a: 1,
+    e: 'Você tem 10 segundos para dizer que está bem. Se não responder, quem você escolheu recebe o alerta com a sua localização.' },
 ];
 
 // ---------- three ----------
@@ -97,8 +97,8 @@ class Panel {
   button(id, x, y, w, h, label, style = {}) { const g = this.g; const hov = this.hover === id; this.buttons.push({ id, x, y, w, h });
     g.save(); rr(g, x, y, w, h, style.r ?? 36); g.fillStyle = style.bg || (hov ? '#2c3f78' : '#1B2A55'); if (hov && !style.bg) g.fillStyle = '#2c3f78'; if (style.bg && hov) g.fillStyle = style.hbg || style.bg; g.fill();
     if (style.border) { g.lineWidth = 8; g.strokeStyle = style.border; g.stroke(); } if (hov) { g.lineWidth = 10; g.strokeStyle = '#E8A9B4'; g.stroke(); }
-    g.fillStyle = style.color || '#F4EEE4'; g.font = `700 ${style.size || 56}px Q, sans-serif`; g.textBaseline = 'middle';
-    const lines = wrap(g, label, w - 80), lh = (style.size || 56) * 1.2; const x0 = style.align === 'left' ? x + 48 : x + w / 2; g.textAlign = style.align === 'left' ? 'left' : 'center';
+    g.fillStyle = style.color || '#F4EEE4'; let fs = style.size || 56; g.font = `700 ${fs}px Q, sans-serif`; g.textBaseline = 'middle';
+    const mw = w - 96 - (style.align === 'left' ? (style.indent || 0) : 0); let lines = wrap(g, label, mw); while (lines.length * fs * 1.2 > h - 24 && fs > 30) { fs -= 4; g.font = `700 ${fs}px Q, sans-serif`; lines = wrap(g, label, mw); } const lh = fs * 1.2; const x0 = style.align === 'left' ? x + 48 : x + w / 2; g.textAlign = style.align === 'left' ? 'left' : 'center';
     lines.forEach((l, i) => g.fillText(l, x0 + (style.align === 'left' ? (style.indent || 0) : 0), y + h / 2 + (i - (lines.length - 1) / 2) * lh));
     if (style.letter) { g.textAlign = 'center'; g.font = `700 44px Q, sans-serif`; g.fillStyle = style.letterColor || '#5B6787'; rr(g, x + 34, y + h / 2 - 40, 80, 80, 22); g.fillStyle = style.letterBg || '#F4EEE4'; g.fill(); g.fillStyle = style.letterColor || '#5B6787'; g.fillText(style.letter, x + 74, y + h / 2 + 2); }
     g.restore(); }
@@ -151,7 +151,7 @@ function drawResult() {
   panel.draw((g, P) => { card(g, P); const W = P.c.width;
     let y = txt(g, 'RESULTADO', W / 2, 140, { size: 44, color: '#B4566E', align: 'center' }) + 30;
     y = txt(g, `${S.hits} de ${QUIZ.length}`, W / 2, y, { size: 230, align: 'center' }) + 30;
-    const msg = S.sess ? (S.consent === false ? 'Obrigada por participar!' : 'Você está participando do sorteio do power bank. Boa sorte!') : 'Obrigada por participar!';
+    const msg = (S.sess && S.consent) ? 'Você está participando do sorteio do power bank. Boa sorte!' : 'Obrigada por participar!';
     y = txt(g, msg, W / 2, y, { size: 64, align: 'center', maxW: 2000 }) + 30;
     txt(g, 'Tecnologia que percebe. Proteção que acompanha.', W / 2, y + 20, { size: 50, weight: 600, color: '#B4566E', align: 'center' });
     P.button('end', W / 2 - 300, P.c.height - 220, 600, 140, 'Finalizar', { size: 56 });
@@ -177,15 +177,34 @@ async function startStory(withSession) {
   if (bMotor) { motor.setVolume(0); motor.play(); }
 }
 function clock() { return bMusic ? listener.context.currentTime - S.t0 : performance.now() / 1000 - S.t0; }
+function drawInvite() {
+  panel.draw((g, P) => { card(g, P); const W = P.c.width;
+    let y = txt(g, 'QUIZ AMPARA', W / 2, 150, { size: 44, color: '#B4566E', align: 'center' }) + 30;
+    y = txt(g, 'Quer participar de um quiz?', W / 2, y, { size: 104, align: 'center', maxW: 2100 }) + 40;
+    y = txt(g, 'São 5 perguntas rápidas. No fim do dia, a gente sorteia um power bank entre quem participou.', W / 2, y, { size: 54, weight: 600, color: '#5B6787', align: 'center', maxW: 1900, lh: 1.35 }) + 30;
+    if (!S.sess) txt(g, 'Para concorrer, peça para a equipe cadastrar você antes de começar.', W / 2, y, { size: 40, weight: 600, color: '#B4566E', align: 'center', maxW: 1900 });
+    P.button('quizYes', W / 2 - 720, P.c.height - 300, 820, 170, 'Quero participar', { size: 64 });
+    P.button('quizNo', W / 2 + 160, P.c.height - 300, 560, 170, 'Agora não', { size: 56, bg: '#F4EEE4', hbg: '#EDE4D6', color: '#5B6787' });
+  }); }
+function startInvite() { S.mode = 'invite'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.45, -2.05); drawInvite(); motor.isPlaying && motor.stop(); }
 function startQuiz() { S.mode = 'quiz'; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.position.set(0, 1.45, -2.05); drawQuestion(); motor.isPlaying && motor.stop(); }
 async function pick(i) { if (S.picked !== null) return; S.picked = i; if (i === QUIZ[S.q].a) S.hits++; drawQuestion();
   if (S.sess) rpc('eureka_vr_progresso', { p_id: S.sess, p_pergunta: S.q + 1, p_acertos: S.hits }); }
 async function next() { if (S.q < QUIZ.length - 1) { S.q++; S.picked = null; drawQuestion(); return; }
   S.mode = 'result'; drawResult(); S.endAt = clock() + 40;
   if (S.sess) { const r = await rpc('eureka_vr_concluir', { p_id: S.sess, p_acertos: S.hits, p_total: QUIZ.length }); if (r.error) console.warn(r.error); } }
-function finish() { S.mode = 'credits'; panel.mesh.visible = false; S.credT = clock(); }
+function drawEnd() {
+  panel.draw((g, P) => { card(g, P); const W = P.c.width;
+    const lw = 460, lh = lw * logoImg.height / logoImg.width; g.drawImage(logoImg, W / 2 - lw / 2, 110, lw, lh);
+    let y = 110 + lh + 60;
+    y = txt(g, 'A experiência terminou.', W / 2, y, { size: 110, align: 'center' }) + 30;
+    y = txt(g, 'Pode tirar o óculos com cuidado e devolver para a equipe.', W / 2, y, { size: 60, weight: 600, color: '#5B6787', align: 'center', maxW: 2000 }) + 40;
+    txt(g, 'Obrigada por viver o Ampara com a gente.', W / 2, y, { size: 56, weight: 600, color: '#B4566E', align: 'center', font: 'Q' });
+  }); }
+function finish() { S.mode = 'credits'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.45, -2.05); drawEnd(); S.credT = clock(); }
 function onSelect(id) { if (!id) return;
   if (S.mode === 'lobby') { if (id === 'start') startStory(true); if (id === 'free') startStory(false); }
+  else if (S.mode === 'invite') { if (id === 'quizYes') startQuiz(); if (id === 'quizNo') finish(); }
   else if (S.mode === 'quiz') { if (id[0] === 'o') pick(+id.slice(1)); if (id === 'next') next(); }
   else if (S.mode === 'result' && id === 'end') finish(); }
 
@@ -231,12 +250,12 @@ let last = 0;
 function tick() {
   let st = null;
   if (S.mode === 'story') { const t = clock();
-    if (t >= TL.quizAt) { startQuiz(); }
-    else { st = X.update(t, { hideFinal: true }); mover.position.set(0, 0, -st.pz);
-      const l1 = TL.carLeave[1]; motor.setVolume(rampF(t, 13, 18) * (1 - rampF(t, l1 - 2, l1 + 1)) * 1.6);
+    if (t >= TL.quizAt) { startInvite(); }
+    else { st = X.update(t, { hideFinal: false }); mover.position.set(0, 0, -st.pz);
+      motor.setVolume(rampF(t, 13, 18) * (1 - 0.5 * rampF(t, TL.relief, TL.relief + 6)) * (1 - rampF(t, TL.toCream[0], TL.toCream[0] + 2)) * 1.6);
       motor.setPlaybackRate(1 + 0.12 * rampF(t, 26, 34) + 0.6 * rampF(t, TL.carLeave[0] + 2, TL.carLeave[0] + 7)); } }
-  if (S.mode === 'lobby' || S.mode === 'quiz' || S.mode === 'result') { st = X.update(TL.quizAt, { hideFinal: true }); mover.position.set(0, 0, -st.pz); }
-  if (S.mode === 'credits') { const t = clock() - S.credT; st = X.update(TL.quizAt + t, { hideFinal: false }); mover.position.set(0, 0, -st.pz); if (t > 25) setLobby(); }
+  if (S.mode === 'lobby' || S.mode === 'invite' || S.mode === 'quiz' || S.mode === 'result') { st = X.update(TL.toCream[1] + 0.5, { hideFinal: true }); mover.position.set(0, 0, -st.pz); }
+  if (S.mode === 'credits') { const t = clock() - S.credT; st = X.update(TL.toCream[1] + 0.5, { hideFinal: true }); mover.position.set(0, 0, -st.pz); if (t > 20) setLobby(); }
   if (S.mode === 'result' && clock() > S.endAt) finish();
   if (!renderer.xr.isPresenting) { camera.rotation.set(-mouse.pitch, -mouse.yaw, 0, 'YXZ'); }
   updateArrow(S.mode === 'story' ? st : null, performance.now() / 1000);
@@ -259,7 +278,7 @@ go.onclick = async () => {
     session.addEventListener('end', () => { $('ui').style.display = ''; setLobby(); });
   } catch (e) { st('Não foi possível entrar no VR: ' + e.message); } };
 prev.onclick = async () => { await listener.context.resume(); $('ui').style.display = 'none'; };
-window.__X = { S, X, startStory, onSelect, panel };
+window.__X = { S, X, startStory, onSelect, panel, drawQuestion };
 </script>
 </body>
 </html>

@@ -83,6 +83,12 @@ function telaPrincipal(){
   <label class="f">Telefone (com DDD)<input type="tel" id="tel" inputmode="numeric" autocomplete="off"></label>
   <label class="check"><input type="checkbox" id="ok"> (Pergunte à pessoa) Autorizo o uso do meu nome e telefone apenas para o sorteio do Ampara na Eureka 2026. Os dados não serão compartilhados e serão apagados depois do sorteio.</label>
   <button class="btn" id="bl">Liberar óculos</button><div class="err" id="er"></div></form></div>
+  <div class="card"><h2>Sorteio do power bank</h2><p class="sub">Entra quem autorizou o sorteio, no quiz do tablet ou no óculos, no dia escolhido.</p>
+  <div class="days" id="sd"><button data-s="sexta">Sexta (23/10)</button><button data-s="sabado">Sábado (24/10)</button></div>
+  <label class="check"><input type="checkbox" id="soTodas"> Só quem acertou todas as perguntas</label>
+  <button class="btn" id="sortear" style="background:var(--rose);color:var(--navy)">Sortear agora</button>
+  <div class="t" id="pool" style="margin-top:10px;font-size:15px;color:var(--muted)"></div>
+  <div id="ganhador"></div></div>
   <div class="card"><div class="top"><h2>Agora</h2><button class="btn ghost" id="sair">Sair</button></div><div id="lista"><div class="empty">Carregando…</div></div></div>`;
   const marcaDia=()=>document.querySelectorAll('[data-d]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.d===dia));
   document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{dia=b.dataset.d;marcaDia()}); marcaDia();
@@ -93,9 +99,20 @@ function telaPrincipal(){
     $('#bl').disabled=true;$('#er').textContent='';
     const {error}=await sb.rpc('eureka_vr_liberar',{p_usuario:c.u,p_senha:c.p,p_dia:dia,p_nome:nome,p_telefone:tel,p_consentimento:ok});
     $('#bl').disabled=false;
-    if(error){ if(/acesso negado/.test(error.message)) return telaLogin('Entre de novo.'); $('#er').textContent='Erro: '+error.message; return }
+    if(error){ if(/acesso negado/.test(error.message)) return telaLogin('Entre de novo.'); if(/ja participou/.test(error.message)){ $('#er').textContent='Esse telefone já usou o óculos. Para ir de novo, use "Começar sem cadastro" no óculos (não conta para o sorteio).'; return } $('#er').textContent='Erro: '+error.message; return }
     $('#nome').value='';$('#tel').value='';$("#ok").checked=false; atualiza()};
-  atualiza(); clearInterval(timer); timer=setInterval(atualiza,3000);
+  let sDia=dia; const marcaS=()=>document.querySelectorAll('[data-s]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.s===sDia));
+  document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{sDia=b.dataset.s;marcaS();$('#ganhador').innerHTML='';contaPool()}); marcaS();
+  $('#soTodas').onchange=()=>{$('#ganhador').innerHTML='';contaPool()};
+  async function lerPool(){ const {data,error}=await sb.rpc('eureka_listar',{p_usuario:c.u,p_senha:c.p,p_dia:sDia}); if(error) throw error;
+    const so=$('#soTodas').checked; return (data||[]).filter(r=>!so||r.acertos===r.total); }
+  async function contaPool(){ try{ const p=await lerPool(); $('#pool').textContent=`${p.length} ${p.length===1?'pessoa concorrendo':'pessoas concorrendo'}`; }catch(e){ $('#pool').textContent='Não foi possível carregar: '+e.message } }
+  $('#sortear').onclick=async()=>{ $('#sortear').disabled=true; try{ const p=await lerPool(); if(!p.length){$('#ganhador').innerHTML='<div class="empty">Ninguém concorrendo ainda.</div>';return}
+      const arr=new Uint32Array(1); crypto.getRandomValues(arr); const w=p[arr[0]%p.length];
+      $('#ganhador').innerHTML=`<div style="background:var(--roseSoft);border-radius:18px;padding:18px;margin-top:14px"><div class="t">Ganhador(a) · ${sDia==='sabado'?'sábado':'sexta'} · entre ${p.length}</div><div class="big" style="font-size:30px;margin-top:4px">${esc(w.nome)}</div><div class="t" style="font-size:17px">${fone(w.telefone)} · ${w.acertos}/${w.total} acertos</div></div>`;
+    }catch(e){ $('#ganhador').innerHTML='<div class="err">Erro: '+esc(e.message)+'</div>' } finally{ $('#sortear').disabled=false; contaPool() } };
+  contaPool();
+  atualiza(); clearInterval(timer); timer=setInterval(()=>{atualiza();contaPool()},5000);
 }
 const ROT={aguardando:'Aguardando no óculos',jogando:'No óculos',concluido:'Concluído',cancelado:'Cancelado'};
 async function atualiza(){

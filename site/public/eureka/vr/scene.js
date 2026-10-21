@@ -223,7 +223,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     { m: T(['Um motor', '*atrás de você.'], 0, 3.4, 1.85, { h: 0.34 }), a: 24.5, b: 31 },
     { m: T(['Os faróis atrás de você', '*não passam.'], 0, 3.4, 1.85, { h: 0.34 }), a: 35, b: 44 },
     { m: T(['Você acelera.', '*Ele também.'], 0, 3.4, 1.85, { h: 0.36 }), a: 49, b: 58 },
-    { m: T(['Ele vai embora.'], 0, 3.2, 1.9, { h: 0.34 }), a: 81.5, b: 87.5 },
+    { m: T(['Agora alguém sabe', '*onde você está.'], 0, 3.0, 1.85, { h: 0.32 }), a: 81.5, b: 87.5 },
     { m: T(['O Ampara percebe', '*o lugar, a hora e o seu corpo.'], 0, 3.0, 1.8, { h: 0.3 }), a: 88, b: 94.5 },
     { m: T(['E pergunta antes', '*de avisar quem você escolheu.'], 0, 3.0, 1.8, { h: 0.3 }), a: 95, b: 101 },
     { m: T(['*Você não está sozinha.'], 0, 3.0, 1.8, { h: 0.4 }), a: 101.5, b: 109 },
@@ -258,7 +258,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     if (bpm > 100) { g.font = 'italic 400 44px LO'; g.fillStyle = '#E8A9B4'; g.fillText('acima do seu normal', 430, 305); }
     else { g.font = F(500, 40); g.fillStyle = 'rgba(244,238,228,.7)'; g.fillText('acompanhando você', 430, 308); }
     status.tex.needsUpdate = true; }
-  placeAround(status.m, -26, 1.75, 1.32); rig.add(status.m);
+  placeAround(status.m, -46, 1.75, 1.2); rig.add(status.m);
   // 2) mapa: rua com ocorrências registradas
   const map = hudCard(0.82, 0.82);
   function drawMap(pulse) { const key = (pulse * 10 | 0) + ''; if (key === map.key) return; map.key = key;
@@ -274,7 +274,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.font = 'italic 400 42px LO'; g.fillStyle = '#E8A9B4'; g.fillText('tem ocorrências registradas.', 60, H - 132);
     g.font = F(500, 30); g.fillStyle = 'rgba(244,238,228,.6)'; g.fillText('dados públicos · SSP-SP', 60, H - 72);
     map.tex.needsUpdate = true; }
-  placeAround(map.m, 26, 1.75, 1.32); rig.add(map.m);
+  placeAround(map.m, 46, 1.75, 1.2); rig.add(map.m);
   // 3) alerta: "Está tudo bem?" com contagem, depois "mensagem enviada"
   const alertC = hudCard(1.1, 1.25);
   function drawAlert(mode, n, k) { const key = mode + n + '|' + (k * 20 | 0); if (key === alertC.key) return; alertC.key = key;
@@ -311,7 +311,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
   const arrowGeo = (() => { const s = new THREE.Shape(); s.moveTo(0, 0.16); s.lineTo(0.16, 0); s.lineTo(0, -0.16); s.lineTo(0.05, 0); s.closePath();
     const s2 = s.clone ? null : null; const g = new THREE.ShapeGeometry(s); return g; })();
   const arrowMat = () => new THREE.MeshBasicMaterial({ color: 0xE8A9B4, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide });
-  const guides = [{ a: 16.5, b: 20.5, ang: -26 }, { a: 25.5, b: 34, ang: 180 }, { a: 33.5, b: 37.5, ang: 26 }, { a: 52.5, b: 56.5, ang: -26 }, { a: 82, b: 87, ang: 180 }, { a: 120, b: 128, ang: 180, video: true }];
+  const guides = [{ a: 16.5, b: 20.5, ang: -46 }, { a: 25.5, b: 34, ang: 180 }, { a: 33.5, b: 37.5, ang: 46 }, { a: 52.5, b: 56.5, ang: -46 }, { a: 116, b: 123, ang: 180 }];
   const ringArrows = [];
   if (!xr) for (let k = 0; k < 12; k++) { const g = new THREE.Group(); for (let j = 0; j < 3; j++) { const m = new THREE.Mesh(arrowGeo, arrowMat()); m.position.x = j * 0.13; m.renderOrder = 25; g.add(m); }
     g.userData.ang = k * 30; rig.add(g); ringArrows.push(g); }
@@ -396,10 +396,10 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       if (status.m.visible) { const lvl = t < 34 ? 'baixo' : t < 53 ? 'moderado' : 'alto';
         const fr = lvl === 'baixo' ? 0.28 : lvl === 'moderado' ? 0.28 + 0.32 * ramp(t, 34, 36) : 0.6 + 0.35 * ramp(t, 53, 55);
         const bpm = Math.round(78 + 18 * ramp(t, 34, 48) + 38 * ramp(t, 49, 59) + Math.sin(t * 2.3) * 1.5); drawStatus(lvl, fr, bpm); }
-      status.m.position.y = 1.32 + Math.sin(t * 0.9) * 0.012;
+      status.m.position.y = 1.2 + Math.sin(t * 0.9) * 0.012;
       const mk = ramp(t, 33, 34.2) * (1 - ramp(t, 61.5, 62.5)); map.m.material.opacity = mk; map.m.visible = mk > 0.002;
       if (map.m.visible) drawMap((t * 0.8) % 1);
-      map.m.position.y = 1.32 + Math.sin(t * 0.9 + 1) * 0.012;
+      map.m.position.y = 1.2 + Math.sin(t * 0.9 + 1) * 0.012;
       const ak = ramp(t, 62.2, 63) * (1 - ramp(t, 80, 81.5)); alertC.m.material.opacity = ak; alertC.m.visible = ak > 0.002;
       if (alertC.m.visible) { const c0 = 62.5, c1 = TL.relief; if (t < c1) { const rem = Math.max(1, Math.ceil(10 - (t - c0) * 10 / (c1 - c0))); drawAlert('count', rem, clamp(1 - (t - c0) / (c1 - c0))); }
         else drawAlert('sent', 0, clamp((t - c1) / 2.5)); }
@@ -412,7 +412,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
         const a = THREE.MathUtils.degToRad(g.userData.ang); const ay = 0.82 - 0.3 * toCream; g.position.set(Math.sin(a) * 2.2, ay, -Math.cos(a) * 2.2); g.lookAt(0, ay, 0); g.rotateY(Math.PI); g.scale.x = -dir; // aponta no sentido do alvo
         g.children.forEach((m, j) => { m.material.opacity = k * (0.35 + 0.65 * ((Math.sin(t * 7 - j * 1.2) + 1) / 2)); m.position.x = j * 0.13 + ((t * 0.6) % 0.13); }); }
       else g.children.forEach(m => m.material.opacity = 0); }
-    if (gd) { const a = THREE.MathUtils.degToRad(gd.ang); const dist = gd.ang === 180 || gd.ang === 0 ? 3.0 : 1.75; targetRing.position.set(Math.sin(a) * dist * 0.98, gd.ang === 180 ? 1.0 : 1.32, -Math.cos(a) * dist * 0.98);
+    if (gd) { const a = THREE.MathUtils.degToRad(gd.ang); const dist = gd.ang === 180 || gd.ang === 0 ? 3.0 : 1.75; targetRing.position.set(Math.sin(a) * dist * 0.98, gd.ang === 180 ? 1.0 : 1.2, -Math.cos(a) * dist * 0.98);
       targetRing.lookAt(0, targetRing.position.y, 0); const s = gd.ang === 180 ? 1.3 : 0.62; targetRing.scale.setScalar(s * (1 + 0.12 * Math.sin(t * 4))); targetRing.material.opacity = (gd.ang === 0 || gd.ang === 180) ? 0 : gk * 0.7; }
     else targetRing.material.opacity = 0;
     // seta presa ao olhar (xr)
@@ -424,8 +424,8 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     // sala final
     floorCream.material.opacity = toCream;
     const showFinal = !opts.hideFinal;
-    logoMesh.material.opacity = showFinal ? ramp(t, TL.quizAt, TL.quizAt + 2) : 0;
-    fTexts.slice(1).forEach((m, i) => m.material.opacity = showFinal ? ramp(t, TL.quizAt + 1 + i * 0.5, TL.quizAt + 2.5 + i * 0.5) : 0);
+    logoMesh.material.opacity = showFinal ? ramp(t, TL.toCream[1], TL.toCream[1] + 2) : 0;
+    fTexts.slice(1).forEach((m, i) => m.material.opacity = showFinal ? ramp(t, TL.toCream[1] + 1 + i * 0.5, TL.toCream[1] + 2.5 + i * 0.5) : 0);
     return { pz, car: cs, freezeK, glowOn, toCream, guideAng: gd ? gd.ang : null, guideK: gk };
   }
 

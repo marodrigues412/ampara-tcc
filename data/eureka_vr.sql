@@ -6,6 +6,7 @@
 -- 1. A equipe, logada com o usuário padrão, cadastra quem vai usar o óculos (nome, telefone, aceite).
 -- 2. O óculos pega a próxima pessoa da fila, roda a experiência e o quiz.
 -- 3. No fim, a pontuação fica na sessão e a pessoa entra na lista do sorteio do dia (eureka_participantes).
+-- Regra: o mesmo telefone só pode usar o óculos com cadastro uma vez (cancelados não contam).
 -- O óculos (visitante anônimo) só consegue ver o PRIMEIRO NOME da próxima pessoa e atualizar a sessão em andamento.
 
 create table if not exists public.eureka_vr_sessao (
@@ -30,6 +31,10 @@ returns uuid language plpgsql security definer set search_path = public, extensi
 declare v_id uuid;
 begin
   if not public.eureka_login(p_usuario, p_senha) then raise exception 'acesso negado' using errcode = '42501'; end if;
+  if exists (select 1 from public.eureka_vr_sessao
+             where telefone = regexp_replace(p_telefone, '\D', '', 'g') and status in ('aguardando', 'jogando', 'concluido')) then
+    raise exception 'telefone ja participou' using errcode = 'P0001';
+  end if;
   update public.eureka_vr_sessao set status = 'cancelado', atualizado_em = now() where status = 'aguardando';
   insert into public.eureka_vr_sessao (dia, nome, telefone, consentimento)
     values (p_dia, trim(p_nome), regexp_replace(p_telefone, '\D', '', 'g'), coalesce(p_consentimento, false))
