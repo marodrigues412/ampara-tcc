@@ -77,6 +77,16 @@ type Lugar = {
   longitude: number
 }
 
+// Parte da resposta do Google Places que usamos.
+type LugarDoGoogle = {
+  displayName?: { text?: string }
+  formattedAddress?: string
+  location: { latitude: number; longitude: number }
+  nationalPhoneNumber?: string
+  currentOpeningHours?: { openNow?: boolean }
+  googleMapsUri?: string
+}
+
 // Lugares a mais de 30 km provavelmente são outro lugar com o mesmo nome.
 const DISTANCIA_MAXIMA_KM = 30
 
@@ -103,8 +113,8 @@ async function buscarLugares(tipo: BuscaDeLugar, latitude: number, longitude: nu
     if (!resposta.ok) return null
     const dados = await resposta.json()
     return (dados.places ?? [])
-      .filter((p: any) => Number.isFinite(p.location?.latitude) && Number.isFinite(p.location?.longitude))
-      .map((p: any) => ({
+      .filter((p: Partial<LugarDoGoogle>) => Number.isFinite(p.location?.latitude) && Number.isFinite(p.location?.longitude))
+      .map((p: LugarDoGoogle) => ({
         nome: p.displayName?.text ?? 'Sem nome',
         endereco: p.formattedAddress ?? null,
         distanciaKm: Math.round(distanciaKm(latitude, longitude, p.location.latitude, p.location.longitude) * 10) / 10,
@@ -146,8 +156,9 @@ const daLista = (lista: Set<string>, valor: unknown) => {
   return t && lista.has(t) ? t : null
 }
 
-function lerContexto(bruto: any) {
-  if (!bruto || typeof bruto !== 'object') return null
+function lerContexto(entrada: unknown) {
+  if (!entrada || typeof entrada !== 'object') return null
+  const bruto = entrada as Record<string, unknown>
   const latitude = Number(bruto.latitude)
   const longitude = Number(bruto.longitude)
   return {
@@ -209,6 +220,15 @@ const CATEGORIAS_DE_APOIO: Record<string, BuscaDeLugar> = {
   hospital: { busca: 'pronto-socorro hospital', rotulo: 'hospitais', abertoAgora: false },
 }
 
+// Explicação curta do código HTTP da IA da Mauá, mostrada no app junto com o erro.
+function motivoDoErro(status: number) {
+  if (status === 401 || status === 403) return `a IA da Mauá recusou a chave do app (HTTP ${status})`
+  if (status === 404) return `a IA da Mauá não encontrou o modelo ${MODEL} (HTTP 404)`
+  if (status === 429) return 'limite de uso da IA da Mauá atingido (HTTP 429)'
+  if (status >= 500) return `o servidor da IA da Mauá está com problema (HTTP ${status})`
+  return `a IA da Mauá respondeu HTTP ${status}`
+}
+
 function json(body: unknown, status: number, origin?: string) {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (origin) {
@@ -248,17 +268,17 @@ Deno.serve(async (request) => {
   const authorization = request.headers.get('authorization')
 
   if (!supabaseUrl || !supabaseAnonKey || !baroApiKey) {
-    return json({ erro: 'Assistente indisponível.' }, 503, origin)
+    return json({ erro: 'Assistente indisponível.', motivo: 'falta um segredo da função no Supabase (BARO_API_KEY)' }, 503, origin)
   }
   if (!authorization?.startsWith('Bearer ')) {
-    return json({ erro: 'Sessão inválida.' }, 401, origin)
+    return json({ erro: 'Sessão inválida.', motivo: 'sessão do app expirada: saia e entre de novo' }, 401, origin)
   }
 
   try {
     const authResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: { apikey: supabaseAnonKey, authorization },
     })
-    if (!authResponse.ok) return json({ erro: 'Sessão inválida.' }, 401, origin)
+    if (!authResponse.ok) return json({ erro: 'Sessão inválida.', motivo: 'sessão do app expirada: saia e entre de novo' }, 401, origin)
 
     const body = await request.json().catch(() => null)
 
@@ -314,7 +334,16 @@ Deno.serve(async (request) => {
     })
 
     if (!providerResponse.ok) {
-      return json({ erro: 'Não consegui acessar a IA agora. Tente novamente.' }, 502, origin)
+      // O motivo vai para os logs da função (Supabase > Edge Functions > ampara-chat) e,
+      // resumido, para o app: assim dá para saber se é chave recusada (401/403), modelo
+      // que mudou de nome (404), limite de uso (429) ou o servidor da Mauá (5xx).
+      const corpoDoErro = (await providerResponse.text().catch(() => '')).slice(0, 400)
+      console.error('IA da Mauá respondeu com erro', providerResponse.status, MODEL, corpoDoErro)
+      return json({
+        erro: 'Não consegui acessar a IA agora. Tente novamente.',
+        motivo: motivoDoErro(providerResponse.status),
+        status: providerResponse.status,
+      }, 502, origin)
     }
 
     const providerBody = await providerResponse.json().catch(() => null)
@@ -330,7 +359,12 @@ Deno.serve(async (request) => {
       lugares: lugares?.length ? lugares : undefined,
       tipoLugar: lugares?.length ? tipo!.rotulo : undefined,
     }, 200, origin)
-  } catch {
-    return json({ erro: 'Não consegui acessar a IA agora. Tente novamente.' }, 502, origin)
+  } catch (erro) {
+    const tempoEsgotado = erro instanceof DOMException && erro.name === 'TimeoutError'
+    console.error('Falha ao falar com a IA da Mauá', tempoEsgotado ? 'tempo esgotado (25 s)' : String(erro))
+    return json({
+      erro: 'Não consegui acessar a IA agora. Tente novamente.',
+      motivo: tempoEsgotado ? 'a IA da Mauá demorou mais de 25 s para responder' : 'sem conexão com a IA da Mauá',
+    }, 502, origin)
   }
 })

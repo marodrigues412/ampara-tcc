@@ -164,13 +164,16 @@ export default function ChatBot({ navigation, route }) {
         ...atual,
         { id: `b${Date.now()}`, autor: 'bot', texto: semMarkdown(resposta), lugares },
       ])
-    } catch {
+    } catch (erro) {
+      // O motivo (chave recusada, modelo, sessão, internet...) aparece numa linha à parte,
+      // para quem estiver testando saber o que aconteceu.
+      const motivo = erro?.motivo ? `\n(Motivo: ${erro.motivo}.)` : ''
       setMensagens((atual) => [
         ...atual,
         {
           id: `b${Date.now()}`,
           autor: 'bot',
-          texto: `Não consegui acessar a IA da Mauá agora. Tente novamente mais tarde.\n\n${responder(conteudo)}`,
+          texto: `Não consegui acessar a IA da Mauá agora. Tente novamente mais tarde.${motivo}\n\n${responder(conteudo)}`,
         },
       ])
     } finally {

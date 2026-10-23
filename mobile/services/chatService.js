@@ -16,12 +16,32 @@ export async function perguntarAIA(pergunta) {
 // Conversa do chat: além da resposta, pode trazer lugares próximos (delegacias,
 // hospitais) buscados pela função ampara-chat, para o app mostrar em cartões.
 // contexto: o que montarContextoDaLia() devolve, ou null se ela não compartilhou.
+// Explica em uma frase por que a conversa falhou, para a mensagem do chat dizer o motivo
+// real (e não sempre "não consegui acessar a IA"). A função ampara-chat devolve o campo
+// `motivo` nos erros dela; sem resposta da função, o motivo vem do próprio tipo de erro.
+async function motivoDaFalha(error) {
+  if (error?.name === 'FunctionsFetchError') return 'sem internet, ou o Supabase não respondeu'
+  if (error?.name === 'FunctionsRelayError') return 'o Supabase não conseguiu chegar até a função da Lia'
+  const resposta = error?.context
+  if (resposta && typeof resposta.json === 'function') {
+    const corpo = await resposta.clone().json().catch(() => null)
+    if (corpo?.motivo) return corpo.motivo
+    if (resposta.status === 404) return 'a função ampara-chat não está publicada no Supabase'
+    return `a função da Lia respondeu HTTP ${resposta.status}`
+  }
+  return null
+}
+
 export async function conversarComLia(pergunta, contexto = null) {
   const { data, error } = await supabase.functions.invoke('ampara-chat', {
     body: contexto ? { pergunta, contexto } : { pergunta },
   })
 
-  if (error) throw error
+  if (error) {
+    const falha = new Error(error.message)
+    falha.motivo = await motivoDaFalha(error)
+    throw falha
+  }
   if (typeof data?.resposta !== 'string' || !data.resposta.trim()) {
     throw new Error('Resposta inválida do assistente')
   }
