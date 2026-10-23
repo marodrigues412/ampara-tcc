@@ -101,7 +101,7 @@ function batida(quando, vol) { const ctx = listener.context, saida = listener.ge
     o.frequency.setValueAtTime(f, quando + d); o.frequency.exponentialRampToValueAtTime(f * 0.6, quando + d + 0.13);
     g.gain.setValueAtTime(0.0001, quando + d); g.gain.exponentialRampToValueAtTime(vol * v, quando + d + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, quando + d + 0.2);
     o.connect(g); g.connect(saida); o.start(quando + d); o.stop(quando + d + 0.25); } }
-function somDoCoracao(t) { const ctx = listener.context;
+function somDoCoracao(t) { if (!X.COM_RAPAZES) return; const ctx = listener.context;
   const vol = (0.5 * rampF(t, 38, 44) + 0.4 * rampF(t, 49, 56)) * (1 - rampF(t, TL.relief - 1, TL.relief + 2));
   if (vol < 0.01) { proxBatida = 0; return; }
   if (!proxBatida || ctx.currentTime > proxBatida + 1) proxBatida = ctx.currentTime + 0.05;

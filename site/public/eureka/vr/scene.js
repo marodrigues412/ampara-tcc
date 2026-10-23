@@ -190,6 +190,10 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     street.add(c); }
 
   // ---------- beco à direita com dois rapazes ----------
+  // Liga e desliga os dois rapazes do beco (e o que vem com eles: a frase "Dois homens na
+  // esquina", o mapa no centro enquanto eles aparecem e o som do coração).
+  // A versão com eles fica guardada no branch vr-com-rapazes.
+  const COM_RAPAZES = true;
   // Mais um fator de risco: numa rua lateral à direita, duas sombras escuras paradas, que
   // viram a cabeça e o corpo para acompanhar você enquanto passa. Usa o vão entre prédios
   // mais perto de z = -49 (ela passa por volta dos 50 s, já olhando para a frente). Ficam escuras,
@@ -201,7 +205,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       if (larg >= 2.5) { const c = (ini + fim) / 2; if (!melhor || Math.abs(c - BECO_ALVO) < Math.abs(melhor.c - BECO_ALVO)) melhor = { c, larg }; } }
     return melhor ?? { c: BECO_ALVO, larg: 4 }; })();
   const rapazes = [];
-  {
+  if (COM_RAPAZES) {
     const x0 = SW_R[1], fundo = x0 + 10; // os prédios têm 10 m de profundidade
     const chao = new THREE.Mesh(new THREE.PlaneGeometry(fundo - x0 + 0.4, beco.larg + 0.4), fm(new THREE.MeshStandardMaterial({ color: 0x1a1b20, roughness: 1 })));
     chao.rotation.x = -Math.PI / 2; chao.position.set((x0 + fundo) / 2, 0.02, beco.c); street.add(chao);
@@ -387,7 +391,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     { m: T(['Faltam seis quarteirões.', '*A rua está vazia.'], 0, 7.0, 2.15, { h: 0.38 }), a: 15, b: 23 },
     { m: T(['Um motor', 'atrás de você.'], 0, 7.0, 2.15, { h: 0.4 }), a: 24.5, b: 31 },
     { m: T(['Os faróis atrás de você', 'não passam.'], 0, 7.0, 2.15, { h: 0.4 }), a: 35, b: 44 },
-    { m: T(['Dois homens na esquina.', '*Param de conversar quando você chega.'], 0, 7.0, 2.15, { h: 0.36 }), a: 44.3, b: 48.8 },
+    ...(COM_RAPAZES ? [{ m: T(['Dois homens na esquina.', '*Param de conversar quando você chega.'], 0, 7.0, 2.15, { h: 0.36 }), a: 44.3, b: 48.8 }] : []),
     { m: T(['O carro acelera.', '*Você também.'], 0, 7.0, 2.15, { h: 0.42 }), a: 49, b: 58 },
     // Durante o alerta (62 a 72,5 s): explica por que ninguém toca em "Estou bem".
     // Fica mais alto (y 3.45) para não cobrir o cartão do alerta.
@@ -417,7 +421,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.strokeStyle = color; g.lineCap = 'round'; g.beginPath(); g.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); g.stroke(); }
   // Batimentos mostrados no painel (e usados pelo som do coração no index.html): sobem com o
   // carro, sobem mais quando os dois rapazes começam a olhar (40 a 47 s) e disparam quando ela acelera.
-  const bpmEm = t => 78 + 18 * ramp(t, 34, 48) + 12 * ramp(t, 40, 47) + 38 * ramp(t, 49, 59);
+  const bpmEm = t => 78 + 18 * ramp(t, 34, 48) + (COM_RAPAZES ? 12 * ramp(t, 40, 47) : 0) + 38 * ramp(t, 49, 59);
   // Momentos de ênfase: o painel pulsa aqui e o index.html toca um som curto.
   const ENFASES = [{ t: 33.4, tipo: 'mapa' }, { t: 34, tipo: 'risco' }, { t: 53, tipo: 'risco' }];
   const pulsoEm = (t, tipo) => { let k = 0; for (const e of ENFASES) if (e.tipo === tipo && t >= e.t && t < e.t + 0.9) k = Math.max(k, Math.sin(Math.PI * (t - e.t) / 0.9)); return k; };
@@ -582,7 +586,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       map.m.scale.setScalar(1 + 0.14 * pulsoEm(t, 'mapa'));
       // No centro enquanto os dois homens aparecem à direita (para não tapá-los); depois que
       // ela passa por eles (~51 s), o mapa volta para o lugar dele, à direita.
-      const volta = ramp(t, 51, 52.5);
+      const volta = COM_RAPAZES ? ramp(t, 51, 52.5) : 1;
       placeAround(map.m, 17 * volta, 3.4, 0.82 + 0.28 * volta + Math.sin(t * 0.9 + 1) * 0.012);
       const ak = ramp(t, 62.2, 63) * (1 - ramp(t, 80, 81.5)); alertC.m.material.opacity = ak; alertC.m.visible = ak > 0.002;
       if (alertC.m.visible) { const c0 = 62.5, c1 = TL.relief; if (t < c1) { const rem = Math.max(1, Math.ceil(10 - (t - c0) * 10 / (c1 - c0))); drawAlert('count', rem, clamp(1 - (t - c0) / (c1 - c0))); }
@@ -613,5 +617,5 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     return { pz, car: cs, freezeK, glowOn, toCream, guideAng: gd ? gd.ang : null, guideK: gk };
   }
 
-  return { scene, rig, car, update, ENFASES, bpmEm, walkZ, walkSpeed, carState, EYE, DUR: TL.dur, textPlane, placeAround, ramp, clamp, IM };
+  return { scene, rig, car, update, ENFASES, bpmEm, COM_RAPAZES, walkZ, walkSpeed, carState, EYE, DUR: TL.dur, textPlane, placeAround, ramp, clamp, IM };
 }
