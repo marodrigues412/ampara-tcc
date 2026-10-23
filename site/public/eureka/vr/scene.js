@@ -193,7 +193,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
   // Liga e desliga os dois rapazes do beco (e o que vem com eles: a frase "Dois homens na
   // esquina", o mapa no centro enquanto eles aparecem e o som do coração).
   // A versão com eles fica guardada no branch vr-com-rapazes.
-  const COM_RAPAZES = true;
+  const COM_RAPAZES = false;
   // Mais um fator de risco: numa rua lateral à direita, duas sombras escuras paradas, que
   // viram a cabeça e o corpo para acompanhar você enquanto passa. Usa o vão entre prédios
   // mais perto de z = -49 (ela passa por volta dos 50 s, já olhando para a frente). Ficam escuras,
