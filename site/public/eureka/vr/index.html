@@ -93,6 +93,19 @@ function somDeEnfase(tipo) { const ctx = listener.context, saida = listener.getI
     g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.5, t0 + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.45);
     o.connect(g); g.connect(saida); o.start(t0 + d); o.stop(t0 + d + 0.5); } }
 let tAnterior = 0;
+// Som do coração: começa baixinho quando os dois rapazes passam a olhar (38 s), fica mais forte
+// quando ela acelera e para quando o alerta é enviado. Cada batida são duas pancadas graves.
+let proxBatida = 0;
+function batida(quando, vol) { const ctx = listener.context, saida = listener.getInput();
+  for (const [d, f, v] of [[0, 62, 1], [0.15, 52, 0.7]]) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(f, quando + d); o.frequency.exponentialRampToValueAtTime(f * 0.6, quando + d + 0.13);
+    g.gain.setValueAtTime(0.0001, quando + d); g.gain.exponentialRampToValueAtTime(vol * v, quando + d + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, quando + d + 0.2);
+    o.connect(g); g.connect(saida); o.start(quando + d); o.stop(quando + d + 0.25); } }
+function somDoCoracao(t) { const ctx = listener.context;
+  const vol = (0.5 * rampF(t, 38, 44) + 0.4 * rampF(t, 49, 56)) * (1 - rampF(t, TL.relief - 1, TL.relief + 2));
+  if (vol < 0.01) { proxBatida = 0; return; }
+  if (!proxBatida || ctx.currentTime > proxBatida + 1) proxBatida = ctx.currentTime + 0.05;
+  if (ctx.currentTime >= proxBatida - 0.08) { batida(proxBatida, vol); proxBatida += 60 / X.bpmEm(t); } }
 
 // ---------- painéis desenhados em canvas (texto nítido + botões) ----------
 function wrap(g, text, maxW) { const words = text.split(' '); const lines = []; let cur = '';
@@ -106,7 +119,7 @@ class Panel {
   draw(fn) { if (fn) this.drawFn = fn; const g = this.g; g.clearRect(0, 0, this.c.width, this.c.height); this.buttons = []; this.drawFn && this.drawFn(g, this); this.tex.needsUpdate = true; }
   button(id, x, y, w, h, label, style = {}) { const g = this.g; const hov = this.hover === id; this.buttons.push({ id, x, y, w, h });
     g.save(); rr(g, x, y, w, h, style.r ?? 36); g.fillStyle = style.bg || (hov ? '#2c3f78' : '#1B2A55'); if (hov && !style.bg) g.fillStyle = '#2c3f78'; if (style.bg && hov) g.fillStyle = style.hbg || style.bg; g.fill();
-    if (style.border) { g.lineWidth = 8; g.strokeStyle = style.border; g.stroke(); } if (hov) { g.lineWidth = 10; g.strokeStyle = '#E8A9B4'; g.stroke(); }
+    if (style.border) { g.lineWidth = 8; g.strokeStyle = style.border; g.stroke(); } if (hov && !style.bg) { g.lineWidth = 10; g.strokeStyle = '#E8A9B4'; g.stroke(); }
     g.fillStyle = style.color || '#F4EEE4'; let fs = style.size || 56; g.font = `700 ${fs}px Q, sans-serif`; g.textBaseline = 'middle';
     const mw = w - 96 - (style.align === 'left' ? (style.indent || 0) : 0); let lines = wrap(g, label, mw); while (lines.length * fs * 1.2 > h - 24 && fs > 30) { fs -= 4; g.font = `700 ${fs}px Q, sans-serif`; lines = wrap(g, label, mw); } const lh = fs * 1.2; const x0 = style.align === 'left' ? x + 48 : x + w / 2; g.textAlign = style.align === 'left' ? 'left' : 'center';
     lines.forEach((l, i) => g.fillText(l, x0 + (style.align === 'left' ? (style.indent || 0) : 0), y + h / 2 + (i - (lines.length - 1) / 2) * lh));
@@ -146,7 +159,7 @@ function drawQuestion() {
     y = txt(g, it.q, 120, y, { size: 76, maxW: 2160, lh: 1.18 }) + 50;
     const bw = 1060, bh = 190, gap = 40;
     it.o.forEach((o, i) => { const x = 120 + (i % 2) * (bw + gap), yy = y + Math.floor(i / 2) * (bh + gap);
-      let st = { size: 52, align: 'left', indent: 110, bg: '#FFFFFF', hbg: '#F8F1F3', color: '#1B2A55', border: '#E4DACB', letter: 'ABCD'[i] };
+      let st = { size: 52, align: 'left', indent: 110, bg: '#FFFFFF', hbg: '#F6E9EE', color: '#1B2A55', border: '#E4DACB', letter: 'ABCD'[i] };
       if (S.picked !== null) { if (i === it.a) st = { ...st, bg: '#E3F1EA', border: '#2F7962', letterBg: '#2F7962', letterColor: '#fff' };
         else if (i === S.picked) st = { ...st, bg: '#F8E3E8', border: '#B4566E', letterBg: '#B4566E', letterColor: '#fff' }; else st = { ...st, color: '#9AA2B8' }; }
       if (S.picked === null) P.button('o' + i, x, yy, bw, bh, o, st); else { const keep = P.hover; P.hover = null; P.button('x' + i, x, yy, bw, bh, o, st); P.hover = keep; } });
@@ -196,10 +209,10 @@ function drawInvite() {
     P.button('quizNo', W / 2 + 160, P.c.height - 300, 560, 170, 'Agora não', { size: 56, bg: '#F4EEE4', hbg: '#EDE4D6', color: '#5B6787' });
   }); }
 function startInvite() { S.mode = 'invite'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -3.4); drawInvite(); motor.isPlaying && motor.stop(); }
-function startQuiz() { S.mode = 'quiz'; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -3.4); drawQuestion(); motor.isPlaying && motor.stop(); }
+function startQuiz() { S.mode = 'quiz'; S.q = 0; S.hits = 0; S.picked = null; panel.hover = null; hoverTravado = true; hoverIgnorado = undefined; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -3.4); drawQuestion(); motor.isPlaying && motor.stop(); }
 async function pick(i) { if (S.picked !== null) return; S.picked = i; if (i === QUIZ[S.q].a) S.hits++; drawQuestion();
   if (S.sess) rpc('eureka_vr_progresso', { p_id: S.sess, p_pergunta: S.q + 1, p_acertos: S.hits }); }
-async function next() { if (S.q < QUIZ.length - 1) { S.q++; S.picked = null; drawQuestion(); return; }
+async function next() { if (S.q < QUIZ.length - 1) { S.q++; S.picked = null; panel.hover = null; hoverTravado = true; hoverIgnorado = undefined; drawQuestion(); return; }
   S.mode = 'result'; drawResult(); S.endAt = clock() + 40;
   if (S.sess) { const r = await rpc('eureka_vr_concluir', { p_id: S.sess, p_acertos: S.hits, p_total: QUIZ.length }); if (r.error) console.warn(r.error); } }
 function drawEnd() {
@@ -223,15 +236,22 @@ const ctrls = [0, 1].map(i => { const c = renderer.xr.getController(i);
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0xE8A9B4, transparent: true, opacity: 0.85, depthTest: false }));
   line.scale.z = 3; line.renderOrder = 40; c.add(line);
   const dot = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 8), new THREE.MeshBasicMaterial({ color: 0xE8A9B4, depthTest: false })); dot.renderOrder = 41; dot.visible = false; scene.add(dot);
-  c.userData = { line, dot }; c.addEventListener('select', () => onSelect(c.userData.hoverId)); scene.add(c); return c; });
+  c.userData = { line, dot }; c.addEventListener('select', () => { ctrlAtivo = c; onSelect(c.userData.hoverId); }); scene.add(c); return c; });
+// Controle que a pessoa está usando (o último que apertou o gatilho). O outro, parado na
+// mão ou largado, não destaca nenhuma opção.
+let ctrlAtivo = null;
+// Depois de "Próxima", o raio continua no mesmo lugar e cairia numa opção da pergunta nova,
+// parecendo já marcada. Esse destaque fica desligado até o raio mudar de lugar.
+let hoverTravado = false, hoverIgnorado;
 function pointAt(origin, dir) { ray.set(origin, dir); if (!panel.mesh.visible) return null; const h = ray.intersectObject(panel.mesh, false)[0]; return h || null; }
 function updatePointers() { let hov = null;
   for (const c of ctrls) { c.userData.hoverId = null; if (!renderer.xr.isPresenting) { c.userData.dot.visible = false; continue; }
     tmpM.identity().extractRotation(c.matrixWorld); const o = new THREE.Vector3().setFromMatrixPosition(c.matrixWorld); const d = new THREE.Vector3(0, 0, -1).applyMatrix4(tmpM);
-    const h = pointAt(o, d); if (h) { c.userData.line.scale.z = h.distance; c.userData.dot.visible = true; c.userData.dot.position.copy(h.point); c.userData.hoverId = panel.hit(h.uv); hov = hov || c.userData.hoverId; }
+    const h = pointAt(o, d); if (h) { c.userData.line.scale.z = h.distance; c.userData.dot.visible = true; c.userData.dot.position.copy(h.point); c.userData.hoverId = panel.hit(h.uv); if (!ctrlAtivo || c === ctrlAtivo) hov = hov || c.userData.hoverId; }
     else { c.userData.line.scale.z = 3; c.userData.dot.visible = false; }
     c.userData.line.visible = panel.mesh.visible; }
   if (!renderer.xr.isPresenting && mouse.active) { ray.setFromCamera(mouse.v, camera); const h = panel.mesh.visible ? ray.intersectObject(panel.mesh, false)[0] : null; mouse.hover = h ? panel.hit(h.uv) : null; hov = mouse.hover; }
+  if (hoverTravado) { if (hoverIgnorado === undefined) hoverIgnorado = hov; if (hov === hoverIgnorado) hov = null; else hoverTravado = false; }
   if (hov !== panel.hover) { panel.hover = hov; panel.draw(); } }
 // prévia no computador: arrastar para olhar, clicar para escolher
 const mouse = { v: new THREE.Vector2(), active: false, yaw: 0, pitch: 0, down: null, hover: null };
@@ -272,6 +292,7 @@ function tick() {
   if (S.mode === 'story') { const t = clock();
     for (const e of X.ENFASES) if (tAnterior < e.t && t >= e.t && t - e.t < 1) somDeEnfase(e.tipo);
     tAnterior = t;
+    somDoCoracao(t);
     if (t >= TL.quizAt) { if (S.sess) startInvite(); else finish(); }
     else { st = X.update(t, { hideFinal: false }); mover.position.set(0, 0, -st.pz);
       motor.setVolume(rampF(t, 13, 18) * (1 - 0.5 * rampF(t, TL.relief, TL.relief + 6)) * (1 - rampF(t, TL.toCream[0], TL.toCream[0] + 2)) * 1.6);

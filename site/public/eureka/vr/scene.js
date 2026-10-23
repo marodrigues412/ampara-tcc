@@ -115,6 +115,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(0, H - groundH - 6, W, 6);
     return { map: canvasTex(c), emissiveMap: canvasTex(e) };
   }
+  const predios = []; // usado para abrir o beco dos dois rapazes (ver abaixo)
   function building(side, z0, w) {
     const h = 6 + rnd() * 20, d = 10; const kind = Math.floor(rnd() * 4); const t = facade(w, h, kind);
     const mFront = fm(new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emissiveMap, emissive: 0xffffff, emissiveIntensity: 1, roughness: 0.95 }));
@@ -123,8 +124,10 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     const mats = side > 0 ? [mSide, mFront, mSide, mSide, mSide, mSide] : [mFront, mSide, mSide, mSide, mSide, mSide];
     const b = new THREE.Mesh(geo, mats); const fx = side > 0 ? SW_R[1] : SW_L[0];
     b.position.set(fx + side * d / 2, h / 2, z0 - w / 2); street.add(b);
+    predios.push({ side, z0, w, h, b });
   }
   for (const side of [1, -1]) for (let z = 120; z > -190;) { const w = 6 + rnd() * 9; building(side, z, w); z -= w + (rnd() < .25 ? 3 + rnd() * 4 : 0.2); }
+
 
   // árvores
   const trunkM = fm(new THREE.MeshStandardMaterial({ color: 0x1b1612, roughness: 1 }));
@@ -185,6 +188,166 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     const left = rnd() < .5; c.position.set(left ? ROAD_X - ROAD_W / 2 + 1.25 : ROAD_X + ROAD_W / 2 - 1.15, 0, z); if (rnd() < .5) c.rotation.y = Math.PI;
     if (!left && z < 20 && z > -80) continue; // deixa a faixa do carro que segue livre perto dela
     street.add(c); }
+
+  // ---------- beco à direita com dois rapazes ----------
+  // Mais um fator de risco: numa rua lateral à direita, duas sombras escuras paradas, que
+  // viram a cabeça e o corpo para acompanhar você enquanto passa. Usa o vão entre prédios
+  // mais perto de z = -49 (ela passa por volta dos 50 s, já olhando para a frente). Ficam escuras,
+  // sem rosto, recortadas contra uma luz fraca no fundo do beco. Nada aqui usa rnd(), para
+  // não mudar o resto da rua.
+  const BECO_ALVO = -49;
+  const beco = (() => { const dir = predios.filter(p => p.side > 0).sort((a, b) => b.z0 - a.z0); let melhor = null;
+    for (let i = 0; i < dir.length - 1; i++) { const ini = dir[i].z0 - dir[i].w, fim = dir[i + 1].z0, larg = ini - fim;
+      if (larg >= 2.5) { const c = (ini + fim) / 2; if (!melhor || Math.abs(c - BECO_ALVO) < Math.abs(melhor.c - BECO_ALVO)) melhor = { c, larg }; } }
+    return melhor ?? { c: BECO_ALVO, larg: 4 }; })();
+  const rapazes = [];
+  {
+    const x0 = SW_R[1], fundo = x0 + 10; // os prédios têm 10 m de profundidade
+    const chao = new THREE.Mesh(new THREE.PlaneGeometry(fundo - x0 + 0.4, beco.larg + 0.4), fm(new THREE.MeshStandardMaterial({ color: 0x1a1b20, roughness: 1 })));
+    chao.rotation.x = -Math.PI / 2; chao.position.set((x0 + fundo) / 2, 0.02, beco.c); street.add(chao);
+    // parede do fundo com uma luz amarelada fraca: é ela que recorta as sombras
+    const [pc, pg] = mkCanvas(256, 256); const gr = pg.createRadialGradient(128, 150, 6, 128, 160, 300);
+    gr.addColorStop(0, '#b98a52'); gr.addColorStop(0.25, '#6a5036'); gr.addColorStop(0.7, '#2e251d'); gr.addColorStop(1, '#0c0c0e'); pg.fillStyle = gr; pg.fillRect(0, 0, 256, 256);
+    const parede = new THREE.Mesh(new THREE.PlaneGeometry(beco.larg + 0.4, 7), fm(new THREE.MeshBasicMaterial({ map: canvasTex(pc) })));
+    parede.position.set(fundo, 3.5, beco.c); parede.rotation.y = -Math.PI / 2; street.add(parede);
+    const luz = new THREE.Sprite(fm(new THREE.SpriteMaterial({ map: glowTex, color: 0xffc27a, depthWrite: false, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.55 })));
+    luz.scale.set(3.4, 3.4, 1); luz.position.set(fundo - 0.3, 3.0, beco.c); street.add(luz);
+    // os dois rapazes: corpo humano com roupas escuras, rosto na sombra do capuz e do boné.
+    // Ficam na boca do beco, colados à calçada, iluminados pelo poste mais próximo.
+    const mat = c => fm(new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 }));
+    const olhoM = fm(new THREE.MeshBasicMaterial({ color: 0x5e5852, fog: false }));
+    const peca = (geo, m, pai, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); pai.add(o); return o; };
+    // Membro com duas partes (coxa e canela, braço e antebraço) e uma junta no meio.
+    function membro(pai, x, y, z, r1, r2, l1, l2, m1, m2, a1, a2, lado = 0, lado2 = 0) {
+      const j1 = new THREE.Group(); j1.position.set(x, y, z); j1.rotation.set(a1, 0, lado); pai.add(j1);
+      peca(new THREE.CapsuleGeometry(r1, l1 - 2 * r1, 4, 10), m1, j1, 0, -l1 / 2, 0);
+      const j2 = new THREE.Group(); j2.position.y = -l1; j2.rotation.set(a2, 0, lado2); j1.add(j2);
+      peca(new THREE.CapsuleGeometry(r2, l2 - 2 * r2, 4, 10), m2, j2, 0, -l2 / 2, 0);
+      return { j1, j2 };
+    }
+    // pose: 'encostado' (costas na parede, um pé apoiado nela, braços cruzados) ou
+    // 'em pe' (peso numa perna, uma mão no bolso e a outra com o cigarro).
+    function rapaz({ altura, blusa, calca, tenis, rosto, capuz, bone, pose }) {
+      const g = new THREE.Group(), corpo = new THREE.Group(), k = altura / 1.78; g.add(corpo); corpo.scale.setScalar(k);
+      const mB = mat(blusa), mC = mat(calca), mT = mat(tenis), mR = mat(rosto);
+      const quadril = 0.92;
+      // pernas e pés
+      const pernas = pose === 'encostado'
+        ? [membro(corpo, -0.1, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, 0.03, 0, 0.02), membro(corpo, 0.1, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, -0.95, 1.55, -0.04)]
+        : [membro(corpo, -0.11, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, 0, 0, 0.06), membro(corpo, 0.11, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, -0.12, 0.2, -0.03)];
+      for (const pr of pernas) { const pe = peca(new THREE.BoxGeometry(0.11, 0.08, 0.27), mT, pr.j2, 0, -0.45, 0.06); pe.rotation.x = -pr.j1.rotation.x - pr.j2.rotation.x; }
+      // quadril, tronco (mais largo nos ombros) e pescoço
+      const q = peca(new THREE.CapsuleGeometry(0.15, 0.12, 4, 10), mC, corpo, 0, quadril + 0.02, 0); q.rotation.z = Math.PI / 2; q.scale.set(1, 1, 0.7);
+      const tronco = peca(new THREE.CylinderGeometry(0.2, 0.16, 0.52, 14), mB, corpo, 0, quadril + 0.33, 0); tronco.scale.z = 0.62;
+      const ombros = peca(new THREE.CapsuleGeometry(0.1, 0.3, 4, 10), mB, corpo, 0, quadril + 0.56, 0); ombros.rotation.z = Math.PI / 2; ombros.scale.z = 0.9;
+      peca(new THREE.CylinderGeometry(0.05, 0.06, 0.1, 10), mR, corpo, 0, quadril + 0.66, 0);
+      // braços
+      const yOmbro = quadril + 0.56;
+      if (pose === 'encostado') { // braços cruzados na frente do peito
+        membro(corpo, -0.23, yOmbro, 0, 0.055, 0.047, 0.29, 0.27, mB, mB, -0.25, -1.55, 0.06, 1.05);
+        membro(corpo, 0.23, yOmbro, 0, 0.055, 0.047, 0.29, 0.27, mB, mB, -0.2, -1.42, -0.06, -1.05);
+      } else { // mãos nos bolsos
+        membro(corpo, -0.24, yOmbro, 0, 0.055, 0.047, 0.29, 0.27, mB, mB, 0.12, -0.45, -0.14);
+        membro(corpo, 0.24, yOmbro, 0, 0.055, 0.047, 0.29, 0.27, mB, mB, 0.12, -0.45, 0.14); }
+      // cabeça (gira sozinha para acompanhar você)
+      const cabeca = new THREE.Group(); cabeca.position.y = quadril + 0.8; corpo.add(cabeca);
+      peca(new THREE.SphereGeometry(0.105, 16, 12), mR, cabeca, 0, 0, 0.005).scale.set(0.92, 1.12, 1);
+      for (const x of [-0.035, 0.035]) peca(new THREE.SphereGeometry(0.009, 6, 4), olhoM, cabeca, x, 0.02, 0.098);
+      if (capuz) { const h = peca(new THREE.SphereGeometry(0.15, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), mB, cabeca, 0, 0.015, -0.025); h.rotation.x = -0.35; h.scale.set(1, 1.08, 1.05); }
+      if (bone) { peca(new THREE.SphereGeometry(0.112, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mT, cabeca, 0, 0.035, 0);
+        const aba = peca(new THREE.BoxGeometry(0.19, 0.012, 0.12), mT, cabeca, 0, 0.04, 0.12); aba.rotation.x = 0.12; }
+      if (pose === 'encostado') corpo.rotation.x = -0.07; // costas apoiadas na parede
+      street.add(g); return { g, corpoGira: pose !== 'encostado', virarCabeca: (y, aceno = 0) => { cabeca.rotation.set(aceno, y, 0); } };
+    }
+    const bocaZ = beco.c + beco.larg / 2; // quina do beco do lado de quem vem andando
+    // encostado na fachada, ao lado da boca do beco, de frente para a calçada
+    const a = rapaz({ altura: 1.82, blusa: 0x1c1f26, calca: 0x151a24, tenis: 0x111114, rosto: 0x1d1917, capuz: true, pose: 'encostado' });
+    const POS_A = [x0 - 0.2, 0.16, bocaZ + 0.55], POS_B = [x0 - 0.6, 0.16, bocaZ - 0.5];
+    const CONVERSA_B = Math.atan2(POS_A[0] - POS_B[0], POS_A[2] - POS_B[2]); // b virado para a
+    a.g.position.set(...POS_A); a.g.rotation.y = -Math.PI / 2;
+    // em pé na boca do beco, quase na calçada
+    const b = rapaz({ altura: 1.76, blusa: 0x2d2824, calca: 0x16171b, tenis: 0x0e0e10, rosto: 0x1d1917, bone: true, pose: 'em pe' });
+    b.g.position.set(...POS_B); b.g.rotation.y = CONVERSA_B;
+    rapazes.push({ ...a, yaw: 0, outro: b.g.position, fase: 0 }, { ...b, yaw: 0, outro: a.g.position, fase: 3, corpo0: CONVERSA_B });
+
+    // Versão realista: troca os bonecos por um modelo 3D de pessoa (avatar de exemplo do
+    // three.js, com esqueleto), com a pose feita girando os ossos. Se não carregar em 10 s
+    // (sem internet, por exemplo), ficam os bonecos de cima.
+    const URL_PESSOA = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r169/examples/models/gltf/readyplayer.me.glb';
+    const comPrazo = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('demorou')), ms))]);
+    try {
+      const [{ GLTFLoader }, { clone: clonarComOssos }] = await comPrazo(Promise.all([
+        import('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/loaders/GLTFLoader.js'),
+        import('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/utils/SkeletonUtils.js')]), 10000);
+      const modelo = await comPrazo(new GLTFLoader().loadAsync(URL_PESSOA), 10000);
+      const girar = (osso, eixo, ang) => osso.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(...eixo), ang));
+      function pessoa({ altura, blusa, calca, tenis, gorro, bone, bigode, pose }) {
+        const g = new THREE.Group(), corpo = clonarComOssos(modelo.scene); g.add(corpo);
+        const ossos = {}; corpo.traverse(o => { if (o.isBone) ossos[o.name] = o; });
+        corpo.traverse(o => { if (!o.isMesh) return; o.material = o.material.clone(); o.frustumCulled = false; o.castShadow = false;
+          if (o.name === 'Wolf3D_Headwear') o.visible = false;
+          if (o.name === 'Wolf3D_Beard') o.visible = !!bigode;
+          const cor = { Wolf3D_Outfit_Top: blusa, Wolf3D_Outfit_Bottom: calca, Wolf3D_Outfit_Footwear: tenis }[o.name];
+          // roupa lisa e escura (sem a estampa nem os detalhes do terno original): casaco, calça e tênis
+          if (cor != null) { o.material.map = null; o.material.normalMap = null; o.material.color.set(cor); o.material.roughness = 1; o.material.metalness = 0; }
+          else if (o.name === 'Wolf3D_Head' || o.name === 'Wolf3D_Body') o.material.color.multiplyScalar(0.5); // pele na penumbra
+          else o.material.color.multiplyScalar(0.6);
+          o.material.envMapIntensity = 0.15; // menos brilho: ficam mais na sombra
+          fm(o.material); o.material.needsUpdate = true; });
+        corpo.scale.setScalar(altura / 1.87);
+        // pose (girando cada osso a partir da pose de repouso)
+        ossos.LeftArm.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0, 0.1))); // braços caídos ao lado do corpo
+        ossos.RightArm.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0, -0.1)));
+        if (pose === 'encostado') { // mãos no bolso e um pé apoiado na parede
+          girar(ossos.LeftForeArm, [0, 0, 1], 0.35); girar(ossos.RightForeArm, [0, 0, 1], -0.35);
+          girar(ossos.RightUpLeg, [1, 0, 0], -0.55); girar(ossos.RightLeg, [1, 0, 0], 1.35);
+        } else { // em pé, peso numa perna, braços soltos
+          girar(ossos.LeftForeArm, [0, 0, 1], 0.25); girar(ossos.RightForeArm, [0, 0, 1], -0.25);
+          girar(ossos.LeftUpLeg, [0, 0, 1], -0.06); girar(ossos.RightUpLeg, [1, 0, 0], -0.08); }
+        // gorro ou boné, presos ao osso da cabeça (alinhados com o topo da cabeça e os olhos)
+        const cab = ossos.Head, topo = ossos.HeadTop_End.position.clone();
+        const olhos = ossos.LeftEye.position.clone().add(ossos.RightEye.position).multiplyScalar(0.5);
+        const cima = topo.clone().normalize(), frente = olhos.clone().sub(cima.clone().multiplyScalar(olhos.dot(cima))).normalize();
+        const r = topo.length() * 0.56, mChapeu = fm(new THREE.MeshStandardMaterial({ color: gorro ?? bone ?? 0x111111, roughness: 1 }));
+        const chapeu = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 12, 0, Math.PI * 2, 0, Math.PI * (gorro ? 0.56 : 0.5)), mChapeu);
+        chapeu.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), cima); chapeu.position.copy(topo).multiplyScalar(gorro ? 0.5 : 0.56).add(frente.clone().multiplyScalar(-r * 0.08));
+        cab.add(chapeu);
+        if (bone) { const aba = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.95, r * 0.95, r * 0.06, 20, 1, false, -Math.PI / 2, Math.PI), mChapeu);
+          aba.quaternion.copy(chapeu.quaternion); aba.position.copy(chapeu.position).add(frente.clone().multiplyScalar(r * 0.35)); cab.add(aba); }
+        street.add(g);
+        const neckQ = ossos.Neck.quaternion.clone(), headQ = cab.quaternion.clone(), bracoQ = ossos.RightForeArm.quaternion.clone();
+        const q = (eixo, a) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(...eixo), a);
+        return { g, corpoGira: pose !== 'encostado',
+          virarCabeca: (y, aceno = 0) => { // o pescoço faz 40% do giro e a cabeça o resto (mais o aceno da conversa)
+            ossos.Neck.quaternion.copy(neckQ).multiply(q([0, 1, 0], y * 0.4));
+            cab.quaternion.copy(headQ).multiply(q([0, 1, 0], y * 0.6)).multiply(q([1, 0, 0], aceno)); },
+          gesto: k => { ossos.RightForeArm.quaternion.copy(bracoQ).multiply(q([0, 0, 1], -0.75 * k)); } }; // mão que gesticula falando
+      }
+      const pa = pessoa({ altura: 1.82, blusa: 0x22262e, calca: 0x1b2232, tenis: 0x131315, gorro: 0x18191c, bigode: false, pose: 'encostado' });
+      pa.g.position.set(POS_A[0] + 0.04, POS_A[1], POS_A[2]); pa.g.rotation.set(-0.05, -Math.PI / 2, 0, 'YXZ');
+      const pb = pessoa({ altura: 1.76, blusa: 0x33291f, calca: 0x17181c, tenis: 0x0f0f11, bone: 0x101113, bigode: true, pose: 'em pe' });
+      pb.g.position.set(...POS_B); pb.g.rotation.y = CONVERSA_B;
+      for (const r of rapazes) r.g.visible = false; // some com os bonecos
+      rapazes.length = 0;
+      rapazes.push({ ...pa, yaw: 0, outro: pb.g.position, fase: 0 }, { ...pb, yaw: 0, outro: pa.g.position, fase: 3, corpo0: CONVERSA_B });
+    } catch (e) { console.warn('Modelo de pessoa não carregou; ficam os bonecos.', e); }
+  }
+  // vira o corpo devagar e a cabeça mais rápido na direção de quem anda
+  const giro = (atual, alvo, k) => atual + ((((alvo - atual + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) - Math.PI) * k;
+  // Antes: os dois conversam (um de frente para o outro, acenando com a cabeça e gesticulando,
+  // cada um na sua vez). Quando ela chega a uns 14 m, param e passam a acompanhá-la com o
+  // olhar; o que está em pé vira o corpo devagar na direção dela.
+  function olharDosRapazes(t, pz) {
+    for (const r of rapazes) { const p = r.g.position;
+      const k = sm(clamp((14 - (pz - p.z)) / 3)); // 0 = conversando, 1 = olhando para ela
+      const paraEla = Math.atan2(0 - p.x, pz - p.z), paraOOutro = Math.atan2(r.outro.x - p.x, r.outro.z - p.z);
+      if (r.corpoGira) r.g.rotation.y = giro(r.g.rotation.y, k > 0.5 ? paraEla : r.corpo0, 0.015);
+      const alvo = giro(paraOOutro, paraEla, k);
+      const cabecaAlvo = THREE.MathUtils.clamp(giro(0, alvo - r.g.rotation.y, 1), -1.25, 1.25);
+      r.yaw += (cabecaAlvo - r.yaw) * 0.08;
+      const falando = (1 - k) * (Math.sin(t * 0.9 + r.fase) > 0 ? 1 : 0.25); // revezam a fala
+      r.virarCabeca(r.yaw, falando * 0.07 * Math.sin(t * 2.4 + r.fase));
+      r.gesto?.(falando * (0.5 + 0.5 * Math.sin(t * 3.1 + r.fase))); } }
 
   // ---------- o carro que segue ----------
   const car = carModel(0x101218, true); scene.add(car);
@@ -252,6 +415,9 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.save(); g.beginPath(); g.arc(cx, cy, r - 14, 0, 7); g.fillStyle = '#F4EEE4'; g.fill(); g.clip(); g.drawImage(IM.avatar, cx - r + 14, cy - r + 14, (r - 14) * 2, (r - 14) * 2); g.restore();
     g.lineWidth = 14; g.strokeStyle = 'rgba(255,255,255,0.18)'; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke();
     g.strokeStyle = color; g.lineCap = 'round'; g.beginPath(); g.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); g.stroke(); }
+  // Batimentos mostrados no painel (e usados pelo som do coração no index.html): sobem com o
+  // carro, sobem mais quando os dois rapazes começam a olhar (40 a 47 s) e disparam quando ela acelera.
+  const bpmEm = t => 78 + 18 * ramp(t, 34, 48) + 12 * ramp(t, 40, 47) + 38 * ramp(t, 49, 59);
   // Momentos de ênfase: o painel pulsa aqui e o index.html toca um som curto.
   const ENFASES = [{ t: 33.4, tipo: 'mapa' }, { t: 34, tipo: 'risco' }, { t: 53, tipo: 'risco' }];
   const pulsoEm = (t, tipo) => { let k = 0; for (const e of ENFASES) if (e.tipo === tipo && t >= e.t && t < e.t + 0.9) k = Math.max(k, Math.sin(Math.PI * (t - e.t) / 0.9)); return k; };
@@ -286,7 +452,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.font = 'italic 400 42px LO'; g.fillStyle = '#E8A9B4'; g.fillText('tem ocorrências registradas.', 60, H - 132);
     g.font = F(500, 30); g.fillStyle = 'rgba(244,238,228,.6)'; g.fillText('dados públicos · SSP-SP', 60, H - 72);
     map.tex.needsUpdate = true; }
-  placeAround(map.m, 17, 3.4, 1.1); rig.add(map.m);
+  placeAround(map.m, 0, 3.4, 0.82); rig.add(map.m); // no centro, abaixo da frase: o lado direito fica livre para ver o beco
   // 3) alerta: "Está tudo bem?" com contagem, depois "mensagem enviada"
   const alertC = hudCard(1.1, 1.25);
   function drawAlert(mode, n, k) { const key = mode + n + '|' + (k * 20 | 0); if (key === alertC.key) return; alertC.key = key;
@@ -370,6 +536,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
   function update(t, opts = {}) {
     const pz = walkZ(t); rig.position.set(0, 0, pz);
     const cs = carState(t); car.position.set(cs.x, 0, cs.z); car.rotation.y = cs.ry;
+    olharDosRapazes(t, pz);
     // passos: leve balanço só no vídeo não (evita enjoo) — nada de balanço de câmera.
     const freezeK = ramp(t, TL.freeze - 0.4, TL.freeze + 0.6) * (1 - ramp(t, TL.relief, TL.relief + 4));
     const toCream = ramp(t, TL.toCream[0], TL.toCream[1]);
@@ -407,13 +574,13 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       const sk = ramp(t, 16, 17.2) * (1 - ramp(t, 61.5, 62.5)); status.m.material.opacity = sk; status.m.visible = sk > 0.002;
       if (status.m.visible) { const lvl = t < 34 ? 'baixo' : t < 53 ? 'moderado' : 'alto';
         const fr = lvl === 'baixo' ? 0.28 : lvl === 'moderado' ? 0.28 + 0.32 * ramp(t, 34, 36) : 0.6 + 0.35 * ramp(t, 53, 55);
-        const bpm = Math.round(78 + 18 * ramp(t, 34, 48) + 38 * ramp(t, 49, 59) + Math.sin(t * 2.3) * 1.5); drawStatus(lvl, fr, bpm, riscoSubindo(t) && Math.sin(t * 9) > -0.3); }
+        const bpm = Math.round(bpmEm(t) + Math.sin(t * 2.3) * 1.5); drawStatus(lvl, fr, bpm, riscoSubindo(t) && Math.sin(t * 9) > -0.3); }
       status.m.scale.setScalar(1 + 0.14 * pulsoEm(t, 'risco'));
       status.m.position.y = 1.1 + Math.sin(t * 0.9) * 0.012;
       const mk = ramp(t, 33, 34.2) * (1 - ramp(t, 61.5, 62.5)); map.m.material.opacity = mk; map.m.visible = mk > 0.002;
       if (map.m.visible) drawMap((t * 0.8) % 1);
       map.m.scale.setScalar(1 + 0.14 * pulsoEm(t, 'mapa'));
-      map.m.position.y = 1.1 + Math.sin(t * 0.9 + 1) * 0.012;
+      map.m.position.y = 0.82 + Math.sin(t * 0.9 + 1) * 0.012;
       const ak = ramp(t, 62.2, 63) * (1 - ramp(t, 80, 81.5)); alertC.m.material.opacity = ak; alertC.m.visible = ak > 0.002;
       if (alertC.m.visible) { const c0 = 62.5, c1 = TL.relief; if (t < c1) { const rem = Math.max(1, Math.ceil(10 - (t - c0) * 10 / (c1 - c0))); drawAlert('count', rem, clamp(1 - (t - c0) / (c1 - c0))); }
         else drawAlert('sent', 0, clamp((t - c1) / 2.5)); }
@@ -443,5 +610,5 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     return { pz, car: cs, freezeK, glowOn, toCream, guideAng: gd ? gd.ang : null, guideK: gk };
   }
 
-  return { scene, rig, car, update, ENFASES, walkZ, walkSpeed, carState, EYE, DUR: TL.dur, textPlane, placeAround, ramp, clamp, IM };
+  return { scene, rig, car, update, ENFASES, bpmEm, walkZ, walkSpeed, carState, EYE, DUR: TL.dur, textPlane, placeAround, ramp, clamp, IM };
 }
