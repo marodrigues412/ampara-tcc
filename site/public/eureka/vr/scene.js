@@ -388,7 +388,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     { m: T(['Um motor', 'atrás de você.'], 0, 7.0, 2.15, { h: 0.4 }), a: 24.5, b: 31 },
     { m: T(['Os faróis atrás de você', 'não passam.'], 0, 7.0, 2.15, { h: 0.4 }), a: 35, b: 44 },
     { m: T(['Dois homens na esquina.', '*Param de conversar quando você chega.'], 0, 7.0, 2.15, { h: 0.36 }), a: 44.3, b: 48.8 },
-    { m: T(['Você acelera.', '*Ele também.'], 0, 7.0, 2.15, { h: 0.42 }), a: 49, b: 58 },
+    { m: T(['O carro acelera.', '*Você também.'], 0, 7.0, 2.15, { h: 0.42 }), a: 49, b: 58 },
     // Durante o alerta (62 a 72,5 s): explica por que ninguém toca em "Estou bem".
     // Fica mais alto (y 3.45) para não cobrir o cartão do alerta.
     { m: T(['Você congela.', '*Não dá para pegar o celular.'], 0, 7.0, 3.45, { h: 0.34 }), a: 63, b: 67.6 },
