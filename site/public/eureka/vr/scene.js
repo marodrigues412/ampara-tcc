@@ -225,7 +225,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       peca(new THREE.CapsuleGeometry(r2, l2 - 2 * r2, 4, 10), m2, j2, 0, -l2 / 2, 0);
       return { j1, j2 };
     }
-    // pose: 'encostado' (costas na parede, um pé apoiado nela, braços cruzados) ou
+    // pose: 'encostado' (costas na parede, pernas retas, braços cruzados) ou
     // 'em pe' (peso numa perna, uma mão no bolso e a outra com o cigarro).
     function rapaz({ altura, blusa, calca, tenis, rosto, capuz, bone, pose }) {
       const g = new THREE.Group(), corpo = new THREE.Group(), k = altura / 1.78; g.add(corpo); corpo.scale.setScalar(k);
@@ -233,7 +233,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       const quadril = 0.92;
       // pernas e pés
       const pernas = pose === 'encostado'
-        ? [membro(corpo, -0.1, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, 0.03, 0, 0.02), membro(corpo, 0.1, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, -0.95, 1.55, -0.04)]
+        ? [membro(corpo, -0.1, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, 0.03, 0, 0.02), membro(corpo, 0.1, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, 0.03, 0, -0.02)]
         : [membro(corpo, -0.11, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, 0, 0, 0.06), membro(corpo, 0.11, quadril, 0, 0.085, 0.065, 0.46, 0.45, mC, mC, -0.12, 0.2, -0.03)];
       for (const pr of pernas) { const pe = peca(new THREE.BoxGeometry(0.11, 0.08, 0.27), mT, pr.j2, 0, -0.45, 0.06); pe.rotation.x = -pr.j1.rotation.x - pr.j2.rotation.x; }
       // quadril, tronco (mais largo nos ombros) e pescoço
@@ -298,9 +298,8 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
         // pose (girando cada osso a partir da pose de repouso)
         ossos.LeftArm.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0, 0.1))); // braços caídos ao lado do corpo
         ossos.RightArm.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0, -0.1)));
-        if (pose === 'encostado') { // mãos no bolso e um pé apoiado na parede
+        if (pose === 'encostado') { // mãos no bolso, pernas retas
           girar(ossos.LeftForeArm, [0, 0, 1], 0.35); girar(ossos.RightForeArm, [0, 0, 1], -0.35);
-          girar(ossos.RightUpLeg, [1, 0, 0], -0.55); girar(ossos.RightLeg, [1, 0, 0], 1.35);
         } else { // em pé, peso numa perna, braços soltos
           girar(ossos.LeftForeArm, [0, 0, 1], 0.25); girar(ossos.RightForeArm, [0, 0, 1], -0.25);
           girar(ossos.LeftUpLeg, [0, 0, 1], -0.06); girar(ossos.RightUpLeg, [1, 0, 0], -0.08); }
@@ -388,6 +387,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     { m: T(['Faltam seis quarteirões.', '*A rua está vazia.'], 0, 7.0, 2.15, { h: 0.38 }), a: 15, b: 23 },
     { m: T(['Um motor', 'atrás de você.'], 0, 7.0, 2.15, { h: 0.4 }), a: 24.5, b: 31 },
     { m: T(['Os faróis atrás de você', 'não passam.'], 0, 7.0, 2.15, { h: 0.4 }), a: 35, b: 44 },
+    { m: T(['Dois homens na esquina.', '*Param de conversar quando você chega.'], 0, 7.0, 2.15, { h: 0.36 }), a: 44.3, b: 48.8 },
     { m: T(['Você acelera.', '*Ele também.'], 0, 7.0, 2.15, { h: 0.42 }), a: 49, b: 58 },
     // Durante o alerta (62 a 72,5 s): explica por que ninguém toca em "Estou bem".
     // Fica mais alto (y 3.45) para não cobrir o cartão do alerta.
@@ -452,7 +452,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.font = 'italic 400 42px LO'; g.fillStyle = '#E8A9B4'; g.fillText('tem ocorrências registradas.', 60, H - 132);
     g.font = F(500, 30); g.fillStyle = 'rgba(244,238,228,.6)'; g.fillText('dados públicos · SSP-SP', 60, H - 72);
     map.tex.needsUpdate = true; }
-  placeAround(map.m, 0, 3.4, 0.82); rig.add(map.m); // no centro, abaixo da frase: o lado direito fica livre para ver o beco
+  placeAround(map.m, 0, 3.4, 0.82); rig.add(map.m); // começa no centro, abaixo da frase (ver update)
   // 3) alerta: "Está tudo bem?" com contagem, depois "mensagem enviada"
   const alertC = hudCard(1.1, 1.25);
   function drawAlert(mode, n, k) { const key = mode + n + '|' + (k * 20 | 0); if (key === alertC.key) return; alertC.key = key;
@@ -580,7 +580,10 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       const mk = ramp(t, 33, 34.2) * (1 - ramp(t, 61.5, 62.5)); map.m.material.opacity = mk; map.m.visible = mk > 0.002;
       if (map.m.visible) drawMap((t * 0.8) % 1);
       map.m.scale.setScalar(1 + 0.14 * pulsoEm(t, 'mapa'));
-      map.m.position.y = 0.82 + Math.sin(t * 0.9 + 1) * 0.012;
+      // No centro enquanto os dois homens aparecem à direita (para não tapá-los); depois que
+      // ela passa por eles (~51 s), o mapa volta para o lugar dele, à direita.
+      const volta = ramp(t, 51, 52.5);
+      placeAround(map.m, 17 * volta, 3.4, 0.82 + 0.28 * volta + Math.sin(t * 0.9 + 1) * 0.012);
       const ak = ramp(t, 62.2, 63) * (1 - ramp(t, 80, 81.5)); alertC.m.material.opacity = ak; alertC.m.visible = ak > 0.002;
       if (alertC.m.visible) { const c0 = 62.5, c1 = TL.relief; if (t < c1) { const rem = Math.max(1, Math.ceil(10 - (t - c0) * 10 / (c1 - c0))); drawAlert('count', rem, clamp(1 - (t - c0) / (c1 - c0))); }
         else drawAlert('sent', 0, clamp((t - c1) / 2.5)); }
