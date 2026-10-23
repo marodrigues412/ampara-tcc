@@ -226,6 +226,10 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     { m: T(['Um motor', 'atrás de você.'], 0, 7.0, 2.15, { h: 0.4 }), a: 24.5, b: 31 },
     { m: T(['Os faróis atrás de você', 'não passam.'], 0, 7.0, 2.15, { h: 0.4 }), a: 35, b: 44 },
     { m: T(['Você acelera.', '*Ele também.'], 0, 7.0, 2.15, { h: 0.42 }), a: 49, b: 58 },
+    // Durante o alerta (62 a 72,5 s): explica por que ninguém toca em "Estou bem".
+    // Fica mais alto (y 3.45) para não cobrir o cartão do alerta.
+    { m: T(['Você congela.', '*Não dá para pegar o celular.'], 0, 7.0, 3.45, { h: 0.34 }), a: 63, b: 67.6 },
+    { m: T(['Você não consegue responder.', '*E o tempo acaba.'], 0, 7.0, 3.45, { h: 0.34 }), a: 68, b: 72.6 },
     { m: T(['Agora alguém sabe', 'onde você está.'], 0, 7.0, 2.15, { h: 0.38 }), a: 81.5, b: 87.5 },
     { m: T(['O Ampara percebe', 'o lugar, a hora e o seu corpo.'], 0, 7.0, 2.15, { h: 0.35 }), a: 88, b: 94.5 },
     { m: T(['E pergunta antes', 'de avisar quem você escolheu.'], 0, 7.0, 2.15, { h: 0.35 }), a: 95, b: 101 },
@@ -297,8 +301,8 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       g.lineWidth = 14; g.strokeStyle = '#E9D7DB'; g.beginPath(); g.arc(W / 2, 710, 110, 0, 7); g.stroke();
       g.strokeStyle = '#D2475F'; g.lineCap = 'round'; g.beginPath(); g.arc(W / 2, 710, 110, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); g.stroke();
       g.font = F(700, 120); g.fillStyle = '#B4566E'; g.textBaseline = 'middle'; g.fillText(String(n), W / 2, 712); g.textBaseline = 'top';
-      rrect(g, 120, 880, W - 240, 130, 65); g.fillStyle = '#2F7962'; g.fill(); g.font = F(700, 52); g.fillStyle = '#fff'; g.fillText('Estou bem, cancelar', W / 2, 920);
-      g.font = F(500, 34); g.fillStyle = '#9AA2B8'; g.fillText('ninguém respondeu…', W / 2, 1050);
+      rrect(g, 120, 880, W - 240, 130, 65); g.fillStyle = '#E6DFE2'; g.fill(); g.font = F(700, 52); g.fillStyle = '#A59AA0'; g.fillText('Estou bem, cancelar', W / 2, 920);
+      g.font = F(500, 38); g.fillStyle = '#B4566E'; g.fillText('sem resposta…', W / 2, 1050);
     } else {
       g.fillStyle = '#E3F1EA'; g.beginPath(); g.arc(W / 2, 175, 110, 0, 7); g.fill(); g.strokeStyle = '#2F7962'; g.lineWidth = 18; g.lineCap = 'round'; g.lineJoin = 'round';
       g.beginPath(); g.moveTo(W / 2 - 48, 178); g.lineTo(W / 2 - 10, 216); g.lineTo(W / 2 + 54, 140); g.stroke();
