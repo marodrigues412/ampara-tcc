@@ -217,15 +217,18 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
   const rig = new THREE.Group(); scene.add(rig); // acompanha a pessoa
   const EYE = 1.6;
   const T = (lines, ang, dist, y, o = {}) => { const m = textPlane(lines, o); placeAround(m, ang, dist, y); rig.add(m); return m; };
+  // Quando as duas linhas são duas frases completas, a 2ª fica em itálico rosa.
+  // Quando é uma frase só quebrada em duas linhas, as duas usam o mesmo estilo,
+  // para quem assiste ler como uma frase contínua.
   const texts = [
     { m: T(['22:47.', '*Voltando da faculdade.'], 0, 7.0, 2.15, { h: 0.42 }), a: 5, b: 13 },
     { m: T(['Faltam seis quarteirões.', '*A rua está vazia.'], 0, 7.0, 2.15, { h: 0.38 }), a: 15, b: 23 },
-    { m: T(['Um motor', '*atrás de você.'], 0, 7.0, 2.15, { h: 0.4 }), a: 24.5, b: 31 },
-    { m: T(['Os faróis atrás de você', '*não passam.'], 0, 7.0, 2.15, { h: 0.4 }), a: 35, b: 44 },
+    { m: T(['Um motor', 'atrás de você.'], 0, 7.0, 2.15, { h: 0.4 }), a: 24.5, b: 31 },
+    { m: T(['Os faróis atrás de você', 'não passam.'], 0, 7.0, 2.15, { h: 0.4 }), a: 35, b: 44 },
     { m: T(['Você acelera.', '*Ele também.'], 0, 7.0, 2.15, { h: 0.42 }), a: 49, b: 58 },
-    { m: T(['Agora alguém sabe', '*onde você está.'], 0, 7.0, 2.15, { h: 0.38 }), a: 81.5, b: 87.5 },
-    { m: T(['O Ampara percebe', '*o lugar, a hora e o seu corpo.'], 0, 7.0, 2.15, { h: 0.35 }), a: 88, b: 94.5 },
-    { m: T(['E pergunta antes', '*de avisar quem você escolheu.'], 0, 7.0, 2.15, { h: 0.35 }), a: 95, b: 101 },
+    { m: T(['Agora alguém sabe', 'onde você está.'], 0, 7.0, 2.15, { h: 0.38 }), a: 81.5, b: 87.5 },
+    { m: T(['O Ampara percebe', 'o lugar, a hora e o seu corpo.'], 0, 7.0, 2.15, { h: 0.35 }), a: 88, b: 94.5 },
+    { m: T(['E pergunta antes', 'de avisar quem você escolheu.'], 0, 7.0, 2.15, { h: 0.35 }), a: 95, b: 101 },
     { m: T(['*Você não está sozinha.'], 0, 7.0, 2.15, { h: 0.47 }), a: 101.5, b: 109 },
   ];
   const look = [
@@ -245,20 +248,25 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.save(); g.beginPath(); g.arc(cx, cy, r - 14, 0, 7); g.fillStyle = '#F4EEE4'; g.fill(); g.clip(); g.drawImage(IM.avatar, cx - r + 14, cy - r + 14, (r - 14) * 2, (r - 14) * 2); g.restore();
     g.lineWidth = 14; g.strokeStyle = 'rgba(255,255,255,0.18)'; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke();
     g.strokeStyle = color; g.lineCap = 'round'; g.beginPath(); g.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); g.stroke(); }
+  // Momentos de ênfase: o painel pulsa aqui e o index.html toca um som curto.
+  const ENFASES = [{ t: 33.4, tipo: 'mapa' }, { t: 34, tipo: 'risco' }, { t: 53, tipo: 'risco' }];
+  const pulsoEm = (t, tipo) => { let k = 0; for (const e of ENFASES) if (e.tipo === tipo && t >= e.t && t < e.t + 0.9) k = Math.max(k, Math.sin(Math.PI * (t - e.t) / 0.9)); return k; };
+  const riscoSubindo = t => ENFASES.some(e => e.tipo === 'risco' && t >= e.t && t < e.t + 3.5);
   // 1) status: bonequinha + risco + batimentos
   const status = hudCard(1.05, 0.5);
-  function drawStatus(level, frac, bpm) { const key = level + '|' + frac.toFixed(2) + '|' + bpm; if (key === status.key) return; status.key = key;
+  function drawStatus(level, frac, bpm, subindo = false) { const key = level + '|' + frac.toFixed(2) + '|' + bpm + '|' + subindo; if (key === status.key) return; status.key = key;
     const { g, c } = status; const W = c.width, H = c.height; g.clearRect(0, 0, W, H); glass(g, W, H);
     avatarRing(g, 225, H / 2, 150, RISK[level][0], frac);
     g.textBaseline = 'top'; g.textAlign = 'left';
     g.font = F(700, 40); g.fillStyle = '#E8A9B4'; g.fillText('AMPARA · PROTEÇÃO', 430, 70);
     g.font = F(500, 58); g.fillStyle = '#F4EEE4'; g.fillText('Risco', 430, 130); const rw = g.measureText('Risco ').width;
     g.font = F(700, 76); g.fillStyle = RISK[level][0]; g.fillText(level, 430 + rw, 118);
+    if (subindo) { const x = 430 + rw + g.measureText(level + ' ').width; g.beginPath(); g.moveTo(x, 182); g.lineTo(x + 25, 140); g.lineTo(x + 50, 182); g.closePath(); g.fill(); }
     g.font = F(700, 54); g.fillStyle = '#F4EEE4'; g.fillText('♥ ' + bpm + ' bpm', 430, 232);
     if (bpm > 100) { g.font = 'italic 400 44px LO'; g.fillStyle = '#E8A9B4'; g.fillText('acima do seu normal', 430, 305); }
     else { g.font = F(500, 40); g.fillStyle = 'rgba(244,238,228,.7)'; g.fillText('acompanhando você', 430, 308); }
     status.tex.needsUpdate = true; }
-  placeAround(status.m, -40, 3.4, 1.2); rig.add(status.m);
+  placeAround(status.m, -17, 3.4, 1.1); rig.add(status.m);
   // 2) mapa: rua com ocorrências registradas
   const map = hudCard(0.82, 0.82);
   function drawMap(pulse) { const key = (pulse * 10 | 0) + ''; if (key === map.key) return; map.key = key;
@@ -274,7 +282,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     g.font = 'italic 400 42px LO'; g.fillStyle = '#E8A9B4'; g.fillText('tem ocorrências registradas.', 60, H - 132);
     g.font = F(500, 30); g.fillStyle = 'rgba(244,238,228,.6)'; g.fillText('dados públicos · SSP-SP', 60, H - 72);
     map.tex.needsUpdate = true; }
-  placeAround(map.m, 40, 3.4, 1.2); rig.add(map.m);
+  placeAround(map.m, 17, 3.4, 1.1); rig.add(map.m);
   // 3) alerta: "Está tudo bem?" com contagem, depois "mensagem enviada"
   const alertC = hudCard(1.1, 1.25);
   function drawAlert(mode, n, k) { const key = mode + n + '|' + (k * 20 | 0); if (key === alertC.key) return; alertC.key = key;
@@ -311,7 +319,7 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
   const arrowGeo = (() => { const s = new THREE.Shape(); s.moveTo(0, 0.16); s.lineTo(0.16, 0); s.lineTo(0, -0.16); s.lineTo(0.05, 0); s.closePath();
     const s2 = s.clone ? null : null; const g = new THREE.ShapeGeometry(s); return g; })();
   const arrowMat = () => new THREE.MeshBasicMaterial({ color: 0xE8A9B4, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide });
-  const guides = [{ a: 16.5, b: 20.5, ang: -40 }, { a: 21, b: 23, ang: 0 }, { a: 25.5, b: 33.2, ang: 180 }, { a: 33.5, b: 37.5, ang: 40 }, { a: 38, b: 43.5, ang: 0 }, { a: 49, b: 53, ang: 0 }, { a: 53.5, b: 57.5, ang: -40 }, { a: 59, b: 80.5, ang: 0 }, { a: 81.5, b: 109, ang: 0 }, { a: 116, b: 123, ang: 180 }];
+  const guides = [{ a: 16.5, b: 20.5, ang: 0 }, { a: 21, b: 23, ang: 0 }, { a: 25.5, b: 33.2, ang: 180 }, { a: 33.5, b: 37.5, ang: 0 }, { a: 38, b: 43.5, ang: 0 }, { a: 49, b: 53, ang: 0 }, { a: 53.5, b: 57.5, ang: 0 }, { a: 59, b: 80.5, ang: 0 }, { a: 81.5, b: 109, ang: 0 }, { a: 116, b: 123, ang: 180 }];
   const ringArrows = [];
   if (!xr) for (let k = 0; k < 12; k++) { const g = new THREE.Group(); for (let j = 0; j < 3; j++) { const m = new THREE.Mesh(arrowGeo, arrowMat()); m.position.x = j * 0.13; m.renderOrder = 25; g.add(m); }
     g.userData.ang = k * 30; rig.add(g); ringArrows.push(g); }
@@ -395,11 +403,13 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
       const sk = ramp(t, 16, 17.2) * (1 - ramp(t, 61.5, 62.5)); status.m.material.opacity = sk; status.m.visible = sk > 0.002;
       if (status.m.visible) { const lvl = t < 34 ? 'baixo' : t < 53 ? 'moderado' : 'alto';
         const fr = lvl === 'baixo' ? 0.28 : lvl === 'moderado' ? 0.28 + 0.32 * ramp(t, 34, 36) : 0.6 + 0.35 * ramp(t, 53, 55);
-        const bpm = Math.round(78 + 18 * ramp(t, 34, 48) + 38 * ramp(t, 49, 59) + Math.sin(t * 2.3) * 1.5); drawStatus(lvl, fr, bpm); }
-      status.m.position.y = 1.2 + Math.sin(t * 0.9) * 0.012;
+        const bpm = Math.round(78 + 18 * ramp(t, 34, 48) + 38 * ramp(t, 49, 59) + Math.sin(t * 2.3) * 1.5); drawStatus(lvl, fr, bpm, riscoSubindo(t) && Math.sin(t * 9) > -0.3); }
+      status.m.scale.setScalar(1 + 0.14 * pulsoEm(t, 'risco'));
+      status.m.position.y = 1.1 + Math.sin(t * 0.9) * 0.012;
       const mk = ramp(t, 33, 34.2) * (1 - ramp(t, 61.5, 62.5)); map.m.material.opacity = mk; map.m.visible = mk > 0.002;
       if (map.m.visible) drawMap((t * 0.8) % 1);
-      map.m.position.y = 1.2 + Math.sin(t * 0.9 + 1) * 0.012;
+      map.m.scale.setScalar(1 + 0.14 * pulsoEm(t, 'mapa'));
+      map.m.position.y = 1.1 + Math.sin(t * 0.9 + 1) * 0.012;
       const ak = ramp(t, 62.2, 63) * (1 - ramp(t, 80, 81.5)); alertC.m.material.opacity = ak; alertC.m.visible = ak > 0.002;
       if (alertC.m.visible) { const c0 = 62.5, c1 = TL.relief; if (t < c1) { const rem = Math.max(1, Math.ceil(10 - (t - c0) * 10 / (c1 - c0))); drawAlert('count', rem, clamp(1 - (t - c0) / (c1 - c0))); }
         else drawAlert('sent', 0, clamp((t - c1) / 2.5)); }
@@ -429,5 +439,5 @@ export async function createExperience(THREE, { base = './', TL, xr = false } = 
     return { pz, car: cs, freezeK, glowOn, toCream, guideAng: gd ? gd.ang : null, guideK: gk };
   }
 
-  return { scene, rig, car, update, walkZ, walkSpeed, carState, EYE, DUR: TL.dur, textPlane, placeAround, ramp, clamp, IM };
+  return { scene, rig, car, update, ENFASES, walkZ, walkSpeed, carState, EYE, DUR: TL.dur, textPlane, placeAround, ramp, clamp, IM };
 }

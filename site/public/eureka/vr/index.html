@@ -85,6 +85,14 @@ const loader = new THREE.AudioLoader();
 const loadBuf = u => new Promise(res => loader.load(u, res, undefined, () => res(null)));
 const [bMusic, bMotor, bQuiz] = await Promise.all([loadBuf('/eureka/vr/audio/musica.mp3'), loadBuf('/eureka/vr/audio/motor.mp3'), loadBuf('/eureka/vr/audio/quiz_loop.mp3')]);
 if (bMusic) music.setBuffer(bMusic); if (bMotor) motor.setBuffer(bMotor); if (bQuiz) quizLoop.setBuffer(bQuiz);
+// Som curto de ênfase, gerado na hora (sem arquivo): três notas subindo quando o risco
+// aumenta e um "ping" duplo quando aparece o mapa da rua com ocorrências.
+function somDeEnfase(tipo) { const ctx = listener.context, saida = listener.getInput(), t0 = ctx.currentTime;
+  const notas = tipo === 'risco' ? [[587, 0], [784, 0.13], [1046, 0.26]] : [[988, 0], [740, 0.16]];
+  for (const [f, d] of notas) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = tipo === 'risco' ? 'triangle' : 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.5, t0 + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.45);
+    o.connect(g); g.connect(saida); o.start(t0 + d); o.stop(t0 + d + 0.5); } }
+let tAnterior = 0;
 
 // ---------- painéis desenhados em canvas (texto nítido + botões) ----------
 function wrap(g, text, maxW) { const words = text.split(' '); const lines = []; let cur = '';
@@ -262,6 +270,8 @@ let last = 0;
 function tick() {
   let st = null;
   if (S.mode === 'story') { const t = clock();
+    for (const e of X.ENFASES) if (tAnterior < e.t && t >= e.t && t - e.t < 1) somDeEnfase(e.tipo);
+    tAnterior = t;
     if (t >= TL.quizAt) { if (S.sess) startInvite(); else finish(); }
     else { st = X.update(t, { hideFinal: false }); mover.position.set(0, 0, -st.pz);
       motor.setVolume(rampF(t, 13, 18) * (1 - 0.5 * rampF(t, TL.relief, TL.relief + 6)) * (1 - rampF(t, TL.toCream[0], TL.toCream[0] + 2)) * 1.6);
