@@ -143,6 +143,10 @@ function drawLobby() {
     const lw = 520, lh = lw * logoImg.height / logoImg.width; g.drawImage(logoImg, W / 2 - lw / 2, 70, lw, lh);
     let y = 70 + lh + 40;
     y = txt(g, 'Experiência em realidade virtual', W / 2, y, { size: 50, weight: 600, color: '#B4566E', align: 'center' }) + 50;
+    if (!QUIZ_NO_OCULOS) { // começa direto, sem cadastro
+      y = txt(g, 'Pronta para começar?', W / 2, y, { size: 92, align: 'center' }) + 20;
+      y = txt(g, 'Aponte o controle para o botão e aperte o gatilho (ou junte o polegar e o indicador).', W / 2, y, { size: 44, weight: 600, color: '#5B6787', align: 'center', maxW: 1900 }) + 40;
+      P.button('free', W / 2 - 360, y, 720, 150, 'Começar', { size: 66 }); return; }
     if (S.nome) { y = txt(g, `Olá, ${S.nome}!`, W / 2, y, { size: 92, align: 'center' }) + 20;
       y = txt(g, 'Aponte o controle para o botão e aperte o gatilho (ou junte o polegar e o indicador).', W / 2, y, { size: 44, weight: 600, color: '#5B6787', align: 'center', maxW: 1900 }) + 40;
       P.button('start', W / 2 - 360, y, 720, 150, 'Começar', { size: 66 }); }
@@ -181,10 +185,14 @@ function drawResult() {
   }); }
 
 // ---------- fluxo ----------
+// O quiz saiu do óculos e agora é feito no tablet (site da apresentação). Com isto em false, o
+// óculos começa direto, sem esperar a equipe liberar, e no fim manda a pessoa para o tablet.
+// Para voltar ao quiz no óculos (com cadastro pela equipe), troque para true.
+const QUIZ_NO_OCULOS = false;
 function setLobby() { S.mode = 'lobby'; S.sess = null; S.nome = null; S.q = 0; S.hits = 0; S.picked = null; panel.mesh.visible = true; panel.mesh.material.opacity = 1;
   music.isPlaying && music.stop(); motor.isPlaying && motor.stop(); if (bQuiz && !quizLoop.isPlaying) { quizLoop.setVolume(0.35); quizLoop.play(); }
   drawLobby(); }
-async function poll() { if (S.mode !== 'lobby') return; const { data, error } = await rpc('eureka_vr_proxima');
+async function poll() { if (S.mode !== 'lobby' || !QUIZ_NO_OCULOS) return; const { data, error } = await rpc('eureka_vr_proxima');
   const row = Array.isArray(data) ? data[0] : null; const nome = row ? row.primeiro_nome : null; const id = row ? row.id : null; S.pendingConsent = row ? !!row.consentimento : false;
   if (id !== S.pending || nome !== S.nome) { S.pending = id; S.nome = nome; drawLobby(); } }
 setInterval(poll, 2500);
@@ -221,6 +229,7 @@ function drawEnd() {
     let y = 110 + lh + 60;
     y = txt(g, 'A experiência terminou.', W / 2, y, { size: 110, align: 'center' }) + 30;
     y = txt(g, 'Pode tirar o óculos com cuidado e devolver para a equipe.', W / 2, y, { size: 60, weight: 600, color: '#5B6787', align: 'center', maxW: 2000 }) + 40;
+    if (!QUIZ_NO_OCULOS) y = txt(g, 'Agora responda o quiz no tablet e concorra a um power bank!', W / 2, y, { size: 60, align: 'center', maxW: 2000 }) + 40;
     txt(g, 'Obrigada por viver o Ampara com a gente.', W / 2, y, { size: 56, weight: 600, color: '#B4566E', align: 'center', font: 'Q' });
   }); }
 function finish() { S.mode = 'credits'; panel.mesh.visible = true; panel.mesh.position.set(0, 1.5, -3.4); drawEnd(); S.credT = clock(); }

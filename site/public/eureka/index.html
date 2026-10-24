@@ -163,9 +163,10 @@ th{font-size:13px;letter-spacing:2px;color:var(--muted)}
 <div class="app">
 <header>
 <div class="brand"><b>Ampara</b><span>EUREKA 2026 · STAND 72</span></div>
-<!-- No tablet o quiz fica escondido (decisão da Maria); as duas explicações ficam. -->
+<!-- O quiz agora é feito aqui no tablet (saiu do óculos): a pessoa responde e deixa nome e
+     telefone no fim, sem a equipe precisar liberar. As duas explicações continuam. -->
 <nav class="tabs" role="tablist">
-<button role="tab" id="tab-quiz" aria-selected="false" hidden style="display:none">Quiz</button>
+<button role="tab" id="tab-quiz" aria-selected="false">Quiz</button>
 <button role="tab" id="tab-score" aria-selected="false">Como o score funciona</button>
 <button role="tab" id="tab-arq" aria-selected="false">Como o app funciona</button>
 </nav>
@@ -225,10 +226,13 @@ const QUIZZES = {
 const DAY_LABEL = {sexta:'Sexta (23/10)', sabado:'Sábado (24/10)'};
 
 function defaultDay(){
+  const d=new Date();
+  if(d.getMonth()===9 && d.getDate()===23) return 'sexta';
+  if(d.getMonth()===9 && d.getDate()===24) return 'sabado';
   try{ const s=localStorage.getItem('ampara-quiz-dia'); if(s&&QUIZZES[s]) return s }catch(e){}
-  const d=new Date(); return (d.getMonth()===9 && d.getDate()===24) ? 'sabado' : 'sexta';
+  return 'sexta';
 }
-const state = { tab:'score', day: defaultDay(), step:'start', i:0, picked:null, hits:0, saving:false, err:'' };
+const state = { tab:'quiz', day: defaultDay(), step:'start', i:0, picked:null, hits:0, saving:false, err:'' };
 let resetTimer = null;
 const SB_URL='https://hhlxgtwvoxpvyvejvxwt.supabase.co', SB_KEY='sb_publishable_LaG0x6zbfn3HTGFbDE4Lgg_F6bROg8g';
 const sb = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,storageKey:'ampara-eureka-auth'}}) : null;
@@ -835,7 +839,14 @@ function openLogin(){
 }
 $('#teamBtn').onclick=async()=>{ if(await isUnlocked()) openTeam(); else openLogin(); };
 
+$('#tab-quiz').onclick=()=>{state.tab='quiz';render()};
 $('#tab-score').onclick=()=>{state.tab='score';render()};
+// Se alguém larga o quiz no meio, depois de 2 minutos sem toque o tablet volta para o início.
+let ultimoToque=Date.now();
+document.addEventListener('pointerdown',()=>{ultimoToque=Date.now()},true);
+document.addEventListener('keydown',()=>{ultimoToque=Date.now()},true);
+setInterval(()=>{ if(state.tab==='quiz' && (state.step==='q'||state.step==='form') && !state.saving && Date.now()-ultimoToque>120000){
+  Object.assign(state,{step:'start',err:''}); render() } },5000);
 $('#tab-arq').onclick=()=>{state.tab='arq';render()};
 render();
 </script>
